@@ -59,7 +59,10 @@ Create a small, open-source coding playground for students and alumni to practic
 Phase 1:
 
 - localStorage saves projects anonymously
+- project dashboard/list
+- create, rename, duplicate, and delete projects
 - import/export JSON
+- copy share link that imports a local copy via URL hash
 
 Phase 2:
 

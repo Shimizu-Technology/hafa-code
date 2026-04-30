@@ -19,8 +19,10 @@ This project intentionally starts smaller than Replit. The first version should 
 2. Ruby runner
 3. JavaScript runner
 4. HTML/CSS/JS live preview
-5. Local project saving first
-6. Cloud accounts/projects after the playground loop feels good
+5. Local project library with create/rename/delete/duplicate
+6. Import/export project JSON
+7. Copy share links that import a local project copy
+8. Cloud accounts/projects after the playground loop feels good
 
 ## Security Model
 
