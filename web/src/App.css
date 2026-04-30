@@ -324,6 +324,11 @@ h2 {
 }
 
 .main-workspace { min-width: 0; }
+.editor-panel {
+  align-self: start;
+  overflow: hidden;
+  background: #14110f;
+}
 .project-sidebar {
   min-width: 0;
   padding: 1rem;

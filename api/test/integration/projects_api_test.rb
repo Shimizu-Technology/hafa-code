@@ -216,4 +216,25 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  test "rate limits public share creation" do
+    original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    payload = {
+      title: "Shared Ruby",
+      kind: "ruby",
+      files: [ { path: "main.rb", language: "ruby", content: "puts 'hafa'" } ]
+    }
+
+    60.times do
+      post "/api/v1/shares", params: payload.to_json, headers: { "Content-Type" => "application/json" }
+      assert_response :created
+    end
+
+    post "/api/v1/shares", params: payload.to_json, headers: { "Content-Type" => "application/json" }
+
+    assert_response :too_many_requests
+  ensure
+    Rails.cache = original_cache
+  end
 end

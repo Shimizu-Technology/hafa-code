@@ -62,26 +62,14 @@ function linkedWebDocument(body: string) {
 
 function normalizeWebHtml(content: string) {
   if (!/<html[\s>]/i.test(content)) return linkedWebDocument(content)
-
-  let next = content
-  if (!/<link\b[^>]*\bhref=["']\.?\/?style\.css["'][^>]*>/i.test(next)) {
-    next = /<\/head>/i.test(next)
-      ? next.replace(/<\/head>/i, '    <link rel="stylesheet" href="style.css" />\n  </head>')
-      : next.replace(/<html([^>]*)>/i, '<html$1>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <link rel="stylesheet" href="style.css" />\n  </head>')
-  }
-  if (!/<script\b[^>]*\bsrc=["']\.?\/?script\.js["'][^>]*>\s*<\/script>/i.test(next)) {
-    next = /<\/body>/i.test(next)
-      ? next.replace(/<\/body>/i, '    <script src="script.js"></script>\n  </body>')
-      : `${next}\n<script src="script.js"></script>\n`
-  }
-
-  return next
+  return content
 }
 
 function normalizeWebFiles(files: SavedProject['files']) {
   const next = files.map((file) => ({ ...file }))
   let htmlIndex = next.findIndex((file) => file.path === 'index.html')
   if (htmlIndex === -1) htmlIndex = next.findIndex((file) => file.language === 'html')
+  const isLegacyBodyOnlyProject = htmlIndex !== -1 && !/<html[\s>]/i.test(next[htmlIndex].content)
 
   if (htmlIndex === -1) {
     next.unshift({
@@ -99,10 +87,10 @@ function normalizeWebFiles(files: SavedProject['files']) {
     }
   }
 
-  if (!next.some((file) => file.path === 'style.css')) {
+  if (isLegacyBodyOnlyProject && !next.some((file) => file.path === 'style.css')) {
     next.splice(htmlIndex + 1, 0, { path: 'style.css', language: 'css', content: DEFAULT_WEB_CSS })
   }
-  if (!next.some((file) => file.path === 'script.js')) {
+  if (isLegacyBodyOnlyProject && !next.some((file) => file.path === 'script.js')) {
     next.splice(htmlIndex + 2, 0, { path: 'script.js', language: 'javascript', content: DEFAULT_WEB_JS })
   }
 

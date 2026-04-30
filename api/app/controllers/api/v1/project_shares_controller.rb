@@ -47,7 +47,7 @@ module Api
 
       def share_rate_limited?
         key = "share-create:#{request.remote_ip}"
-        Rails.cache.write(key, 0, expires_in: 1.hour, unless_exist: true)
+        Rails.cache.write(key, 0, expires_in: 1.hour, unless_exist: true, raw: true)
         count = Rails.cache.increment(key).to_i
 
         count > 60
