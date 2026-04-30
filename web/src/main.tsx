@@ -11,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
+import { hasClerkPublishableKey } from './lib/clerk.ts'
 import { registerServiceWorker } from './pwa.ts'
 
 declare global {
@@ -22,7 +23,7 @@ declare global {
 }
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-const hasClerkPublishableKey = /^pk_(test|live)_[A-Za-z0-9_-]+$/.test(clerkPublishableKey ?? '')
+const cloudEnabled = hasClerkPublishableKey(clerkPublishableKey)
 
 window.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -36,7 +37,7 @@ window.MonacoEnvironment = {
 
 loader.config({ monaco })
 
-const app = hasClerkPublishableKey ? (
+const app = cloudEnabled ? (
   <ClerkProvider publishableKey={clerkPublishableKey}>
     <AuthProvider>
       <App />

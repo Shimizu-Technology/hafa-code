@@ -42,6 +42,7 @@ import {
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
 import { api } from './lib/api'
+import { hasClerkPublishableKey } from './lib/clerk'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 
@@ -257,10 +258,6 @@ function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
 
 function isCloudProjectId(id: string) {
   return /^\d+$/.test(id)
-}
-
-function hasClerkPublishableKey(value: unknown) {
-  return typeof value === 'string' && /^pk_(test|live)_[A-Za-z0-9_-]+$/.test(value)
 }
 
 function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary): ProjectLibrary {
