@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
 import {
   BookOpen,
   Cloud,
@@ -218,8 +218,14 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
 }
 
 function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
+  const { isLoaded } = useAuth()
+
   if (!cloudEnabled) {
     return <span className="cloud-pill muted"><Cloud size={15} /> Add Clerk key for cloud save</span>
+  }
+
+  if (!isLoaded) {
+    return <span className="cloud-pill muted"><Loader2 className="spin" size={15} /> Loading sign-in</span>
   }
 
   return (
