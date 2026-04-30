@@ -175,6 +175,31 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not response.parsed_body.dig("checkpoints", 0).key?("snapshot")
   end
 
+  test "keeps only the newest project checkpoints" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'hafa'") ]
+    )
+
+    31.times do |index|
+      post "/api/v1/projects/#{project.id}/checkpoints",
+        params: { title: "Checkpoint #{index}" }.to_json,
+        headers: @headers
+
+      assert_response :created
+    end
+
+    get "/api/v1/projects/#{project.id}/checkpoints", headers: @headers
+
+    assert_response :success
+    checkpoints = response.parsed_body.fetch("checkpoints")
+    assert_equal 30, checkpoints.length
+    assert_equal "Checkpoint 30", checkpoints.first.fetch("title")
+    assert_not_includes checkpoints.map { |checkpoint| checkpoint.fetch("title") }, "Checkpoint 0"
+    assert_equal 30, project.project_checkpoints.count
+  end
+
   test "creates and reads public share snapshots without authentication" do
     post "/api/v1/shares",
       params: {

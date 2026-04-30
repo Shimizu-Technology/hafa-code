@@ -415,12 +415,20 @@ export default function App() {
   }, [library])
 
   useEffect(() => {
-    Promise.resolve().then(() => setCheckpoints(loadLocalCheckpoints(project.id)))
+    let cancelled = false
+
+    Promise.resolve().then(() => {
+      if (!cancelled) setCheckpoints(loadLocalCheckpoints(project.id))
+    })
 
     if (isSignedIn && isCloudProjectId(project.id)) {
       api.getCheckpoints(project.id).then((res) => {
-        if (res.data) setCheckpoints(res.data)
+        if (!cancelled && res.data) setCheckpoints(res.data)
       })
+    }
+
+    return () => {
+      cancelled = true
     }
   }, [isSignedIn, project.id])
 

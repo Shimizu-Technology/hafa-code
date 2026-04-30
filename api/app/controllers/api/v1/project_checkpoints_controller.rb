@@ -1,12 +1,14 @@
 module Api
   module V1
     class ProjectCheckpointsController < ApplicationController
+      MAX_CHECKPOINTS_PER_PROJECT = 30
+
       before_action :authenticate_user!
       before_action :set_project
       before_action :set_checkpoint, only: [ :restore ]
 
       def index
-        render json: { checkpoints: @project.project_checkpoints.limit(30).map { |checkpoint| checkpoint_json(checkpoint, include_snapshot: false) } }
+        render json: { checkpoints: @project.project_checkpoints.limit(MAX_CHECKPOINTS_PER_PROJECT).map { |checkpoint| checkpoint_json(checkpoint, include_snapshot: false) } }
       end
 
       def create
@@ -16,6 +18,7 @@ module Api
         )
 
         if checkpoint.save
+          prune_old_checkpoints(checkpoint)
           render json: { checkpoint: checkpoint_json(checkpoint) }, status: :created
         else
           render json: { errors: checkpoint.errors.full_messages }, status: :unprocessable_entity
@@ -57,6 +60,15 @@ module Api
 
       def set_checkpoint
         @checkpoint = @project.project_checkpoints.find(params[:id])
+      end
+
+      def prune_old_checkpoints(saved_checkpoint)
+        checkpoint_ids = @project.project_checkpoints
+          .where.not(id: saved_checkpoint.id)
+          .offset(MAX_CHECKPOINTS_PER_PROJECT - 1)
+          .pluck(:id)
+
+        @project.project_checkpoints.where(id: checkpoint_ids).destroy_all
       end
 
       def project_snapshot(project)
