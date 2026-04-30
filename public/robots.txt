@@ -1,0 +1,7 @@
+# Hafa Code
+# https://hafacode.com
+
+User-agent: *
+Allow: /
+
+Sitemap: https://hafacode.com/sitemap.xml

@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import {
+  BookOpen,
   Copy,
   Download,
   Files,
   Globe,
   Import,
+  Layers3,
   Loader2,
   Play,
   Plus,
+  Rocket,
+  ShieldCheck,
   Square,
   Terminal,
   Trash2,
+  Zap,
 } from 'lucide-react'
 import './App.css'
 import {
@@ -44,6 +49,11 @@ interface RunState {
 }
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
+const kindLabels: Record<ProjectKind, string> = {
+  ruby: 'Ruby',
+  javascript: 'JavaScript',
+  web: 'HTML/CSS/JS',
+}
 
 function languageForFile(file: ProjectFile) {
   if (file.language === 'ruby') return 'ruby'
@@ -147,11 +157,12 @@ function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFil
   const outputIsEmpty = !runState.stdout && !runState.stderr
 
   return (
-    <section className="panel output-panel">
+    <section className="panel output-panel surface-grid">
       <div className="panel-header">
         <div>
           <p className="eyebrow">Output</p>
           <h2><Terminal size={18} /> Browser runner</h2>
+          <p className="helper-text">Runs locally in a worker with a {RUNNER_TIMEOUT_MS / 1000}s guardrail.</p>
         </div>
         {runState.status === 'running' ? (
           <button className="secondary" onClick={() => {
@@ -167,8 +178,13 @@ function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFil
         )}
       </div>
       <div className="terminal">
-        {runState.status === 'running' && <p className="muted inline"><Loader2 className="spin" size={15} /> Running in browser...</p>}
-        {runState.status !== 'running' && outputIsEmpty && <p className="muted">Output will appear here.</p>}
+        {runState.status === 'running' && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
+        {runState.status !== 'running' && outputIsEmpty && (
+          <div className="empty-output">
+            <Zap size={28} />
+            <p>Press Run to see stdout and errors here.</p>
+          </div>
+        )}
         {runState.stdout && <pre>{runState.stdout}</pre>}
         {runState.stderr && <pre className="error-text">{runState.stderr}</pre>}
       </div>
@@ -184,14 +200,15 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
   const preview = useMemo(() => buildHtmlPreview(files), [files])
 
   return (
-    <section className="panel preview-panel">
+    <section className="panel preview-panel surface-grid">
       <div className="panel-header">
         <div>
           <p className="eyebrow">Preview</p>
           <h2><Globe size={18} /> Web page</h2>
+          <p className="helper-text">Sandboxed iframe, no same-origin access.</p>
         </div>
       </div>
-      <iframe title="Web preview" sandbox="allow-scripts" srcDoc={preview} />
+      <iframe title="Web preview" sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={preview} />
     </section>
   )
 }
@@ -289,11 +306,25 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <header className="hero">
-        <div>
+      <header className="hero panel hero-panel">
+        <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
           <h1>Hafa Code</h1>
           <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, and HTML/CSS/JS in the browser.</p>
+          <div className="trust-row" aria-label="Platform guardrails">
+            <span><ShieldCheck size={15} /> Browser-sandboxed</span>
+            <span><Rocket size={15} /> No setup</span>
+            <span><BookOpen size={15} /> Beginner-first</span>
+          </div>
+        </div>
+        <div className="hero-card" aria-hidden="true">
+          <div className="orbit orbit-one" />
+          <div className="orbit orbit-two" />
+          <div className="hero-card-inner">
+            <Layers3 size={26} />
+            <strong>{library.projects.length}</strong>
+            <span>local projects</span>
+          </div>
         </div>
         <div className="hero-actions">
           <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
@@ -311,11 +342,12 @@ export default function App() {
       )}
 
       <div className="layout-grid">
-        <aside className="panel project-sidebar">
+        <aside className="panel project-sidebar surface-grid">
           <div className="sidebar-header">
             <h2><Files size={18} /> Projects</h2>
             <span>{library.projects.length}</span>
           </div>
+          <p className="sidebar-note">Everything is private to this browser until you export or share it.</p>
           <div className="new-project-grid">
             {(['ruby', 'javascript', 'web'] as ProjectKind[]).map((kind) => (
               <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
@@ -330,19 +362,19 @@ export default function App() {
                 className={`project-card ${candidate.id === project.id ? 'active' : ''}`}
                 onClick={() => setActiveProject(candidate.id)}
               >
-                <span>{candidate.title}</span>
-                <small>{candidate.kind === 'javascript' ? 'JavaScript' : candidate.kind === 'web' ? 'HTML/CSS/JS' : 'Ruby'}</small>
+                <span>{candidate.title || 'Untitled Project'}</span>
+                <small>{kindLabels[candidate.kind]}</small>
               </button>
             ))}
           </div>
         </aside>
 
         <section className="main-workspace">
-          <div className="project-toolbar panel">
+          <div className="project-toolbar panel surface-grid">
             <div className="title-field">
               <label htmlFor="project-title">Project name</label>
               <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} />
-              <small>Saved locally · updated {formatUpdatedAt(project.updatedAt)}</small>
+              <small>Autosaved locally · updated {formatUpdatedAt(project.updatedAt)}</small>
             </div>
             <div className="toolbar-actions">
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
@@ -364,6 +396,7 @@ export default function App() {
                 language={languageForFile(activeFile)}
                 theme="vs-dark"
                 value={activeFile.content}
+                loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
                 onChange={(value) => updateActiveFile(value ?? '')}
                 options={{
                   minimap: { enabled: false },
@@ -373,6 +406,7 @@ export default function App() {
                   wordWrap: 'on',
                   automaticLayout: true,
                   scrollBeyondLastLine: false,
+                  padding: { top: 16, bottom: 16 },
                 }}
               />
             </section>

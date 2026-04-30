@@ -1,0 +1,19 @@
+{
+  "name": "Hafa Code",
+  "short_name": "Hafa Code",
+  "description": "A beginner-friendly coding playground for Ruby, JavaScript, HTML, and CSS.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f0e5",
+  "theme_color": "#14110f",
+  "orientation": "any",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
