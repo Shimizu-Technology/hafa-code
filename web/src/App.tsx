@@ -42,6 +42,7 @@ import {
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
 import { api } from './lib/api'
+import { hasClerkPublishableKey } from './lib/clerk'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 
@@ -219,9 +220,21 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
 
 function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
   const { isLoaded } = useAuth()
+  const [loadTimedOut, setLoadTimedOut] = useState(false)
+
+  useEffect(() => {
+    if (!cloudEnabled || isLoaded) return
+
+    const timeout = window.setTimeout(() => setLoadTimedOut(true), 8_000)
+    return () => window.clearTimeout(timeout)
+  }, [cloudEnabled, isLoaded])
 
   if (!cloudEnabled) {
-    return <span className="cloud-pill muted"><Cloud size={15} /> Add Clerk key for cloud save</span>
+    return <span className="cloud-pill muted"><Cloud size={15} /> Add a valid Clerk key for cloud save</span>
+  }
+
+  if (!isLoaded && loadTimedOut) {
+    return <span className="cloud-pill muted"><Cloud size={15} /> Cloud sign-in unavailable</span>
   }
 
   if (!isLoaded) {
@@ -247,6 +260,16 @@ function isCloudProjectId(id: string) {
   return /^\d+$/.test(id)
 }
 
+function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary): ProjectLibrary {
+  const localOnlyProjects = localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
+  const projects = [...cloudProjects, ...localOnlyProjects]
+  const activeProjectId = projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
+    ? localLibrary.activeProjectId
+    : projects[0].id
+
+  return { activeProjectId, projects }
+}
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
@@ -257,13 +280,15 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const syncTimerRef = useRef<number | null>(null)
   const replacingCloudIdRef = useRef(false)
+  const libraryRef = useRef(library)
   const { isSignedIn, user } = useAuthContext()
-  const cloudEnabled = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
+  const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
 
   useEffect(() => {
+    libraryRef.current = library
     saveProjectLibrary(library)
   }, [library])
 
@@ -276,9 +301,11 @@ export default function App() {
         return
       }
       if (res.data && res.data.length > 0) {
-        setLibrary({ activeProjectId: res.data[0].id, projects: res.data })
-        setActivePath(res.data[0].files[0].path)
-        setNotice(`Loaded ${res.data.length} cloud project${res.data.length === 1 ? '' : 's'}.`)
+        const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current)
+        const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
+        setLibrary(merged)
+        setActivePath(nextProject.files[0].path)
+        setNotice(`Loaded ${res.data.length} cloud project${res.data.length === 1 ? '' : 's'} and kept local drafts.`)
       } else {
         setNotice('Signed in. Local projects will sync to your account as you edit.')
       }
@@ -487,7 +514,7 @@ export default function App() {
                 ))}
               </div>
               <MonacoEditor
-                height="560px"
+                height="var(--workspace-pane-height)"
                 language={languageForFile(activeFile)}
                 theme="vs-dark"
                 value={activeFile.content}

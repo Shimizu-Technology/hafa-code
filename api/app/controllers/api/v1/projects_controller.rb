@@ -85,6 +85,8 @@ module Api
 
       def assign_files(project)
         files_param.each_with_index do |file, index|
+          next unless file.respond_to?(:to_unsafe_h)
+
           permitted = ActionController::Parameters.new(file.to_unsafe_h).permit(:path, :language, :content, :position)
           project.project_files.build(
             path: permitted[:path],

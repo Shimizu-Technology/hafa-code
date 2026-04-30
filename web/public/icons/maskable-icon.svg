@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Hafa Code maskable icon</title>
+  <desc id="desc">A centered Hafa Code mark with generous safe-area padding for adaptive app icons.</desc>
+  <rect width="512" height="512" fill="#f7f0e5"/>
+  <circle cx="128" cy="112" r="112" fill="#f8b84e" fill-opacity="0.34"/>
+  <circle cx="420" cy="88" r="132" fill="#136f63" fill-opacity="0.18"/>
+  <rect x="154" y="144" width="204" height="204" rx="48" fill="#14110f" transform="rotate(-4 256 246)"/>
+  <path d="M224 222l-36 34 36 34M288 222l36 34-36 34M270 204l-28 104" fill="none" stroke="#fffaf1" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M342 168c32 25 49 60 46 99" fill="none" stroke="#e9472f" stroke-width="6" stroke-linecap="round" stroke-opacity="0.74"/>
+</svg>

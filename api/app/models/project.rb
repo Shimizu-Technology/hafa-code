@@ -9,4 +9,14 @@ class Project < ApplicationRecord
   validates :title, presence: true, length: { maximum: 120 }
   validates :kind, inclusion: { in: KINDS }
   validates :visibility, inclusion: { in: VISIBILITIES }
+  validates_associated :project_files
+  validate :has_at_least_one_file
+
+  private
+
+  def has_at_least_one_file
+    return if project_files.reject(&:marked_for_destruction?).any?
+
+    errors.add(:project_files, "must include at least one file")
+  end
 end
