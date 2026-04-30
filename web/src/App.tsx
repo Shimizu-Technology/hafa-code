@@ -234,8 +234,29 @@ function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFil
   )
 }
 
+interface PreviewConsoleMessage {
+  source: 'hafa-code-preview-console'
+  level: 'log' | 'warn' | 'error'
+  message: string
+}
+
 function WebPreview({ files }: { files: ProjectFile[] }) {
   const preview = useMemo(() => buildHtmlPreview(files), [files])
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      const message = event.data as Partial<PreviewConsoleMessage>
+      if (message.source !== 'hafa-code-preview-console' || !message.level || !message.message) return
+
+      setConsoleMessages((current) => [...current, message as PreviewConsoleMessage].slice(-20))
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
 
   return (
     <section className="panel preview-panel surface-grid">
@@ -246,7 +267,22 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
           <p className="helper-text">Sandboxed iframe, no same-origin access.</p>
         </div>
       </div>
-      <iframe title="Web preview" sandbox="allow-scripts allow-modals" referrerPolicy="no-referrer" srcDoc={preview} />
+      <iframe ref={iframeRef} title="Web preview" sandbox="allow-scripts allow-modals" referrerPolicy="no-referrer" srcDoc={preview} />
+      <div className="preview-console" aria-live="polite">
+        <div className="preview-console-header">
+          <span>Browser console</span>
+          {consoleMessages.length > 0 && (
+            <button className="ghost compact" type="button" onClick={() => setConsoleMessages([])}>Clear</button>
+          )}
+        </div>
+        {consoleMessages.length === 0 ? (
+          <p>No console messages yet.</p>
+        ) : (
+          consoleMessages.map((message, index) => (
+            <pre key={`${message.level}-${index}`} className={`preview-console-line ${message.level}`}>{message.message}</pre>
+          ))
+        )}
+      </div>
     </section>
   )
 }
@@ -625,6 +661,7 @@ export default function App() {
 
   const saveCheckpoint = async () => {
     const title = `Checkpoint ${formatCheckpointTime(new Date().toISOString())}`
+    let cloudCheckpointError = ''
 
     if (isSignedIn && isCloudProjectId(project.id)) {
       const res = await api.createCheckpoint(project.id, title)
@@ -633,12 +670,14 @@ export default function App() {
         setNotice('Checkpoint saved to cloud.')
         return
       }
-      setNotice(`Cloud checkpoint failed: ${res.error || 'unknown error'}`)
+      cloudCheckpointError = res.error || 'unknown error'
     }
 
     const checkpoint = createLocalCheckpoint(project, title)
     setCheckpoints((current) => [checkpoint, ...current].slice(0, 30))
-    setNotice('Checkpoint saved locally.')
+    setNotice(cloudCheckpointError
+      ? `Cloud checkpoint failed: ${cloudCheckpointError}. Saved locally instead.`
+      : 'Checkpoint saved locally.')
   }
 
   const restoreCheckpoint = async (checkpoint: ProjectCheckpoint) => {

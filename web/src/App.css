@@ -671,6 +671,45 @@ h2 {
   background: white;
 }
 
+.preview-console {
+  border-top: 1px solid var(--line);
+  background: #11100f;
+  color: #f3eadc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  min-height: 94px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.preview-console-header {
+  align-items: center;
+  background: #211c18;
+  color: #b9aa99;
+  display: flex;
+  font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  justify-content: space-between;
+  padding: 0.45rem 0.7rem;
+}
+
+.preview-console p {
+  color: #9f9185;
+  margin: 0;
+  padding: 0.75rem;
+}
+
+.preview-console-line {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.preview-console-line.warn { color: #ffd38a; }
+.preview-console-line.error { color: #ffb3a7; }
+
 .mobile-bottom-nav {
   display: none;
 }

@@ -1,4 +1,5 @@
 import type { ProjectCheckpoint, ProjectFile, ProjectKind, ProjectSnapshot, SavedProject } from './codeRunner'
+import { normalizeProject } from './projectStorage'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 let getAuthToken: (() => Promise<string | null>) | null = null
@@ -82,7 +83,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 }
 
 function apiProjectToSavedProject(project: ApiProject): SavedProject {
-  return {
+  const normalized = normalizeProject({
     id: String(project.id),
     title: project.title,
     kind: project.kind,
@@ -93,7 +94,10 @@ function apiProjectToSavedProject(project: ApiProject): SavedProject {
     createdAt: project.created_at,
     updatedAt: project.updated_at,
     archivedAt: project.archived_at,
-  }
+  })
+
+  if (!normalized) throw new Error('Cloud project was not valid.')
+  return normalized
 }
 
 function savedProjectPayload(project: SavedProject) {
@@ -116,7 +120,7 @@ function apiCheckpointToProjectCheckpoint(checkpoint: ApiCheckpoint): ProjectChe
 
 function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
   const now = new Date().toISOString()
-  return {
+  const normalized = normalizeProject({
     id: crypto.randomUUID(),
     title: share.snapshot.title || share.title,
     kind: share.snapshot.kind || share.kind,
@@ -124,7 +128,10 @@ function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
-  }
+  })
+
+  if (!normalized) throw new Error('Shared project was not valid.')
+  return normalized
 }
 
 export const api = {

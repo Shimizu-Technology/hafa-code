@@ -6,6 +6,8 @@ const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
 const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
 const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css'])
 type FileLanguage = SavedProject['files'][number]['language']
+const DEFAULT_WEB_CSS = 'body {\n  font-family: system-ui, sans-serif;\n  margin: 0;\n  padding: 2rem;\n  background: #0f172a;\n  color: white;\n}\n\nmain {\n  max-width: 680px;\n  margin: auto;\n}\n\nbutton {\n  border: 0;\n  border-radius: 999px;\n  padding: 0.75rem 1rem;\n  background: #ef4444;\n  color: white;\n  font-weight: 700;\n}\n'
+const DEFAULT_WEB_JS = 'document.querySelector("#hello")?.addEventListener("click", () => {\n  alert("You shipped your first web interaction!")\n})\n'
 
 export interface ProjectLibrary {
   activeProjectId: string
@@ -41,12 +43,78 @@ function inferFileLanguage(path: string, kind: ProjectKind): FileLanguage {
   return 'javascript'
 }
 
-function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
+function linkedWebDocument(body: string) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hafa Code Page</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    ${body.trim()}
+    <script src="script.js"></script>
+  </body>
+</html>
+`
+}
+
+function normalizeWebHtml(content: string) {
+  if (!/<html[\s>]/i.test(content)) return linkedWebDocument(content)
+
+  let next = content
+  if (!/<link\b[^>]*\bhref=["']\.?\/?style\.css["'][^>]*>/i.test(next)) {
+    next = /<\/head>/i.test(next)
+      ? next.replace(/<\/head>/i, '    <link rel="stylesheet" href="style.css" />\n  </head>')
+      : next.replace(/<html([^>]*)>/i, '<html$1>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <link rel="stylesheet" href="style.css" />\n  </head>')
+  }
+  if (!/<script\b[^>]*\bsrc=["']\.?\/?script\.js["'][^>]*>\s*<\/script>/i.test(next)) {
+    next = /<\/body>/i.test(next)
+      ? next.replace(/<\/body>/i, '    <script src="script.js"></script>\n  </body>')
+      : `${next}\n<script src="script.js"></script>\n`
+  }
+
+  return next
+}
+
+function normalizeWebFiles(files: SavedProject['files']) {
+  const next = files.map((file) => ({ ...file }))
+  let htmlIndex = next.findIndex((file) => file.path === 'index.html')
+  if (htmlIndex === -1) htmlIndex = next.findIndex((file) => file.language === 'html')
+
+  if (htmlIndex === -1) {
+    next.unshift({
+      path: 'index.html',
+      language: 'html',
+      content: linkedWebDocument('<main>\n      <h1>Hafa adai!</h1>\n      <p>Edit HTML, CSS, and JS to build a page.</p>\n      <button id="hello">Click me</button>\n    </main>'),
+    })
+    htmlIndex = 0
+  } else {
+    next[htmlIndex] = {
+      ...next[htmlIndex],
+      path: next[htmlIndex].path || 'index.html',
+      language: 'html',
+      content: normalizeWebHtml(next[htmlIndex].content),
+    }
+  }
+
+  if (!next.some((file) => file.path === 'style.css')) {
+    next.splice(htmlIndex + 1, 0, { path: 'style.css', language: 'css', content: DEFAULT_WEB_CSS })
+  }
+  if (!next.some((file) => file.path === 'script.js')) {
+    next.splice(htmlIndex + 2, 0, { path: 'script.js', language: 'javascript', content: DEFAULT_WEB_JS })
+  }
+
+  return next
+}
+
+export function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
   if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
     return null
   }
 
-  const files = candidate.files
+  let files = candidate.files
     .filter((file) => typeof file?.path === 'string')
     .map((file) => ({
       path: file.path.trim() || 'main.txt',
@@ -55,6 +123,7 @@ function normalizeProject(candidate: Partial<SavedProject> | null | undefined): 
     }))
 
   if (files.length === 0) return null
+  if (candidate.kind === 'web') files = normalizeWebFiles(files)
 
   const now = new Date().toISOString()
   return {
