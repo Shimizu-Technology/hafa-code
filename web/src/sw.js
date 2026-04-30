@@ -34,8 +34,9 @@ function shouldHandleRequest(request, url) {
 async function cacheResponse(key, response) {
   if (!response.ok) return
 
+  const copy = response.clone()
   const cache = await caches.open(CACHE_NAME)
-  await cache.put(key, response.clone())
+  await cache.put(key, copy)
 }
 
 self.addEventListener('fetch', (event) => {
