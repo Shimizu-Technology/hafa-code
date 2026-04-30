@@ -1,17 +1,7 @@
-const SERVICE_WORKER_VERSION = new URL(self.location.href).searchParams.get('v') || 'dev'
+const SERVICE_WORKER_VERSION = '__HAFA_CODE_SW_VERSION__'
 const CACHE_PREFIX = 'hafa-code-shell'
 const CACHE_NAME = `${CACHE_PREFIX}-${SERVICE_WORKER_VERSION}`
-const APP_SHELL = [
-  '/',
-  '/manifest.json',
-  '/favicon.svg',
-  '/icons/icon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/maskable-icon.svg',
-  '/icons/maskable-icon-512.png',
-  '/icons/apple-touch-icon.png'
-]
+const APP_SHELL = __HAFA_CODE_APP_SHELL__
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

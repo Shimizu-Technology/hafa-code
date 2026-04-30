@@ -4,6 +4,7 @@ const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
 const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
 const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css'])
+type FileLanguage = SavedProject['files'][number]['language']
 
 export interface ProjectLibrary {
   activeProjectId: string
@@ -23,16 +24,30 @@ function isProjectKind(value: unknown): value is ProjectKind {
   return typeof value === 'string' && PROJECT_KINDS.has(value as ProjectKind)
 }
 
+function isFileLanguage(value: unknown): value is FileLanguage {
+  return typeof value === 'string' && FILE_LANGUAGES.has(value)
+}
+
+function inferFileLanguage(path: string, kind: ProjectKind): FileLanguage {
+  const extension = path.toLowerCase().split('.').pop()
+  if (extension === 'rb') return 'ruby'
+  if (extension === 'html' || extension === 'htm') return 'html'
+  if (extension === 'css') return 'css'
+  if (extension === 'js' || extension === 'mjs' || extension === 'cjs') return 'javascript'
+  if (kind === 'ruby') return 'ruby'
+  return 'javascript'
+}
+
 function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
   if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
     return null
   }
 
   const files = candidate.files
-    .filter((file) => typeof file?.path === 'string' && FILE_LANGUAGES.has(file.language))
+    .filter((file) => typeof file?.path === 'string')
     .map((file) => ({
       path: file.path.trim() || 'main.txt',
-      language: file.language,
+      language: isFileLanguage(file.language) ? file.language : inferFileLanguage(file.path, candidate.kind as ProjectKind),
       content: String(file.content ?? ''),
     }))
 

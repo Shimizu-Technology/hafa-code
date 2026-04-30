@@ -7,7 +7,7 @@ export function registerServiceWorker() {
   }
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=20260430-2').catch((error) => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
       console.warn('Service worker registration failed:', error)
     })
   })
