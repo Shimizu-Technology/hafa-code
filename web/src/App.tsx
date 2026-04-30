@@ -246,7 +246,7 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
           <p className="helper-text">Sandboxed iframe, no same-origin access.</p>
         </div>
       </div>
-      <iframe title="Web preview" sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={preview} />
+      <iframe title="Web preview" sandbox="allow-scripts allow-modals" referrerPolicy="no-referrer" srcDoc={preview} />
     </section>
   )
 }
@@ -494,6 +494,10 @@ export default function App() {
   }
 
   const requestDeleteProject = () => {
+    if (library.projects.length <= 1) {
+      setNotice('Keep at least one project in the library.')
+      return
+    }
     setProjectActionsOpen(false)
     setConfirmAction('delete')
   }
