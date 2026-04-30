@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
 import {
   BookOpen,
+  Cloud,
   Copy,
   Download,
   Files,
@@ -38,6 +40,8 @@ import {
   saveProjectLibrary,
   type ProjectLibrary,
 } from './lib/projectStorage'
+import { useAuthContext } from './contexts/AuthContext'
+import { api } from './lib/api'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 
@@ -213,13 +217,42 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
   )
 }
 
+function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
+  if (!cloudEnabled) {
+    return <span className="cloud-pill muted"><Cloud size={15} /> Add Clerk key for cloud save</span>
+  }
+
+  return (
+    <div className="auth-actions">
+      <SignedOut>
+        <SignInButton mode="modal">
+          <button className="secondary"><Cloud size={16} /> Sign in to sync</button>
+        </SignInButton>
+      </SignedOut>
+      <SignedIn>
+        <span className="cloud-pill"><Cloud size={15} /> Cloud sync on</span>
+        <UserButton afterSignOutUrl="/" />
+      </SignedIn>
+    </div>
+  )
+}
+
+function isCloudProjectId(id: string) {
+  return /^\d+$/.test(id)
+}
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
+  const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const syncTimerRef = useRef<number | null>(null)
+  const replacingCloudIdRef = useRef(false)
+  const { isSignedIn, user } = useAuthContext()
+  const cloudEnabled = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
@@ -227,6 +260,55 @@ export default function App() {
   useEffect(() => {
     saveProjectLibrary(library)
   }, [library])
+
+  useEffect(() => {
+    if (!isSignedIn || hasLoadedCloudProjects) return
+
+    api.getProjects().then((res) => {
+      if (res.error) {
+        setNotice(`Cloud sync unavailable: ${res.error}`)
+        return
+      }
+      if (res.data && res.data.length > 0) {
+        setLibrary({ activeProjectId: res.data[0].id, projects: res.data })
+        setActivePath(res.data[0].files[0].path)
+        setNotice(`Loaded ${res.data.length} cloud project${res.data.length === 1 ? '' : 's'}.`)
+      } else {
+        setNotice('Signed in. Local projects will sync to your account as you edit.')
+      }
+      setHasLoadedCloudProjects(true)
+    })
+  }, [hasLoadedCloudProjects, isSignedIn])
+
+  useEffect(() => {
+    if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current) return
+    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+
+    syncTimerRef.current = window.setTimeout(async () => {
+      if (isCloudProjectId(project.id)) {
+        const res = await api.updateProject(project)
+        if (res.error) setNotice(`Cloud save failed: ${res.error}`)
+        return
+      }
+
+      const res = await api.createProject(project)
+      if (res.error || !res.data) {
+        setNotice(`Cloud save failed: ${res.error || 'unknown error'}`)
+        return
+      }
+
+      replacingCloudIdRef.current = true
+      setLibrary((current) => ({
+        activeProjectId: current.activeProjectId === project.id ? res.data!.id : current.activeProjectId,
+        projects: current.projects.map((candidate) => candidate.id === project.id ? res.data! : candidate),
+      }))
+      window.setTimeout(() => { replacingCloudIdRef.current = false }, 0)
+    }, 900)
+
+    return () => {
+      if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+    }
+  }, [hasLoadedCloudProjects, isSignedIn, library, project])
 
   const setActiveProject = (projectId: string) => {
     const nextProject = library.projects.find((candidate) => candidate.id === projectId)
@@ -251,7 +333,13 @@ export default function App() {
     const activeProjectId = projectId === library.activeProjectId ? remaining[0].id : library.activeProjectId
     setLibrary({ activeProjectId, projects: remaining })
     setActivePath(remaining.find((candidate) => candidate.id === activeProjectId)?.files[0].path ?? remaining[0].files[0].path)
-    setNotice('Project deleted locally.')
+    if (isSignedIn && isCloudProjectId(projectId)) {
+      api.deleteProject(projectId).then((res) => {
+        setNotice(res.error ? `Cloud delete failed: ${res.error}` : 'Project deleted from cloud.')
+      })
+    } else {
+      setNotice('Project deleted locally.')
+    }
   }
 
   const cloneProject = () => {
@@ -323,10 +411,11 @@ export default function App() {
           <div className="hero-card-inner">
             <Layers3 size={26} />
             <strong>{library.projects.length}</strong>
-            <span>local projects</span>
+            <span>{isSignedIn ? 'cloud projects' : 'local projects'}</span>
           </div>
         </div>
         <div className="hero-actions">
+          <AuthControls cloudEnabled={cloudEnabled} />
           <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
           <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
           <button onClick={copyShareLink}><Copy size={16} /> Share</button>
@@ -347,7 +436,7 @@ export default function App() {
             <h2><Files size={18} /> Projects</h2>
             <span>{library.projects.length}</span>
           </div>
-          <p className="sidebar-note">Everything is private to this browser until you export or share it.</p>
+          <p className="sidebar-note">{isSignedIn ? `Signed in${user?.full_name ? ` as ${user.full_name}` : ''}. Projects sync to your account.` : 'Everything is private to this browser until you export, share, or sign in.'}</p>
           <div className="new-project-grid">
             {(['ruby', 'javascript', 'web'] as ProjectKind[]).map((kind) => (
               <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
@@ -374,7 +463,7 @@ export default function App() {
             <div className="title-field">
               <label htmlFor="project-title">Project name</label>
               <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} />
-              <small>Autosaved locally · updated {formatUpdatedAt(project.updatedAt)}</small>
+              <small>{isSignedIn ? 'Autosaved to cloud + local backup' : 'Autosaved locally'} · updated {formatUpdatedAt(project.updatedAt)}</small>
             </div>
             <div className="toolbar-actions">
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>

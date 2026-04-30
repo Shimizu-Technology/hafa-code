@@ -56,13 +56,14 @@ Intentional restrictions:
 - Ruby WASM is large and first-run startup can be slow on older devices.
 - The UI timeout can terminate a worker, but Ruby WASM internals may not support as fine-grained interruption as QuickJS.
 - Share links encode project source in the URL hash; users should not put secrets in projects.
-- Local storage is device/browser scoped and should not be treated as durable cloud backup.
+- Anonymous local storage is device/browser scoped and should not be treated as durable cloud backup.
+- Signed-in cloud sync stores source text in Rails/PostgreSQL; users should still avoid storing secrets in playground code.
 
-## Before Adding Cloud Persistence
+## Cloud Persistence Rules
 
-Do not run student code on the cloud persistence backend.
+Do not run student code on the Rails backend.
 
-Cloud services should store only:
+Rails should store only:
 
 - users
 - project metadata

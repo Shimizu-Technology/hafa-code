@@ -3,15 +3,21 @@
 ## High-Level Shape
 
 ```txt
-React SPA
-  ├─ Monaco editors
-  ├─ Runner worker
-  │   ├─ Ruby WASM
-  │   └─ QuickJS WASM
-  ├─ HTML preview iframe
-  └─ Project storage adapter
-      ├─ localStorage initially
-      └─ cloud backend later
+Rails API + React SPA
+  ├─ api/ Rails API-only backend
+  │   ├─ Clerk JWT authentication
+  │   ├─ Users
+  │   ├─ Projects
+  │   └─ ProjectFiles
+  └─ web/ React + Vite frontend
+      ├─ Monaco editors
+      ├─ Runner worker
+      │   ├─ Ruby WASM
+      │   └─ QuickJS WASM
+      ├─ HTML preview iframe
+      └─ Project storage adapter
+          ├─ localStorage anonymous fallback
+          └─ Rails cloud sync when signed in
 ```
 
 ## Why Browser-Side Execution
@@ -79,13 +85,29 @@ type ProjectFile = {
 }
 ```
 
-## First Backend Choice
+## Backend Choice
 
-Recommendation: start frontend-only with localStorage. Once UX is validated, add Supabase for:
+Hafa Code uses the same broad shape as other Shimizu/CSG apps: Rails API + React frontend.
 
-- Auth
-- Postgres projects table
-- Row-level security
-- public/unlisted share links
+Why this instead of Supabase/Convex:
 
-Convex would also be good for fast iteration, but Supabase is easier for students/alumni to understand and contribute to as open source.
+- CSG students are already learning Rails + React.
+- Alumni can contribute using familiar app patterns.
+- The backend remains portable and open-source friendly.
+- Rails is a great fit for users, projects, files, forks, visibility, and classroom metadata.
+
+Important: Rails does **not** execute student code. It only stores source files and metadata. Any future server-side execution should be a separate sandbox service with quotas, filesystem isolation, network isolation, and abuse monitoring.
+
+## Current API Shape
+
+```txt
+POST   /api/v1/sessions
+GET    /api/v1/projects
+POST   /api/v1/projects
+GET    /api/v1/projects/:id
+PATCH  /api/v1/projects/:id
+DELETE /api/v1/projects/:id
+POST   /api/v1/projects/:id/duplicate
+```
+
+Auth follows the CSG LMS Clerk pattern: frontend gets a Clerk JWT, API verifies it against Clerk JWKS, and Rails finds or creates the local `User`.

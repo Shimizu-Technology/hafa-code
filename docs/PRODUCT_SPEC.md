@@ -66,8 +66,8 @@ Phase 1:
 
 Phase 2:
 
-- user auth
-- cloud projects
+- Clerk user auth
+- Rails-backed cloud projects
 - share links
 - forks/remixes
 
@@ -84,13 +84,14 @@ These can come later, but only after the simple learning loop is excellent.
 
 ## Recommended Stack
 
-- React + TypeScript + Vite
+- Rails API-only backend
+- Clerk auth, following the CSG LMS pattern
+- React + TypeScript + Vite frontend
 - Monaco editor
-- Tailwind later, but keep MVP CSS simple if it ships faster
 - Ruby WASM for Ruby
 - QuickJS WASM for JavaScript
 - Sandboxed iframe for HTML/CSS/JS
-- Future persistence: Supabase or Convex
+- PostgreSQL for users, projects, files, forks, and share metadata
 
 ## Open Source Positioning
 
