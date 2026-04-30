@@ -2,6 +2,8 @@ import { starterProject, type ProjectKind, type SavedProject } from './codeRunne
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
+const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
+const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css'])
 
 export interface ProjectLibrary {
   activeProjectId: string
@@ -17,9 +19,41 @@ function safeParse<T>(value: string | null): T | null {
   }
 }
 
+function isProjectKind(value: unknown): value is ProjectKind {
+  return typeof value === 'string' && PROJECT_KINDS.has(value as ProjectKind)
+}
+
+function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
+  if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
+    return null
+  }
+
+  const files = candidate.files
+    .filter((file) => typeof file?.path === 'string' && FILE_LANGUAGES.has(file.language))
+    .map((file) => ({
+      path: file.path.trim() || 'main.txt',
+      language: file.language,
+      content: String(file.content ?? ''),
+    }))
+
+  if (files.length === 0) return null
+
+  const now = new Date().toISOString()
+  return {
+    id: String(candidate.id),
+    title: String(candidate.title),
+    kind: candidate.kind,
+    files,
+    createdAt: String(candidate.createdAt || now),
+    updatedAt: String(candidate.updatedAt || now),
+  }
+}
+
 function normalizeLibrary(candidate: ProjectLibrary | null): ProjectLibrary | null {
   if (!candidate || !Array.isArray(candidate.projects) || candidate.projects.length === 0) return null
-  const projects = candidate.projects.filter((project) => project?.id && project?.kind && Array.isArray(project.files))
+  const projects = candidate.projects
+    .map((project) => normalizeProject(project))
+    .filter((project): project is SavedProject => Boolean(project))
   if (projects.length === 0) return null
   const activeProjectId = projects.some((project) => project.id === candidate.activeProjectId)
     ? candidate.activeProjectId
@@ -32,8 +66,9 @@ export function loadProjectLibrary(): ProjectLibrary {
   if (current) return current
 
   const legacyProject = safeParse<SavedProject>(localStorage.getItem(LEGACY_STORAGE_KEY))
-  if (legacyProject?.id && Array.isArray(legacyProject.files)) {
-    const migrated = { activeProjectId: legacyProject.id, projects: [legacyProject] }
+  const normalizedLegacyProject = normalizeProject(legacyProject)
+  if (normalizedLegacyProject) {
+    const migrated = { activeProjectId: normalizedLegacyProject.id, projects: [normalizedLegacyProject] }
     saveProjectLibrary(migrated)
     localStorage.removeItem(LEGACY_STORAGE_KEY)
     return migrated
@@ -83,23 +118,19 @@ export function exportProject(project: SavedProject) {
 
 export function parseImportedProject(raw: string): SavedProject {
   const parsed = JSON.parse(raw) as Partial<SavedProject>
-  if (!parsed.title || !parsed.kind || !Array.isArray(parsed.files) || parsed.files.length === 0) {
+  const now = new Date().toISOString()
+  const normalized = normalizeProject({
+    ...parsed,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  if (!normalized) {
     throw new Error('That file is not a valid Hafa Code project.')
   }
 
-  const now = new Date().toISOString()
-  return {
-    id: crypto.randomUUID(),
-    title: String(parsed.title),
-    kind: parsed.kind,
-    files: parsed.files.map((file) => ({
-      path: String(file.path || 'main.txt'),
-      language: file.language,
-      content: String(file.content ?? ''),
-    })),
-    createdAt: now,
-    updatedAt: now,
-  }
+  return normalized
 }
 
 export function encodeProjectForShare(project: SavedProject) {
