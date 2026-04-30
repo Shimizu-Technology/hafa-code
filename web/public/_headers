@@ -3,4 +3,7 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https://img.clerk.com; font-src 'self' https://fonts.bunny.net; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; script-src 'self' 'wasm-unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com; worker-src 'self' blob:; connect-src 'self' http://localhost:* https://fonts.bunny.net https://*.clerk.accounts.dev https://*.clerk.com https://api.clerk.com https://*.shimizutechnology.com; frame-src 'self' blob: data: https://*.clerk.accounts.dev https://*.clerk.com;
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https://img.clerk.com; font-src 'self' https://fonts.bunny.net; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; script-src 'self' 'wasm-unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com; worker-src 'self' blob:; connect-src 'self' https://fonts.bunny.net https://*.clerk.accounts.dev https://*.clerk.com https://api.clerk.com https://*.shimizutechnology.com; frame-src 'self' blob: data: https://*.clerk.accounts.dev https://*.clerk.com;
+
+/sw.js
+  Cache-Control: no-cache

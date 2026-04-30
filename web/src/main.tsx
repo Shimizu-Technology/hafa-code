@@ -11,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
+import { registerServiceWorker } from './pwa.ts'
 
 declare global {
   interface Window {
@@ -50,3 +51,5 @@ createRoot(document.getElementById('root')!).render(
     {app}
   </StrictMode>,
 )
+
+registerServiceWorker()
