@@ -2,7 +2,7 @@ module Api
   module V1
     class ProjectsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_project, only: [ :show, :update, :destroy, :duplicate ]
+      before_action :set_project, only: [ :show, :update, :destroy, :archive, :duplicate, :unarchive ]
 
       def index
         projects = current_user.projects.includes(:project_files).order(updated_at: :desc)
@@ -42,6 +42,16 @@ module Api
       def destroy
         @project.destroy
         head :no_content
+      end
+
+      def archive
+        @project.update!(archived_at: Time.current)
+        render json: { project: project_json(@project.reload) }
+      end
+
+      def unarchive
+        @project.update!(archived_at: nil)
+        render json: { project: project_json(@project.reload) }
       end
 
       def duplicate
@@ -104,6 +114,7 @@ module Api
           kind: project.kind,
           visibility: project.visibility,
           forked_from_id: project.forked_from_id,
+          archived_at: project.archived_at,
           created_at: project.created_at,
           updated_at: project.updated_at,
           files: project.project_files.map do |file|

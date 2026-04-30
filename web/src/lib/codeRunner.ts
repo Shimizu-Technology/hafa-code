@@ -15,6 +15,20 @@ export interface SavedProject {
   files: ProjectFile[]
   createdAt: string
   updatedAt: string
+  archivedAt?: string | null
+}
+
+export interface ProjectSnapshot {
+  title: string
+  kind: ProjectKind
+  files: ProjectFile[]
+}
+
+export interface ProjectCheckpoint {
+  id: string
+  title: string
+  createdAt: string
+  snapshot?: ProjectSnapshot
 }
 
 export const RUNNER_TIMEOUT_MS = 3000
@@ -52,7 +66,7 @@ export function starterProject(kind: ProjectKind): SavedProject {
     files: [
       { path: 'index.html', language: 'html', content: '<main>\n  <h1>Hafa adai!</h1>\n  <p>Edit HTML, CSS, and JS to build a page.</p>\n  <button id="hello">Click me</button>\n</main>\n' },
       { path: 'style.css', language: 'css', content: 'body {\n  font-family: system-ui, sans-serif;\n  margin: 0;\n  padding: 2rem;\n  background: #0f172a;\n  color: white;\n}\n\nmain {\n  max-width: 680px;\n  margin: auto;\n}\n\nbutton {\n  border: 0;\n  border-radius: 999px;\n  padding: 0.75rem 1rem;\n  background: #ef4444;\n  color: white;\n  font-weight: 700;\n}\n' },
-      { path: 'script.js', language: 'javascript', content: 'document.querySelector("#hello")?.addEventListener("click", () => {\n  alert("You shipped your first web interaction!")\n})\n' },
+      { path: 'script.js', language: 'javascript', content: 'const button = document.querySelector("#hello")\n\nbutton?.addEventListener("click", () => {\n  button.textContent = "Clicked!"\n\n  let message = document.querySelector("#message")\n  if (!message) {\n    message = document.createElement("p")\n    message.id = "message"\n    document.querySelector("main")?.append(message)\n  }\n\n  message.textContent = "You shipped your first web interaction!"\n})\n' },
     ],
     createdAt: now,
     updatedAt: now,
@@ -63,6 +77,30 @@ export function buildHtmlPreview(files: ProjectFile[]) {
   const html = files.find((file) => file.language === 'html')?.content ?? ''
   const css = files.find((file) => file.language === 'css')?.content ?? ''
   const js = files.find((file) => file.path === 'script.js')?.content ?? ''
+  const safeJs = js.replaceAll('</script>', '<\\/script>')
+  const previewBridge = `
+    <script>
+      (() => {
+        const showMessage = (message) => {
+          let notice = document.getElementById('__hafa_preview_notice')
+          if (!notice) {
+            notice = document.createElement('div')
+            notice.id = '__hafa_preview_notice'
+            notice.setAttribute('role', 'status')
+            notice.style.cssText = 'margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.75rem; background: rgba(255,255,255,0.16); color: inherit; font: 600 0.95rem system-ui, sans-serif;'
+            document.body.append(notice)
+          }
+          notice.textContent = String(message)
+        }
+
+        window.alert = showMessage
+        window.confirm = (message) => {
+          showMessage(message)
+          return false
+        }
+        window.print = () => showMessage('Printing is disabled in the preview.')
+      })()
+    </script>`
 
   return `<!doctype html>
 <html>
@@ -73,7 +111,8 @@ export function buildHtmlPreview(files: ProjectFile[]) {
   </head>
   <body>
     ${html}
-    <script>${js.replaceAll('</script>', '<\\/script>')}</script>
+    ${previewBridge}
+    <script>${safeJs}</script>
   </body>
 </html>`
 }

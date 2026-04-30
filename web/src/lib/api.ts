@@ -1,4 +1,4 @@
-import type { ProjectFile, ProjectKind, SavedProject } from './codeRunner'
+import type { ProjectCheckpoint, ProjectFile, ProjectKind, ProjectSnapshot, SavedProject } from './codeRunner'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 let getAuthToken: (() => Promise<string | null>) | null = null
@@ -24,6 +24,7 @@ interface ApiProject {
   title: string
   kind: ProjectKind
   visibility: 'private' | 'unlisted' | 'public'
+  archived_at: string | null
   created_at: string
   updated_at: string
   files: ApiProjectFile[]
@@ -32,6 +33,21 @@ interface ApiProject {
 interface ApiResponse<T> {
   data: T | null
   error: string | null
+}
+
+interface ApiCheckpoint {
+  id: number
+  title: string
+  created_at: string
+  snapshot?: ProjectSnapshot
+}
+
+interface ApiShare {
+  token: string
+  title: string
+  kind: ProjectKind
+  created_at: string
+  snapshot: ProjectSnapshot
 }
 
 export function setAuthTokenGetter(getter: () => Promise<string | null>) {
@@ -76,6 +92,7 @@ function apiProjectToSavedProject(project: ApiProject): SavedProject {
       .map((file) => ({ path: file.path, language: file.language, content: file.content })),
     createdAt: project.created_at,
     updatedAt: project.updated_at,
+    archivedAt: project.archived_at,
   }
 }
 
@@ -85,6 +102,28 @@ function savedProjectPayload(project: SavedProject) {
     kind: project.kind,
     visibility: 'private',
     files: project.files.map((file, index) => ({ ...file, position: index })),
+  }
+}
+
+function apiCheckpointToProjectCheckpoint(checkpoint: ApiCheckpoint): ProjectCheckpoint {
+  return {
+    id: String(checkpoint.id),
+    title: checkpoint.title,
+    createdAt: checkpoint.created_at,
+    snapshot: checkpoint.snapshot,
+  }
+}
+
+function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
+  const now = new Date().toISOString()
+  return {
+    id: crypto.randomUUID(),
+    title: share.snapshot.title || share.title,
+    kind: share.snapshot.kind || share.kind,
+    files: share.snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })),
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
   }
 }
 
@@ -108,5 +147,39 @@ export const api = {
     })
     return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
   },
+  archiveProject: async (id: string) => {
+    const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${id}/archive`, { method: 'PATCH' })
+    return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+  },
   deleteProject: (id: string) => fetchApi<null>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
+  unarchiveProject: async (id: string) => {
+    const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${id}/unarchive`, { method: 'PATCH' })
+    return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+  },
+  getCheckpoints: async (projectId: string) => {
+    const res = await fetchApi<{ checkpoints: ApiCheckpoint[] }>(`/api/v1/projects/${projectId}/checkpoints`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.checkpoints.map(apiCheckpointToProjectCheckpoint) ?? [], error: null }
+  },
+  createCheckpoint: async (projectId: string, title: string) => {
+    const res = await fetchApi<{ checkpoint: ApiCheckpoint }>(`/api/v1/projects/${projectId}/checkpoints`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data ? apiCheckpointToProjectCheckpoint(res.data.checkpoint) : null, error: null }
+  },
+  restoreCheckpoint: async (projectId: string, checkpointId: string) => {
+    const res = await fetchApi<{ project: ApiProject; checkpoint: ApiCheckpoint }>(`/api/v1/projects/${projectId}/checkpoints/${checkpointId}/restore`, { method: 'POST' })
+    return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+  },
+  createShare: async (project: SavedProject) => {
+    const res = await fetchApi<{ share: ApiShare }>('/api/v1/shares', {
+      method: 'POST',
+      body: JSON.stringify(savedProjectPayload(project)),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.share ?? null, error: null }
+  },
+  getShare: async (token: string) => {
+    const res = await fetchApi<{ share: ApiShare }>(`/api/v1/shares/${encodeURIComponent(token)}`)
+    return res.error ? { data: null, error: res.error } : { data: res.data ? shareSnapshotToSavedProject(res.data.share) : null, error: null }
+  },
 }
