@@ -560,21 +560,46 @@ export default function App() {
     }
   }
 
-  const archiveProject = () => {
+  const flushCloudProject = async (projectToFlush: SavedProject) => {
+    if (!isSignedIn || !isCloudProjectId(projectToFlush.id)) return projectToFlush
+
+    if (syncTimerRef.current) {
+      window.clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
+
+    const res = await api.updateProject(projectToFlush)
+    if (res.error || !res.data) {
+      setNotice(`Cloud save failed: ${res.error || 'unknown error'}`)
+      return null
+    }
+
+    setLibrary((current) => ({
+      ...current,
+      projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
+    }))
+    return res.data
+  }
+
+  const archiveProject = async () => {
     if (activeProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
     }
+    const projectToArchive = project
+    const flushedProject = await flushCloudProject(projectToArchive)
+    if (!flushedProject) return
+
     const archivedAt = new Date().toISOString()
-    const projects = library.projects.map((candidate) => candidate.id === project.id
-      ? { ...candidate, archivedAt, updatedAt: archivedAt }
+    const projects = libraryRef.current.projects.map((candidate) => candidate.id === flushedProject.id
+      ? { ...flushedProject, archivedAt, updatedAt: archivedAt }
       : candidate)
     activateFallbackProject(projects, false)
     setShowArchived(false)
-    setNotice(`${project.title || 'Project'} archived.`)
+    setNotice(`${projectToArchive.title || 'Project'} archived.`)
 
-    if (isSignedIn && isCloudProjectId(project.id)) {
-      api.archiveProject(project.id).then((res) => {
+    if (isSignedIn && isCloudProjectId(flushedProject.id)) {
+      api.archiveProject(flushedProject.id).then((res) => {
         if (res.error || !res.data) {
           setNotice(`Cloud archive failed: ${res.error || 'unknown error'}`)
           return
