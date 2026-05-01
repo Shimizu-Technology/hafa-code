@@ -12,6 +12,7 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       "Authorization" => "Bearer test_token_#{@user.id}",
       "Content-Type" => "application/json"
     }
+    Rails.cache.clear
   end
 
   test "creates lists updates and deletes projects for authenticated user" do
@@ -92,5 +93,190 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal "Ruby Playground", project.reload.title
     assert_equal [ "main.rb" ], project.project_files.pluck(:path)
+  end
+
+  test "archives and restores projects" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'hafa'") ]
+    )
+
+    patch "/api/v1/projects/#{project.id}/archive", headers: @headers
+    assert_response :success
+    assert_not_nil response.parsed_body.dig("project", "archived_at")
+    assert_not_nil project.reload.archived_at
+
+    get "/api/v1/projects", headers: @headers
+    assert_response :success
+    archived_project = response.parsed_body.fetch("projects").find { |candidate| candidate.fetch("id") == project.id }
+    assert_not_nil archived_project.fetch("archived_at")
+
+    patch "/api/v1/projects/#{project.id}/unarchive", headers: @headers
+    assert_response :success
+    assert_nil response.parsed_body.dig("project", "archived_at")
+    assert_nil project.reload.archived_at
+  end
+
+  test "does not allow archived timestamp through generic project updates" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'hafa'") ]
+    )
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Updated Ruby",
+        kind: "ruby",
+        archived_at: 2.days.ago.iso8601
+      }.to_json,
+      headers: @headers
+
+    assert_response :success
+    assert_nil project.reload.archived_at
+  end
+
+  test "creates and restores project checkpoints" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'before'") ]
+    )
+
+    post "/api/v1/projects/#{project.id}/checkpoints",
+      params: { title: "Before edit" }.to_json,
+      headers: @headers
+
+    assert_response :created
+    checkpoint_id = response.parsed_body.dig("checkpoint", "id")
+    assert_equal "Before edit", response.parsed_body.dig("checkpoint", "title")
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Edited Ruby",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'after'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :success
+    assert_equal "puts 'after'", project.reload.project_files.first.content
+
+    post "/api/v1/projects/#{project.id}/checkpoints/#{checkpoint_id}/restore", headers: @headers
+
+    assert_response :success
+    assert_equal "Ruby Playground", response.parsed_body.dig("project", "title")
+    assert_equal "puts 'before'", response.parsed_body.dig("project", "files", 0, "content")
+
+    get "/api/v1/projects/#{project.id}/checkpoints", headers: @headers
+    assert_response :success
+    assert_equal 1, response.parsed_body.fetch("checkpoints").length
+    assert_not response.parsed_body.dig("checkpoints", 0).key?("snapshot")
+  end
+
+  test "keeps only the newest project checkpoints" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'hafa'") ]
+    )
+
+    31.times do |index|
+      post "/api/v1/projects/#{project.id}/checkpoints",
+        params: { title: "Checkpoint #{index}" }.to_json,
+        headers: @headers
+
+      assert_response :created
+    end
+
+    get "/api/v1/projects/#{project.id}/checkpoints", headers: @headers
+
+    assert_response :success
+    checkpoints = response.parsed_body.fetch("checkpoints")
+    assert_equal 30, checkpoints.length
+    assert_equal "Checkpoint 30", checkpoints.first.fetch("title")
+    assert_not_includes checkpoints.map { |checkpoint| checkpoint.fetch("title") }, "Checkpoint 0"
+    assert_equal 30, project.project_checkpoints.count
+  end
+
+  test "rejects oversized project checkpoints" do
+    project = @user.projects.create!(
+      title: "Large Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'small'") ]
+    )
+    project.project_files.first.update_column(:content, "x" * 500_001)
+
+    post "/api/v1/projects/#{project.id}/checkpoints",
+      params: { title: "Too large" }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "File content is too large for checkpoint"
+    assert_equal 0, project.project_checkpoints.count
+  end
+
+  test "creates and reads public share snapshots without authentication" do
+    post "/api/v1/shares",
+      params: {
+        title: "Shared Web Page",
+        kind: "web",
+        files: [
+          { path: "index.html", language: "html", content: "<button>Hello</button>" },
+          { path: "style.css", language: "css", content: "button { color: red; }" }
+        ]
+      }.to_json,
+      headers: { "Content-Type" => "application/json" }
+
+    assert_response :created
+    token = response.parsed_body.dig("share", "token")
+    assert_not_empty token
+    assert_equal "Shared Web Page", response.parsed_body.dig("share", "snapshot", "title")
+    assert_not_nil response.parsed_body.dig("share", "expires_at")
+
+    get "/api/v1/shares/#{token}", headers: { "Content-Type" => "application/json" }
+
+    assert_response :success
+    assert_equal "web", response.parsed_body.dig("share", "kind")
+    assert_equal 2, response.parsed_body.dig("share", "snapshot", "files").length
+  end
+
+  test "does not serve expired share snapshots" do
+    share = ProjectShare.create!(
+      title: "Expired",
+      kind: "ruby",
+      expires_at: 1.minute.ago,
+      snapshot: {
+        title: "Expired",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'old'" } ]
+      }
+    )
+
+    get "/api/v1/shares/#{share.token}", headers: { "Content-Type" => "application/json" }
+
+    assert_response :not_found
+  end
+
+  test "rate limits public share creation" do
+    original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    payload = {
+      title: "Shared Ruby",
+      kind: "ruby",
+      files: [ { path: "main.rb", language: "ruby", content: "puts 'hafa'" } ]
+    }
+
+    60.times do
+      post "/api/v1/shares", params: payload.to_json, headers: { "Content-Type" => "application/json" }
+      assert_response :created
+    end
+
+    post "/api/v1/shares", params: payload.to_json, headers: { "Content-Type" => "application/json" }
+
+    assert_response :too_many_requests
+  ensure
+    Rails.cache = original_cache
   end
 end

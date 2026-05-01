@@ -10,9 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_30_000400) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_30_001100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "project_checkpoints", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "project_id", null: false
+    t.jsonb "snapshot", default: {}, null: false
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "created_at"], name: "index_project_checkpoints_on_project_id_and_created_at"
+    t.index ["project_id"], name: "index_project_checkpoints_on_project_id"
+  end
 
   create_table "project_files", force: :cascade do |t|
     t.text "content", default: "", null: false
@@ -27,7 +37,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_30_000400) do
     t.index ["project_id"], name: "index_project_files_on_project_id"
   end
 
+  create_table "project_shares", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "expires_at"
+    t.string "kind", null: false
+    t.jsonb "snapshot", default: {}, null: false
+    t.string "title", null: false
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_project_shares_on_created_at"
+    t.index ["token"], name: "index_project_shares_on_token", unique: true
+  end
+
   create_table "projects", force: :cascade do |t|
+    t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.bigint "forked_from_id"
     t.string "kind", null: false
@@ -36,6 +59,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_30_000400) do
     t.bigint "user_id", null: false
     t.string "visibility", default: "private", null: false
     t.index ["forked_from_id"], name: "index_projects_on_forked_from_id"
+    t.index ["user_id", "archived_at"], name: "index_projects_on_user_id_and_archived_at"
     t.index ["user_id", "updated_at"], name: "index_projects_on_user_id_and_updated_at"
     t.index ["user_id"], name: "index_projects_on_user_id"
     t.index ["visibility"], name: "index_projects_on_visibility"
@@ -54,6 +78,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_30_000400) do
     t.index ["clerk_id"], name: "index_users_on_clerk_id", unique: true
   end
 
+  add_foreign_key "project_checkpoints", "projects"
   add_foreign_key "project_files", "projects"
   add_foreign_key "projects", "projects", column: "forked_from_id"
   add_foreign_key "projects", "users"

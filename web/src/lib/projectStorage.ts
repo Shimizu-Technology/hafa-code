@@ -1,7 +1,8 @@
-import { starterProject, type ProjectKind, type SavedProject } from './codeRunner'
+import { starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type SavedProject } from './codeRunner'
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
+const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
 const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
 const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css'])
 type FileLanguage = SavedProject['files'][number]['language']
@@ -10,6 +11,8 @@ export interface ProjectLibrary {
   activeProjectId: string
   projects: SavedProject[]
 }
+
+type CheckpointLibrary = Record<string, ProjectCheckpoint[]>
 
 function safeParse<T>(value: string | null): T | null {
   if (!value) return null
@@ -38,7 +41,7 @@ function inferFileLanguage(path: string, kind: ProjectKind): FileLanguage {
   return 'javascript'
 }
 
-function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
+export function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
   if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
     return null
   }
@@ -61,6 +64,29 @@ function normalizeProject(candidate: Partial<SavedProject> | null | undefined): 
     files,
     createdAt: String(candidate.createdAt || now),
     updatedAt: String(candidate.updatedAt || now),
+    archivedAt: candidate.archivedAt ? String(candidate.archivedAt) : null,
+  }
+}
+
+function normalizeSnapshot(candidate: Partial<ProjectSnapshot> | null | undefined): ProjectSnapshot | null {
+  const project = normalizeProject({
+    id: 'snapshot',
+    title: candidate?.title,
+    kind: candidate?.kind,
+    files: candidate?.files,
+  })
+  if (!project) return null
+  return { title: project.title, kind: project.kind, files: project.files }
+}
+
+function normalizeCheckpoint(candidate: Partial<ProjectCheckpoint> | null | undefined): ProjectCheckpoint | null {
+  const snapshot = normalizeSnapshot(candidate?.snapshot)
+  if (!candidate?.id || !candidate.title || !candidate.createdAt || !snapshot) return null
+  return {
+    id: String(candidate.id),
+    title: String(candidate.title),
+    createdAt: String(candidate.createdAt),
+    snapshot,
   }
 }
 
@@ -99,6 +125,57 @@ export function saveProjectLibrary(library: ProjectLibrary) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(library))
 }
 
+function loadCheckpointLibrary(): CheckpointLibrary {
+  const parsed = safeParse<CheckpointLibrary>(localStorage.getItem(CHECKPOINT_STORAGE_KEY))
+  if (!parsed || typeof parsed !== 'object') return {}
+  return parsed
+}
+
+function saveCheckpointLibrary(library: CheckpointLibrary) {
+  localStorage.setItem(CHECKPOINT_STORAGE_KEY, JSON.stringify(library))
+}
+
+export function projectSnapshot(project: SavedProject): ProjectSnapshot {
+  return {
+    title: project.title,
+    kind: project.kind,
+    files: project.files.map((file) => ({ ...file })),
+  }
+}
+
+export function loadLocalCheckpoints(projectId: string): ProjectCheckpoint[] {
+  const checkpoints = loadCheckpointLibrary()[projectId] ?? []
+  return checkpoints
+    .map((checkpoint) => normalizeCheckpoint(checkpoint))
+    .filter((checkpoint): checkpoint is ProjectCheckpoint => Boolean(checkpoint))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 30)
+}
+
+export function createLocalCheckpoint(project: SavedProject, title = 'Checkpoint'): ProjectCheckpoint {
+  const checkpoint = {
+    id: crypto.randomUUID(),
+    title: title.trim() || 'Checkpoint',
+    createdAt: new Date().toISOString(),
+    snapshot: projectSnapshot(project),
+  }
+  const library = loadCheckpointLibrary()
+  library[project.id] = [checkpoint, ...(library[project.id] ?? [])].slice(0, 30)
+  saveCheckpointLibrary(library)
+  return checkpoint
+}
+
+export function snapshotToProject(project: SavedProject, snapshot: ProjectSnapshot): SavedProject {
+  return {
+    ...project,
+    title: snapshot.title,
+    kind: snapshot.kind,
+    files: snapshot.files.map((file) => ({ ...file })),
+    updatedAt: new Date().toISOString(),
+    archivedAt: null,
+  }
+}
+
 export function createProject(kind: ProjectKind, title?: string): SavedProject {
   const project = starterProject(kind)
   return {
@@ -116,6 +193,7 @@ export function duplicateProject(project: SavedProject): SavedProject {
     files: project.files.map((file) => ({ ...file })),
     createdAt: now,
     updatedAt: now,
+    archivedAt: null,
   }
 }
 
@@ -139,6 +217,7 @@ export function parseImportedProject(raw: string): SavedProject {
     id: crypto.randomUUID(),
     createdAt: now,
     updatedAt: now,
+    archivedAt: null,
   })
 
   if (!normalized) {
@@ -149,7 +228,7 @@ export function parseImportedProject(raw: string): SavedProject {
 }
 
 export function encodeProjectForShare(project: SavedProject) {
-  const json = JSON.stringify(project)
+  const json = JSON.stringify({ ...project, archivedAt: null })
   const bytes = new TextEncoder().encode(json)
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })

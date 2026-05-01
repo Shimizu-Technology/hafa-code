@@ -5,6 +5,7 @@ class Project < ApplicationRecord
   belongs_to :user
   belongs_to :forked_from, class_name: "Project", optional: true
   has_many :project_files, -> { order(:position, :id) }, dependent: :destroy, inverse_of: :project
+  has_many :project_checkpoints, -> { order(created_at: :desc) }, dependent: :destroy
 
   validates :title, presence: true, length: { maximum: 120 }
   validates :kind, inclusion: { in: KINDS }
