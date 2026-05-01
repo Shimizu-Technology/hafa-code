@@ -627,28 +627,34 @@ export default function App() {
     setNotice(`${projectToArchive.title || 'Project'} archived.`)
   }
 
-  const restoreProject = () => {
+  const restoreProject = async () => {
+    const projectToRestore = project
+
+    if (isSignedIn && isCloudProjectId(projectToRestore.id)) {
+      const res = await api.unarchiveProject(projectToRestore.id)
+      if (res.error || !res.data) {
+        setNotice(`Cloud restore failed: ${res.error || 'unknown error'}`)
+        return
+      }
+
+      setLibrary((current) => ({
+        activeProjectId: res.data!.id,
+        projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
+      }))
+      setActivePath(res.data.files[0].path)
+      setShowArchived(false)
+      setNotice(`${projectToRestore.title || 'Project'} restored.`)
+      return
+    }
+
     const restoredAt = new Date().toISOString()
-    const projects = library.projects.map((candidate) => candidate.id === project.id
+    const projects = library.projects.map((candidate) => candidate.id === projectToRestore.id
       ? { ...candidate, archivedAt: null, updatedAt: restoredAt }
       : candidate)
-    setLibrary({ activeProjectId: project.id, projects })
-    setActivePath(project.files[0].path)
+    setLibrary({ activeProjectId: projectToRestore.id, projects })
+    setActivePath(projectToRestore.files[0].path)
     setShowArchived(false)
-    setNotice(`${project.title || 'Project'} restored.`)
-
-    if (isSignedIn && isCloudProjectId(project.id)) {
-      api.unarchiveProject(project.id).then((res) => {
-        if (res.error || !res.data) {
-          setNotice(`Cloud restore failed: ${res.error || 'unknown error'}`)
-          return
-        }
-        setLibrary((current) => ({
-          ...current,
-          projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
-        }))
-      })
-    }
+    setNotice(`${projectToRestore.title || 'Project'} restored.`)
   }
 
   const cloneProject = () => {
