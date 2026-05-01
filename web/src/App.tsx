@@ -347,6 +347,18 @@ function isArchived(project: SavedProject) {
   return Boolean(project.archivedAt)
 }
 
+function mergeCheckpointLists(cloudCheckpoints: ProjectCheckpoint[], localCheckpoints: ProjectCheckpoint[]) {
+  const seen = new Set<string>()
+  return [...cloudCheckpoints, ...localCheckpoints]
+    .filter((checkpoint) => {
+      if (seen.has(checkpoint.id)) return false
+      seen.add(checkpoint.id)
+      return true
+    })
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 30)
+}
+
 async function writeClipboardText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -431,7 +443,7 @@ export default function App() {
 
     if (isSignedIn && isCloudProjectId(project.id)) {
       api.getCheckpoints(project.id).then((res) => {
-        if (isCurrentRequest() && res.data) setCheckpoints(res.data)
+        if (isCurrentRequest() && res.data) setCheckpoints(mergeCheckpointLists(res.data, loadLocalCheckpoints(project.id)))
       })
     }
 
@@ -1089,7 +1101,7 @@ export default function App() {
               />
             </section>
 
-            {project.kind === 'web' ? <WebPreview files={project.files} /> : <RunnerPanel key={`${project.id}:${activeFile.path}`} project={project} activeFile={activeFile} />}
+            {project.kind === 'web' ? <WebPreview key={`${project.id}:${activePath}`} files={project.files} /> : <RunnerPanel key={`${project.id}:${activeFile.path}`} project={project} activeFile={activeFile} />}
           </div>
         </section>
       </div>
