@@ -708,24 +708,41 @@ export default function App() {
   }
 
   const saveCheckpoint = async () => {
+    const projectToCheckpoint = libraryRef.current.projects.find((candidate) => candidate.id === libraryRef.current.activeProjectId) ?? project
+    const checkpointProjectId = projectToCheckpoint.id
+    const isCurrentCheckpointProject = () => libraryRef.current.activeProjectId === checkpointProjectId
     const title = `Checkpoint ${formatCheckpointTime(new Date().toISOString())}`
     let cloudCheckpointError = ''
+    let checkpointProject = projectToCheckpoint
 
-    if (isSignedIn && isCloudProjectId(project.id)) {
-      const res = await api.createCheckpoint(project.id, title)
+    if (isSignedIn && isCloudProjectId(projectToCheckpoint.id)) {
+      const flushedProject = await flushCloudProject(projectToCheckpoint)
+      if (flushedProject) {
+        checkpointProject = flushedProject
+      } else {
+        cloudCheckpointError = 'could not save latest changes to cloud'
+      }
+    }
+
+    if (isSignedIn && isCloudProjectId(checkpointProject.id) && !cloudCheckpointError) {
+      const res = await api.createCheckpoint(checkpointProject.id, title)
       if (res.data) {
-        setCheckpoints((current) => [res.data!, ...current].slice(0, 30))
-        setNotice('Checkpoint saved to cloud.')
+        if (isCurrentCheckpointProject()) {
+          setCheckpoints((current) => [res.data!, ...current].slice(0, 30))
+          setNotice('Checkpoint saved to cloud.')
+        }
         return
       }
       cloudCheckpointError = res.error || 'unknown error'
     }
 
-    const checkpoint = createLocalCheckpoint(project, title)
-    setCheckpoints((current) => [checkpoint, ...current].slice(0, 30))
-    setNotice(cloudCheckpointError
-      ? `Cloud checkpoint failed: ${cloudCheckpointError}. Saved locally instead.`
-      : 'Checkpoint saved locally.')
+    const checkpoint = createLocalCheckpoint(checkpointProject, title)
+    if (isCurrentCheckpointProject()) {
+      setCheckpoints((current) => [checkpoint, ...current].slice(0, 30))
+      setNotice(cloudCheckpointError
+        ? `Cloud checkpoint failed: ${cloudCheckpointError}. Saved locally instead.`
+        : 'Checkpoint saved locally.')
+    }
   }
 
   const restoreCheckpoint = async (checkpoint: ProjectCheckpoint) => {

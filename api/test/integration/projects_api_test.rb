@@ -200,6 +200,23 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal 30, project.project_checkpoints.count
   end
 
+  test "rejects oversized project checkpoints" do
+    project = @user.projects.create!(
+      title: "Large Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'small'") ]
+    )
+    project.project_files.first.update_column(:content, "x" * 500_001)
+
+    post "/api/v1/projects/#{project.id}/checkpoints",
+      params: { title: "Too large" }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "File content is too large for checkpoint"
+    assert_equal 0, project.project_checkpoints.count
+  end
+
   test "creates and reads public share snapshots without authentication" do
     post "/api/v1/shares",
       params: {

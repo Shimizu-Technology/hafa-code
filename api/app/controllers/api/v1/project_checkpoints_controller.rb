@@ -2,6 +2,8 @@ module Api
   module V1
     class ProjectCheckpointsController < ApplicationController
       MAX_CHECKPOINTS_PER_PROJECT = 30
+      MAX_FILES_PER_CHECKPOINT = 12
+      MAX_FILE_BYTES = 500_000
 
       before_action :authenticate_user!
       before_action :set_project
@@ -27,6 +29,8 @@ module Api
         else
           render json: { errors: checkpoint.errors.full_messages }, status: :unprocessable_entity
         end
+      rescue ArgumentError => e
+        render json: { errors: [ e.message ] }, status: :unprocessable_entity
       end
 
       def restore
@@ -77,10 +81,14 @@ module Api
       end
 
       def project_snapshot(project)
+        raise ArgumentError, "Too many files for checkpoint" if project.project_files.length > MAX_FILES_PER_CHECKPOINT
+
         {
           title: project.title,
           kind: project.kind,
           files: project.project_files.map.with_index do |file, index|
+            raise ArgumentError, "File content is too large for checkpoint" if file.content.to_s.bytesize > MAX_FILE_BYTES
+
             {
               path: file.path,
               language: file.language,
