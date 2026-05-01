@@ -737,6 +737,7 @@ export default function App() {
           projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
         }))
         setActivePath(res.data.files[0].path)
+        setShowArchived(isArchived(res.data))
         setMobileTab('code')
         setNotice(`Restored ${checkpoint.title}.`)
         return
@@ -756,6 +757,7 @@ export default function App() {
       projects: current.projects.map((candidate) => candidate.id === project.id ? restored : candidate),
     }))
     setActivePath(restored.files[0].path)
+    setShowArchived(false)
     setMobileTab('code')
     setNotice(`Restored ${checkpoint.title}.`)
   }
