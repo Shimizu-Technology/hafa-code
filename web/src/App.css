@@ -305,18 +305,6 @@ h2 {
   grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.55fr);
 }
 
-.editor-expanded .output-panel .terminal {
-  min-height: clamp(220px, 28vh, 360px);
-}
-
-.editor-expanded .output-panel .empty-output {
-  min-height: clamp(160px, 22vh, 300px);
-}
-
-.editor-expanded .preview-panel iframe {
-  height: clamp(260px, 34vh, 440px);
-}
-
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
@@ -325,7 +313,6 @@ h2 {
 
 .main-workspace { min-width: 0; }
 .editor-panel {
-  align-self: start;
   overflow: hidden;
   background: #14110f;
 }
@@ -671,7 +658,8 @@ h2 {
 
 .preview-panel iframe {
   width: 100%;
-  height: var(--workspace-pane-height);
+  height: calc(var(--workspace-pane-height) - 140px);
+  min-height: 260px;
   border: 0;
   background: white;
 }
