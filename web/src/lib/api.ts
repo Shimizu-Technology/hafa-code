@@ -187,6 +187,12 @@ export const api = {
   },
   getShare: async (token: string) => {
     const res = await fetchApi<{ share: ApiShare }>(`/api/v1/shares/${encodeURIComponent(token)}`)
-    return res.error ? { data: null, error: res.error } : { data: res.data ? shareSnapshotToSavedProject(res.data.share) : null, error: null }
+    if (res.error) return { data: null, error: res.error }
+
+    try {
+      return { data: res.data ? shareSnapshotToSavedProject(res.data.share) : null, error: null }
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Shared project was not valid.' }
+    }
   },
 }
