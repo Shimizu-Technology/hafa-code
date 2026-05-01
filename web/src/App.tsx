@@ -372,6 +372,7 @@ export default function App() {
   const syncTimerRef = useRef<number | null>(null)
   const replacingCloudIdRef = useRef(false)
   const libraryRef = useRef(library)
+  const checkpointRequestIdRef = useRef(0)
   const { isSignedIn, user } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
 
@@ -405,15 +406,18 @@ export default function App() {
   }, [library])
 
   useEffect(() => {
+    const requestId = checkpointRequestIdRef.current + 1
+    checkpointRequestIdRef.current = requestId
     let cancelled = false
+    const isCurrentRequest = () => !cancelled && checkpointRequestIdRef.current === requestId && libraryRef.current.activeProjectId === project.id
 
     Promise.resolve().then(() => {
-      if (!cancelled) setCheckpoints(loadLocalCheckpoints(project.id))
+      if (isCurrentRequest()) setCheckpoints(loadLocalCheckpoints(project.id))
     })
 
     if (isSignedIn && isCloudProjectId(project.id)) {
       api.getCheckpoints(project.id).then((res) => {
-        if (!cancelled && res.data) setCheckpoints(res.data)
+        if (isCurrentRequest() && res.data) setCheckpoints(res.data)
       })
     }
 

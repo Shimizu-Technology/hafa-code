@@ -124,12 +124,21 @@ function consoleBridge() {
           if (typeof value === 'string') return value
           try { return JSON.stringify(value) } catch { return String(value) }
         }
+        const parentOrigin = (() => {
+          try {
+            if (!document.referrer) return null
+            return new URL(document.referrer).origin
+          } catch {
+            return null
+          }
+        })()
         const send = (level, values) => {
+          if (!parentOrigin) return
           window.parent?.postMessage({
             source: 'hafa-code-preview-console',
             level,
             message: values.map(formatValue).join(' ')
-          }, '*')
+          }, parentOrigin)
         }
         ;['log', 'warn', 'error'].forEach((level) => {
           const original = console[level].bind(console)

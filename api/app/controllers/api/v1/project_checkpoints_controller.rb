@@ -8,7 +8,11 @@ module Api
       before_action :set_checkpoint, only: [ :restore ]
 
       def index
-        render json: { checkpoints: @project.project_checkpoints.limit(MAX_CHECKPOINTS_PER_PROJECT).map { |checkpoint| checkpoint_json(checkpoint, include_snapshot: false) } }
+        checkpoints = @project.project_checkpoints
+          .reorder(created_at: :desc, id: :desc)
+          .limit(MAX_CHECKPOINTS_PER_PROJECT)
+
+        render json: { checkpoints: checkpoints.map { |checkpoint| checkpoint_json(checkpoint, include_snapshot: false) } }
       end
 
       def create
@@ -55,7 +59,7 @@ module Api
       private
 
       def set_project
-        @project = current_user.projects.includes(:project_files, :project_checkpoints).find(params[:project_id])
+        @project = current_user.projects.includes(:project_files).find(params[:project_id])
       end
 
       def set_checkpoint
@@ -65,6 +69,7 @@ module Api
       def prune_old_checkpoints(saved_checkpoint)
         checkpoint_ids = @project.project_checkpoints
           .where.not(id: saved_checkpoint.id)
+          .reorder(created_at: :desc, id: :desc)
           .offset(MAX_CHECKPOINTS_PER_PROJECT - 1)
           .pluck(:id)
 
