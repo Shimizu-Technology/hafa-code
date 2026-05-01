@@ -98,9 +98,11 @@ export function buildHtmlPreview(files: ProjectFile[], parentOrigin: string) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     ${consoleBridge(parentOrigin)}
+    ${cssUrl ? `<link rel="stylesheet" href="${cssUrl}" />` : ''}
   </head>
   <body>
     ${preview}
+    ${jsUrl ? `<script src="${jsUrl}"></script>` : ''}
   </body>
 </html>`
   }
