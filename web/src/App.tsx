@@ -366,6 +366,21 @@ function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary:
   return { activeProjectId, projects }
 }
 
+function useResponsiveEditorFontSize() {
+  const [fontSize, setFontSize] = useState(() => window.matchMedia('(max-width: 640px)').matches ? 16 : 14)
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 640px)')
+    const updateFontSize = () => setFontSize(query.matches ? 16 : 14)
+
+    updateFontSize()
+    query.addEventListener('change', updateFontSize)
+    return () => query.removeEventListener('change', updateFontSize)
+  }, [])
+
+  return fontSize
+}
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
@@ -389,6 +404,7 @@ export default function App() {
   const checkpointRequestIdRef = useRef(0)
   const { isSignedIn, user } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
+  const editorFontSize = useResponsiveEditorFontSize()
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
@@ -1078,7 +1094,7 @@ export default function App() {
                 onChange={(value) => updateActiveFile(value ?? '')}
                 options={{
                   minimap: { enabled: false },
-                  fontSize: 14,
+                  fontSize: editorFontSize,
                   tabSize: 2,
                   insertSpaces: true,
                   wordWrap: 'on',
