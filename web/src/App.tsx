@@ -240,8 +240,12 @@ interface PreviewConsoleMessage {
   message: string
 }
 
+function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['level'] {
+  return level === 'log' || level === 'warn' || level === 'error'
+}
+
 function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files), [files])
+  const preview = useMemo(() => buildHtmlPreview(files, window.location.origin), [files])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
 
@@ -250,8 +254,18 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
       if (event.source !== iframeRef.current?.contentWindow) return
       const message = event.data as Partial<PreviewConsoleMessage>
       if (message.source !== 'hafa-code-preview-console' || !message.level || !message.message) return
+      const level = message.level
+      if (!isPreviewConsoleLevel(level)) return
 
-      setConsoleMessages((current) => [...current, message as PreviewConsoleMessage].slice(-20))
+      const nextMessage: PreviewConsoleMessage = {
+        source: 'hafa-code-preview-console',
+        level,
+        message: String(message.message),
+      }
+      setConsoleMessages((current) => [
+        ...current,
+        nextMessage,
+      ].slice(-20))
     }
 
     window.addEventListener('message', handleMessage)
@@ -590,6 +604,20 @@ export default function App() {
     const flushedProject = await flushCloudProject(projectToArchive)
     if (!flushedProject) return
 
+    if (isSignedIn && isCloudProjectId(flushedProject.id)) {
+      const res = await api.archiveProject(flushedProject.id)
+      if (res.error || !res.data) {
+        setNotice(`Cloud archive failed: ${res.error || 'unknown error'}`)
+        return
+      }
+
+      const projects = libraryRef.current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate)
+      activateFallbackProject(projects, false)
+      setShowArchived(false)
+      setNotice(`${projectToArchive.title || 'Project'} archived.`)
+      return
+    }
+
     const archivedAt = new Date().toISOString()
     const projects = libraryRef.current.projects.map((candidate) => candidate.id === flushedProject.id
       ? { ...flushedProject, archivedAt, updatedAt: archivedAt }
@@ -597,19 +625,6 @@ export default function App() {
     activateFallbackProject(projects, false)
     setShowArchived(false)
     setNotice(`${projectToArchive.title || 'Project'} archived.`)
-
-    if (isSignedIn && isCloudProjectId(flushedProject.id)) {
-      api.archiveProject(flushedProject.id).then((res) => {
-        if (res.error || !res.data) {
-          setNotice(`Cloud archive failed: ${res.error || 'unknown error'}`)
-          return
-        }
-        setLibrary((current) => ({
-          ...current,
-          projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
-        }))
-      })
-    }
   }
 
   const restoreProject = () => {
