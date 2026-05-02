@@ -1,23 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Hafa Code app icon</title>
-  <desc id="desc">A warm cream app tile with a black code mark and red accent.</desc>
+  <desc id="desc">A warm cream grid tile with a dark rounded code editor, HC letters, and coral command prompt.</desc>
   <defs>
-    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fff7e8"/>
-      <stop offset="0.62" stop-color="#f3e4cd"/>
-      <stop offset="1" stop-color="#e7d4bb"/>
+    <linearGradient id="cream" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fffaf1"/>
+      <stop offset="1" stop-color="#f3e4cd"/>
     </linearGradient>
-    <filter id="shadow" x="64" y="68" width="384" height="392" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#38291c" flood-opacity="0.24"/>
+    <linearGradient id="panel" x1="118" y1="92" x2="408" y2="428" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1c1a17"/>
+      <stop offset="1" stop-color="#11100f"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="48" y="44" width="416" height="428" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#38291c" flood-opacity="0.2"/>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <path d="M86 108h340M86 404h340M108 86v340M404 86v340" stroke="#14110f" stroke-opacity="0.07" stroke-width="2"/>
-  <circle cx="130" cy="120" r="96" fill="#f8b84e" fill-opacity="0.34"/>
-  <circle cx="420" cy="96" r="120" fill="#136f63" fill-opacity="0.18"/>
-  <g filter="url(#shadow)">
-    <rect x="130" y="120" width="252" height="252" rx="56" fill="#14110f" transform="rotate(-4 256 246)"/>
-    <path d="M217 217l-45 42 45 42M295 217l45 42-45 42M273 196l-34 126" fill="none" stroke="#fffaf1" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" rx="84" fill="url(#cream)"/>
+  <path d="M32 64h448M32 128h448M32 192h448M32 256h448M32 320h448M32 384h448M32 448h448M64 32v448M128 32v448M192 32v448M256 32v448M320 32v448M384 32v448M448 32v448" stroke="#e5d7c1" stroke-width="2" opacity="0.72"/>
+  <g filter="url(#soft-shadow)">
+    <rect x="82" y="82" width="348" height="348" rx="82" fill="#fff7e8" opacity="0.82"/>
+    <rect x="116" y="116" width="280" height="280" rx="48" fill="url(#panel)"/>
   </g>
-  <path d="M360 158c38 29 58 70 54 116" fill="none" stroke="#e9472f" stroke-width="6" stroke-linecap="round" stroke-opacity="0.74"/>
+  <circle cx="158" cy="152" r="15" fill="#e9472f"/>
+  <circle cx="201" cy="152" r="15" fill="#f8b84e"/>
+  <circle cx="244" cy="152" r="15" fill="#136f63"/>
+  <rect x="304" y="145" width="50" height="10" rx="5" fill="#b8a98f" opacity="0.7"/>
+  <text x="151" y="293" fill="#fffaf1" font-family="Arial Black, Arial, sans-serif" font-size="122" font-weight="900">HC</text>
+  <path d="M160 346l32 27-32 27" fill="none" stroke="#e9472f" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="224" y="382" width="52" height="12" rx="6" fill="#b8a98f" opacity="0.78"/>
 </svg>
