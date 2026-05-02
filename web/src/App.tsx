@@ -245,7 +245,7 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
 }
 
 function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files, '*'), [files])
+  const preview = useMemo(() => buildHtmlPreview(files, window.location.origin), [files])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
@@ -254,7 +254,7 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
     iframeRef.current?.contentWindow?.postMessage({
       source: 'hafa-code-preview-update',
       html: preview,
-    }, '*')
+    }, window.location.origin)
   }, [preview])
 
   useEffect(() => {
@@ -296,7 +296,6 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
       <iframe
         ref={iframeRef}
         title="Web preview"
-        sandbox="allow-scripts allow-modals"
         referrerPolicy="no-referrer"
         src={previewFrameUrl}
         onLoad={sendPreviewToFrame}

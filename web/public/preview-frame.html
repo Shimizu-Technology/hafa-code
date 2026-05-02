@@ -32,12 +32,14 @@
         const parentOrigin = params.get('parent') || ''
         const preview = document.getElementById('preview')
 
+        if (!parentOrigin) return
+
         const postToParent = (message) => {
-          window.parent.postMessage(message, parentOrigin || '*')
+          window.parent.postMessage(message, parentOrigin)
         }
 
         window.addEventListener('message', (event) => {
-          if (parentOrigin && event.origin !== parentOrigin) return
+          if (event.origin !== parentOrigin) return
 
           const message = event.data
           if (message?.source === 'hafa-code-preview-update' && typeof message.html === 'string') {
