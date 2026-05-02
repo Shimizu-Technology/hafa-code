@@ -296,6 +296,7 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
       <iframe
         ref={iframeRef}
         title="Web preview"
+        sandbox="allow-scripts allow-same-origin"
         referrerPolicy="no-referrer"
         src={previewFrameUrl}
         onLoad={sendPreviewToFrame}
