@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
 import {
@@ -245,9 +245,17 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
 }
 
 function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files, window.location.origin), [files])
+  const preview = useMemo(() => buildHtmlPreview(files, '*'), [files])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
+  const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
+
+  const sendPreviewToFrame = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage({
+      source: 'hafa-code-preview-update',
+      html: preview,
+    }, '*')
+  }, [preview])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -272,6 +280,10 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
     return () => window.removeEventListener('message', handleMessage)
   }, [])
 
+  useEffect(() => {
+    sendPreviewToFrame()
+  }, [sendPreviewToFrame])
+
   return (
     <section className="panel preview-panel surface-grid">
       <div className="panel-header">
@@ -281,7 +293,14 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
           <p className="helper-text">Sandboxed iframe, no same-origin access.</p>
         </div>
       </div>
-      <iframe ref={iframeRef} title="Web preview" sandbox="allow-scripts allow-modals" referrerPolicy="no-referrer" srcDoc={preview} />
+      <iframe
+        ref={iframeRef}
+        title="Web preview"
+        sandbox="allow-scripts allow-modals"
+        referrerPolicy="no-referrer"
+        src={previewFrameUrl}
+        onLoad={sendPreviewToFrame}
+      />
       <div className="preview-console" aria-live="polite">
         <div className="preview-console-header">
           <span>Browser console</span>
