@@ -31,19 +31,25 @@
         const params = new URLSearchParams(window.location.search)
         const parentOrigin = params.get('parent') || ''
         const preview = document.getElementById('preview')
+        let previewPort = null
 
         if (!parentOrigin) return
 
-        const postToParent = (message) => {
-          window.parent.postMessage(message, parentOrigin)
+        const applyPreviewUpdate = (message) => {
+          if (message?.source === 'hafa-code-preview-update' && typeof message.html === 'string') {
+            preview.srcdoc = message.html
+          }
         }
 
         window.addEventListener('message', (event) => {
           if (event.origin !== parentOrigin) return
 
           const message = event.data
-          if (message?.source === 'hafa-code-preview-update' && typeof message.html === 'string') {
-            preview.srcdoc = message.html
+          if (message?.source === 'hafa-code-preview-connect' && event.ports[0]) {
+            previewPort?.close()
+            previewPort = event.ports[0]
+            previewPort.onmessage = (portEvent) => applyPreviewUpdate(portEvent.data)
+            previewPort.start()
           }
         })
 
@@ -52,11 +58,9 @@
 
           const message = event.data
           if (message?.source === 'hafa-code-preview-console') {
-            postToParent(message)
+            previewPort?.postMessage(message)
           }
         })
-
-        postToParent({ source: 'hafa-code-preview-ready' })
       })()
     </script>
   </body>

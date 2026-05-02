@@ -245,21 +245,28 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
 }
 
 function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files, window.location.origin), [files])
+  const preview = useMemo(() => buildHtmlPreview(files, '*'), [files])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const previewPortRef = useRef<MessagePort | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
 
   const sendPreviewToFrame = useCallback(() => {
-    iframeRef.current?.contentWindow?.postMessage({
+    previewPortRef.current?.postMessage({
       source: 'hafa-code-preview-update',
       html: preview,
-    }, window.location.origin)
+    })
   }, [preview])
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) return
+  const connectPreviewFrame = useCallback(() => {
+    const frameWindow = iframeRef.current?.contentWindow
+    if (!frameWindow) return
+
+    previewPortRef.current?.close()
+    const channel = new MessageChannel()
+    previewPortRef.current = channel.port1
+
+    channel.port1.onmessage = (event) => {
       const message = event.data as Partial<PreviewConsoleMessage>
       if (message.source !== 'hafa-code-preview-console' || !message.level || !message.message) return
       const level = message.level
@@ -275,14 +282,23 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
         nextMessage,
       ].slice(-20))
     }
+    channel.port1.start()
 
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [])
+    frameWindow.postMessage({ source: 'hafa-code-preview-connect' }, '*', [channel.port2])
+    channel.port1.postMessage({
+      source: 'hafa-code-preview-update',
+      html: preview,
+    })
+  }, [preview])
 
   useEffect(() => {
     sendPreviewToFrame()
   }, [sendPreviewToFrame])
+
+  useEffect(() => () => {
+    previewPortRef.current?.close()
+    previewPortRef.current = null
+  }, [])
 
   return (
     <section className="panel preview-panel surface-grid">
@@ -296,10 +312,10 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
       <iframe
         ref={iframeRef}
         title="Web preview"
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts allow-modals"
         referrerPolicy="no-referrer"
         src={previewFrameUrl}
-        onLoad={sendPreviewToFrame}
+        onLoad={connectPreviewFrame}
       />
       <div className="preview-console" aria-live="polite">
         <div className="preview-console-header">
