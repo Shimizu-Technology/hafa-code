@@ -1,10 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Hafa Code maskable icon</title>
-  <desc id="desc">A centered Hafa Code mark with generous safe-area padding for adaptive app icons.</desc>
-  <rect width="512" height="512" fill="#f7f0e5"/>
-  <circle cx="128" cy="112" r="112" fill="#f8b84e" fill-opacity="0.34"/>
-  <circle cx="420" cy="88" r="132" fill="#136f63" fill-opacity="0.18"/>
-  <rect x="154" y="144" width="204" height="204" rx="48" fill="#14110f" transform="rotate(-4 256 246)"/>
-  <path d="M224 222l-36 34 36 34M288 222l36 34-36 34M270 204l-28 104" fill="none" stroke="#fffaf1" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M342 168c32 25 49 60 46 99" fill="none" stroke="#e9472f" stroke-width="6" stroke-linecap="round" stroke-opacity="0.74"/>
+  <title id="title">Hafa Code maskable app icon</title>
+  <desc id="desc">A centered Hafa Code editor mark with safe padding for adaptive app icon masks.</desc>
+  <defs>
+    <linearGradient id="cream" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fffaf1"/>
+      <stop offset="1" stop-color="#f3e4cd"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="140" y1="118" x2="376" y2="394" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1c1a17"/>
+      <stop offset="1" stop-color="#11100f"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="76" y="72" width="360" height="368" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#38291c" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#cream)"/>
+  <path d="M32 64h448M32 128h448M32 192h448M32 256h448M32 320h448M32 384h448M32 448h448M64 32v448M128 32v448M192 32v448M256 32v448M320 32v448M384 32v448M448 32v448" stroke="#e5d7c1" stroke-width="2" opacity="0.72"/>
+  <g filter="url(#soft-shadow)">
+    <rect x="104" y="104" width="304" height="304" rx="76" fill="#fff7e8" opacity="0.82"/>
+    <rect x="134" y="134" width="244" height="244" rx="43" fill="url(#panel)"/>
+  </g>
+  <circle cx="170" cy="166" r="13" fill="#e9472f"/>
+  <circle cx="207" cy="166" r="13" fill="#f8b84e"/>
+  <circle cx="244" cy="166" r="13" fill="#136f63"/>
+  <rect x="296" y="161" width="42" height="8" rx="4" fill="#b8a98f" opacity="0.7"/>
+  <text x="164" y="292" fill="#fffaf1" font-family="Arial Black, Arial, sans-serif" font-size="104" font-weight="900">HC</text>
+  <path d="M172 337l27 23-27 23" fill="none" stroke="#e9472f" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="226" y="368" width="45" height="10" rx="5" fill="#b8a98f" opacity="0.78"/>
 </svg>

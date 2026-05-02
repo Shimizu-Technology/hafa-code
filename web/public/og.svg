@@ -2,30 +2,40 @@
   <title id="title">Hafa Code browser coding playground</title>
   <desc id="desc">Open graph image for Hafa Code, a browser coding playground for Ruby, JavaScript, HTML and CSS.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
       <stop stop-color="#fff7e8"/>
       <stop offset="0.55" stop-color="#f4e8d5"/>
       <stop offset="1" stop-color="#ecddca"/>
     </linearGradient>
+    <linearGradient id="panel" x1="792" y1="148" x2="1018" y2="414" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1c1713"/>
+      <stop offset="1" stop-color="#0f0d0c"/>
+    </linearGradient>
     <pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse">
       <path d="M38 0H0v38" fill="none" stroke="#14110f" stroke-opacity="0.07"/>
     </pattern>
-    <filter id="shadow" x="676" y="108" width="388" height="384" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#38291c" flood-opacity="0.25"/>
+    <filter id="shadow" x="710" y="104" width="410" height="420" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#38291c" flood-opacity="0.28"/>
     </filter>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
   <rect width="1200" height="630" fill="url(#grid)"/>
-  <circle cx="110" cy="90" r="210" fill="#f8b84e" fill-opacity="0.34"/>
-  <circle cx="1070" cy="40" r="250" fill="#136f63" fill-opacity="0.18"/>
+  <circle cx="112" cy="78" r="230" fill="#f8b84e" fill-opacity="0.36"/>
+  <circle cx="1080" cy="44" r="270" fill="#136f63" fill-opacity="0.18"/>
+  <circle cx="1090" cy="590" r="220" fill="#e9472f" fill-opacity="0.08"/>
+  <text x="92" y="212" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="900" fill="#14110f">Hafa Code</text>
+  <text x="98" y="292" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#5b5048">A tiny Replit alternative</text>
+  <text x="98" y="342" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#5b5048">for Guam students learning to code.</text>
+  <text x="98" y="390" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#5b5048">Ruby, JavaScript, HTML, and CSS.</text>
+  <rect x="98" y="438" width="560" height="72" rx="36" fill="#e9472f"/>
+  <text x="136" y="485" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="800" fill="#fffaf1">Beginner-first. Open source. No setup.</text>
+  <text x="98" y="558" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800" fill="#38291c">Built for CSG, FD, and Guam classrooms.</text>
   <g filter="url(#shadow)">
-    <rect x="760" y="155" width="240" height="240" rx="48" fill="#14110f" transform="rotate(-5 880 275)"/>
-    <path d="M832 253l-34 34 34 34M928 253l34 34-34 34M895 232l-31 110" fill="none" stroke="#fffaf1" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="762" y="134" width="284" height="284" rx="70" fill="url(#panel)" transform="rotate(-3.5 904 276)"/>
+    <path d="M810 196h188c13.8 0 25 11.2 25 25v35H785v-35c0-13.8 11.2-25 25-25z" fill="#fffaf1" fill-opacity="0.08" transform="rotate(-3.5 904 276)"/>
   </g>
-  <path d="M980 174c38 33 56 74 51 123" fill="none" stroke="#e9472f" stroke-width="6" stroke-linecap="round" stroke-opacity="0.74"/>
-  <text x="90" y="218" font-family="Arial, sans-serif" font-size="92" font-weight="800" fill="#14110f">Hafa Code</text>
-  <text x="96" y="302" font-family="Arial, sans-serif" font-size="32" font-weight="600" fill="#5b5048">Code in Ruby, JavaScript, HTML and CSS.</text>
-  <rect x="96" y="370" width="470" height="68" rx="34" fill="#e9472f"/>
-  <text x="132" y="415" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#fffaf1">Beginner-first. Open source.</text>
-  <text x="96" y="492" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#38291c">Built for CSG, FD, and Guam students.</text>
+  <path d="M835 225v112M835 281h76M911 225v112" fill="none" stroke="#fffaf1" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1000 229c-42-24-96 5-96 52 0 49 56 76 96 52" fill="none" stroke="#fffaf1" stroke-width="34" stroke-linecap="round"/>
+  <path d="M795 365h150" stroke="#f8b84e" stroke-width="22" stroke-linecap="round"/>
+  <path d="M1016 170c46 34 68 80 65 139" fill="none" stroke="#e9472f" stroke-width="12" stroke-linecap="round"/>
 </svg>
