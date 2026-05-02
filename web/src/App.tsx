@@ -245,7 +245,7 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
 }
 
 function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files, '*'), [files])
+  const preview = useMemo(() => buildHtmlPreview(files), [files])
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const previewPortRef = useRef<MessagePort | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])

@@ -32,12 +32,26 @@
         const parentOrigin = params.get('parent') || ''
         const preview = document.getElementById('preview')
         let previewPort = null
+        let consolePort = null
 
         if (!parentOrigin) return
+
+        const connectPreviewConsole = () => {
+          if (!previewPort || !preview.contentWindow) return
+
+          consolePort?.close()
+          const channel = new MessageChannel()
+          consolePort = channel.port1
+          consolePort.onmessage = (event) => previewPort?.postMessage(event.data)
+          consolePort.start()
+
+          preview.contentWindow.postMessage({ source: 'hafa-code-preview-console-connect' }, '*', [channel.port2])
+        }
 
         const applyPreviewUpdate = (message) => {
           if (message?.source === 'hafa-code-preview-update' && typeof message.html === 'string') {
             preview.srcdoc = message.html
+            preview.onload = connectPreviewConsole
           }
         }
 
@@ -50,15 +64,7 @@
             previewPort = event.ports[0]
             previewPort.onmessage = (portEvent) => applyPreviewUpdate(portEvent.data)
             previewPort.start()
-          }
-        })
-
-        window.addEventListener('message', (event) => {
-          if (event.source !== preview.contentWindow) return
-
-          const message = event.data
-          if (message?.source === 'hafa-code-preview-console') {
-            previewPort?.postMessage(message)
+            connectPreviewConsole()
           }
         })
       })()
