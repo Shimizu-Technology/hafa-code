@@ -121,16 +121,10 @@ function injectConsoleBridge(html: string, hasDocumentShell: boolean) {
 function consoleBridge() {
   return `<script>
       (() => {
-        let consolePort = null
-        window.addEventListener('message', (event) => {
-          const message = event.data
-          const port = event.ports?.[0]
-          if (message?.source === 'hafa-code-preview-console-connect' && port) {
-            consolePort?.close()
-            consolePort = port
-            consolePort.start()
-          }
-        })
+        const consoleChannel = new MessageChannel()
+        const consolePort = consoleChannel.port1
+        consolePort.start()
+        window.parent?.postMessage({ source: 'hafa-code-preview-console-connect' }, '*', [consoleChannel.port2])
         const formatValue = (value) => {
           if (value instanceof Error) return value.stack || value.message
           if (typeof value === 'string') return value

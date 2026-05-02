@@ -36,37 +36,39 @@
 
         if (!parentOrigin) return
 
-        const connectPreviewConsole = () => {
-          if (!previewPort || !preview.contentWindow) return
-
-          consolePort?.close()
+        const connectPreviewFrame = () => {
+          previewPort?.close()
           const channel = new MessageChannel()
-          consolePort = channel.port1
-          consolePort.onmessage = (event) => previewPort?.postMessage(event.data)
-          consolePort.start()
-
-          preview.contentWindow.postMessage({ source: 'hafa-code-preview-console-connect' }, '*', [channel.port2])
+          previewPort = channel.port1
+          previewPort.onmessage = (event) => applyPreviewUpdate(event.data)
+          previewPort.start()
+          window.parent.postMessage({ source: 'hafa-code-preview-connect' }, parentOrigin, [channel.port2])
         }
 
         const applyPreviewUpdate = (message) => {
           if (message?.source === 'hafa-code-preview-update' && typeof message.html === 'string') {
+            consolePort?.close()
+            consolePort = null
             preview.srcdoc = message.html
-            preview.onload = connectPreviewConsole
           }
         }
 
         window.addEventListener('message', (event) => {
-          if (event.origin !== parentOrigin) return
-
-          const message = event.data
-          if (message?.source === 'hafa-code-preview-connect' && event.ports[0]) {
-            previewPort?.close()
-            previewPort = event.ports[0]
-            previewPort.onmessage = (portEvent) => applyPreviewUpdate(portEvent.data)
-            previewPort.start()
-            connectPreviewConsole()
+          if (event.source === preview.contentWindow) {
+            const message = event.data
+            const port = event.ports[0]
+            if (message?.source === 'hafa-code-preview-console-connect' && port && !consolePort) {
+              consolePort = port
+              consolePort.onmessage = (portEvent) => previewPort?.postMessage(portEvent.data)
+              consolePort.start()
+            }
+            return
           }
+
+          if (event.origin !== parentOrigin) return
         })
+
+        connectPreviewFrame()
       })()
     </script>
   </body>

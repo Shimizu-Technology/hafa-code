@@ -258,15 +258,11 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
     })
   }, [preview])
 
-  const connectPreviewFrame = useCallback(() => {
-    const frameWindow = iframeRef.current?.contentWindow
-    if (!frameWindow) return
-
+  const connectPreviewPort = useCallback((port: MessagePort) => {
     previewPortRef.current?.close()
-    const channel = new MessageChannel()
-    previewPortRef.current = channel.port1
+    previewPortRef.current = port
 
-    channel.port1.onmessage = (event) => {
+    port.onmessage = (event) => {
       const message = event.data as Partial<PreviewConsoleMessage>
       if (message.source !== 'hafa-code-preview-console' || !message.level || !message.message) return
       const level = message.level
@@ -282,14 +278,28 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
         nextMessage,
       ].slice(-20))
     }
-    channel.port1.start()
+    port.start()
 
-    frameWindow.postMessage({ source: 'hafa-code-preview-connect' }, '*', [channel.port2])
-    channel.port1.postMessage({
+    port.postMessage({
       source: 'hafa-code-preview-update',
       html: preview,
     })
   }, [preview])
+
+  useEffect(() => {
+    const handlePreviewConnect = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+
+      const message = event.data as { source?: string }
+      const port = event.ports[0]
+      if (message.source !== 'hafa-code-preview-connect' || !port) return
+
+      connectPreviewPort(port)
+    }
+
+    window.addEventListener('message', handlePreviewConnect)
+    return () => window.removeEventListener('message', handlePreviewConnect)
+  }, [connectPreviewPort])
 
   useEffect(() => {
     sendPreviewToFrame()
@@ -315,7 +325,6 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
         sandbox="allow-scripts allow-modals"
         referrerPolicy="no-referrer"
         src={previewFrameUrl}
-        onLoad={connectPreviewFrame}
       />
       <div className="preview-console" aria-live="polite">
         <div className="preview-console-header">
