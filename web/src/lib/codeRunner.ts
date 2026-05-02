@@ -73,7 +73,7 @@ export function starterProject(kind: ProjectKind): SavedProject {
   }
 }
 
-export function buildHtmlPreview(files: ProjectFile[], parentOrigin: string) {
+export function buildHtmlPreview(files: ProjectFile[]) {
   const html = files.find((file) => file.language === 'html')?.content ?? ''
   const cssFile = files.find((file) => file.path === 'style.css')
   const jsFile = files.find((file) => file.path === 'script.js')
@@ -89,7 +89,7 @@ export function buildHtmlPreview(files: ProjectFile[], parentOrigin: string) {
     preview = preview.replace(/\bsrc=(["'])\.?\/?script\.js\1/gi, `src="${jsUrl}"`)
   }
 
-  preview = injectConsoleBridge(preview, hasDocumentShell, parentOrigin)
+  preview = injectConsoleBridge(preview, hasDocumentShell)
 
   if (!hasDocumentShell) {
     preview = `<!doctype html>
@@ -97,7 +97,7 @@ export function buildHtmlPreview(files: ProjectFile[], parentOrigin: string) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    ${consoleBridge(parentOrigin)}
+    ${consoleBridge()}
     ${cssUrl ? `<link rel="stylesheet" href="${cssUrl}" />` : ''}
   </head>
   <body>
@@ -110,31 +110,32 @@ export function buildHtmlPreview(files: ProjectFile[], parentOrigin: string) {
   return preview
 }
 
-function injectConsoleBridge(html: string, hasDocumentShell: boolean, parentOrigin: string) {
+function injectConsoleBridge(html: string, hasDocumentShell: boolean) {
   if (!hasDocumentShell) return html
   if (/<head[\s>]/i.test(html)) {
-    return html.replace(/<head([^>]*)>/i, `<head$1>\n    ${consoleBridge(parentOrigin)}`)
+    return html.replace(/<head([^>]*)>/i, `<head$1>\n    ${consoleBridge()}`)
   }
-  return html.replace(/<html([^>]*)>/i, `<html$1>\n  <head>\n    ${consoleBridge(parentOrigin)}\n  </head>`)
+  return html.replace(/<html([^>]*)>/i, `<html$1>\n  <head>\n    ${consoleBridge()}\n  </head>`)
 }
 
-function consoleBridge(parentOrigin: string) {
-  const targetOrigin = JSON.stringify(parentOrigin)
-
+function consoleBridge() {
   return `<script>
       (() => {
+        const consoleChannel = new MessageChannel()
+        const consolePort = consoleChannel.port1
+        consolePort.start()
+        window.parent?.postMessage({ source: 'hafa-code-preview-console-connect' }, '*', [consoleChannel.port2])
         const formatValue = (value) => {
           if (value instanceof Error) return value.stack || value.message
           if (typeof value === 'string') return value
           try { return JSON.stringify(value) } catch { return String(value) }
         }
-        const parentOrigin = ${targetOrigin}
         const send = (level, values) => {
-          window.parent?.postMessage({
+          consolePort?.postMessage({
             source: 'hafa-code-preview-console',
             level,
             message: values.map(formatValue).join(' ')
-          }, parentOrigin)
+          })
         }
         ;['log', 'warn', 'error'].forEach((level) => {
           const original = console[level].bind(console)
