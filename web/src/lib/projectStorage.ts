@@ -1,11 +1,14 @@
-import { starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type SavedProject } from './codeRunner'
+import { defaultEntryPath, inferFileLanguage, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type SavedProject } from './codeRunner'
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
 const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
 const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
-const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css'])
+const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css', 'json', 'plain'])
 type FileLanguage = SavedProject['files'][number]['language']
+type StoredProjectSnapshot = Partial<ProjectSnapshot> & {
+  entry_path?: string
+}
 
 export interface ProjectLibrary {
   activeProjectId: string
@@ -31,16 +34,6 @@ function isFileLanguage(value: unknown): value is FileLanguage {
   return typeof value === 'string' && FILE_LANGUAGES.has(value)
 }
 
-function inferFileLanguage(path: string, kind: ProjectKind): FileLanguage {
-  const extension = path.toLowerCase().split('.').pop()
-  if (extension === 'rb') return 'ruby'
-  if (extension === 'html' || extension === 'htm') return 'html'
-  if (extension === 'css') return 'css'
-  if (extension === 'js' || extension === 'mjs' || extension === 'cjs') return 'javascript'
-  if (kind === 'ruby') return 'ruby'
-  return 'javascript'
-}
-
 export function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
   if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
     return null
@@ -61,6 +54,9 @@ export function normalizeProject(candidate: Partial<SavedProject> | null | undef
     id: String(candidate.id),
     title: String(candidate.title),
     kind: candidate.kind,
+    entryPath: files.some((file) => file.path === candidate.entryPath)
+      ? String(candidate.entryPath)
+      : defaultEntryPath(files, candidate.kind),
     files,
     createdAt: String(candidate.createdAt || now),
     updatedAt: String(candidate.updatedAt || now),
@@ -68,15 +64,16 @@ export function normalizeProject(candidate: Partial<SavedProject> | null | undef
   }
 }
 
-function normalizeSnapshot(candidate: Partial<ProjectSnapshot> | null | undefined): ProjectSnapshot | null {
+function normalizeSnapshot(candidate: StoredProjectSnapshot | null | undefined): ProjectSnapshot | null {
   const project = normalizeProject({
     id: 'snapshot',
     title: candidate?.title,
     kind: candidate?.kind,
+    entryPath: candidate?.entryPath ?? candidate?.entry_path,
     files: candidate?.files,
   })
   if (!project) return null
-  return { title: project.title, kind: project.kind, files: project.files }
+  return { title: project.title, kind: project.kind, entryPath: project.entryPath, files: project.files }
 }
 
 function normalizeCheckpoint(candidate: Partial<ProjectCheckpoint> | null | undefined): ProjectCheckpoint | null {
@@ -139,6 +136,7 @@ export function projectSnapshot(project: SavedProject): ProjectSnapshot {
   return {
     title: project.title,
     kind: project.kind,
+    entryPath: project.entryPath,
     files: project.files.map((file) => ({ ...file })),
   }
 }
@@ -170,6 +168,7 @@ export function snapshotToProject(project: SavedProject, snapshot: ProjectSnapsh
     ...project,
     title: snapshot.title,
     kind: snapshot.kind,
+    entryPath: snapshot.entryPath,
     files: snapshot.files.map((file) => ({ ...file })),
     updatedAt: new Date().toISOString(),
     archivedAt: null,

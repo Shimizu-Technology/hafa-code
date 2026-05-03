@@ -20,6 +20,7 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       params: {
         title: "Ruby Playground",
         kind: "ruby",
+        entry_path: "main.rb",
         files: [ { path: "main.rb", language: "ruby", content: "puts 'hafa'" } ]
       }.to_json,
       headers: @headers
@@ -27,6 +28,7 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :created
     project_id = response.parsed_body.dig("project", "id")
     assert_equal "Ruby Playground", response.parsed_body.dig("project", "title")
+    assert_equal "main.rb", response.parsed_body.dig("project", "entry_path")
     assert_equal 1, response.parsed_body.dig("project", "files").length
 
     get "/api/v1/projects", headers: @headers
@@ -37,13 +39,18 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       params: {
         title: "Updated Ruby",
         kind: "ruby",
-        files: [ { path: "main.rb", language: "ruby", content: "puts 'updated'" } ]
+        entry_path: "lib/helper.rb",
+        files: [
+          { path: "main.rb", language: "ruby", content: "require_relative './lib/helper'\nputs helper" },
+          { path: "lib/helper.rb", language: "ruby", content: "def helper = 'updated'" }
+        ]
       }.to_json,
       headers: @headers
 
     assert_response :success
     assert_equal "Updated Ruby", response.parsed_body.dig("project", "title")
-    assert_equal "puts 'updated'", response.parsed_body.dig("project", "files", 0, "content")
+    assert_equal "lib/helper.rb", response.parsed_body.dig("project", "entry_path")
+    assert_equal 2, response.parsed_body.dig("project", "files").length
 
     delete "/api/v1/projects/#{project_id}", headers: @headers
     assert_response :no_content
@@ -73,6 +80,44 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
     assert_includes response.parsed_body.fetch("errors"), "Project files must include at least one file"
+  end
+
+  test "rejects unsafe file paths and entry paths" do
+    post "/api/v1/projects",
+      params: {
+        title: "Unsafe Project",
+        kind: "ruby",
+        entry_path: "../secret.rb",
+        files: [ { path: "../secret.rb", language: "ruby", content: "puts 'nope'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert response.parsed_body.fetch("errors").any? { |error| error.include?("Path") }
+
+    post "/api/v1/projects",
+      params: {
+        title: "Missing Entry",
+        kind: "javascript",
+        entry_path: "missing.js",
+        files: [ { path: "main.js", language: "javascript", content: "console.log('hafa')" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Entry path must match a project file"
+
+    post "/api/v1/projects",
+      params: {
+        title: "Long Path",
+        kind: "ruby",
+        entry_path: "#{'a' * 158}.rb",
+        files: [ { path: "#{'a' * 158}.rb", language: "ruby", content: "puts 'too long'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert response.parsed_body.fetch("errors").any? { |error| error.include?("Path") && error.include?("160 characters") }
   end
 
   test "keeps existing files when update with invalid files fails" do
@@ -175,6 +220,44 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not response.parsed_body.dig("checkpoints", 0).key?("snapshot")
   end
 
+  test "restores checkpoint when entry path is not in current files" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      entry_path: "start.rb",
+      project_files: [
+        ProjectFile.new(path: "start.rb", language: "ruby", content: "require_relative 'helper'\nputs helper"),
+        ProjectFile.new(path: "helper.rb", language: "ruby", content: "def helper = 'before'")
+      ]
+    )
+
+    post "/api/v1/projects/#{project.id}/checkpoints",
+      params: { title: "Multi-file entry" }.to_json,
+      headers: @headers
+
+    assert_response :created
+    checkpoint_id = response.parsed_body.dig("checkpoint", "id")
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Different files",
+        kind: "ruby",
+        entry_path: "main.rb",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'after'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :success
+    assert_equal "main.rb", project.reload.entry_path
+    assert_equal [ "main.rb" ], project.project_files.pluck(:path)
+
+    post "/api/v1/projects/#{project.id}/checkpoints/#{checkpoint_id}/restore", headers: @headers
+
+    assert_response :success
+    assert_equal "start.rb", response.parsed_body.dig("project", "entry_path")
+    assert_equal [ "start.rb", "helper.rb" ], response.parsed_body.dig("project", "files").map { |file| file.fetch("path") }
+  end
+
   test "keeps only the newest project checkpoints" do
     project = @user.projects.create!(
       title: "Ruby Playground",
@@ -222,8 +305,10 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       params: {
         title: "Shared Web Page",
         kind: "web",
+        entry_path: "pages/about.html",
         files: [
           { path: "index.html", language: "html", content: "<button>Hello</button>" },
+          { path: "pages/about.html", language: "html", content: "<h1>About</h1>" },
           { path: "style.css", language: "css", content: "button { color: red; }" }
         ]
       }.to_json,
@@ -233,13 +318,14 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     token = response.parsed_body.dig("share", "token")
     assert_not_empty token
     assert_equal "Shared Web Page", response.parsed_body.dig("share", "snapshot", "title")
+    assert_equal "pages/about.html", response.parsed_body.dig("share", "snapshot", "entryPath")
     assert_not_nil response.parsed_body.dig("share", "expires_at")
 
     get "/api/v1/shares/#{token}", headers: { "Content-Type" => "application/json" }
 
     assert_response :success
     assert_equal "web", response.parsed_body.dig("share", "kind")
-    assert_equal 2, response.parsed_body.dig("share", "snapshot", "files").length
+    assert_equal 3, response.parsed_body.dig("share", "snapshot", "files").length
   end
 
   test "does not serve expired share snapshots" do

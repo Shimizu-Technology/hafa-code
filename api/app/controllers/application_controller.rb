@@ -8,6 +8,7 @@ class ApplicationController < ActionController::API
       id: project.id,
       title: project.title,
       kind: project.kind,
+      entry_path: project.entry_path,
       visibility: project.visibility,
       forked_from_id: project.forked_from_id,
       archived_at: project.archived_at,
