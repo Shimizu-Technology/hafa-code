@@ -83,7 +83,7 @@ function transformJavaScriptModule(path: string, code: string, modulePaths: Set<
   let reExportIndex = 0
   let transformed = code
 
-  transformed = transformed.replace(/import\s+([^'";]+?)\s+from\s+['"]([^'"]+)['"];?/g, (_match, bindings: string, specifier: string) => {
+  transformed = transformed.replace(/import\s+([\s\S]+?)\s+from\s+['"]([^'"]+)['"];?/g, (_match, bindings: string, specifier: string) => {
     const resolved = resolveModulePath(path, specifier, modulePaths)
     const trimmed = bindings.trim()
     if (trimmed.startsWith('{')) return `const ${namedImportPattern(trimmed)} = __hafa_require__(${JSON.stringify(resolved)});`

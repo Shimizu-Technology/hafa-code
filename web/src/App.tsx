@@ -984,18 +984,14 @@ export default function App() {
       return
     }
 
-    let nextActivePath = activePath
-    updateCurrentProject((currentProject) => {
-      if (currentProject.files.length <= 1) return currentProject
-      const remaining = currentProject.files.filter((candidate) => candidate.path !== file.path)
-      nextActivePath = activePath === file.path ? remaining[0].path : activePath
-      return {
-        ...currentProject,
-        entryPath: currentProject.entryPath === file.path ? defaultEntryPath(remaining, currentProject.kind) : currentProject.entryPath,
-        files: remaining,
-        updatedAt: new Date().toISOString(),
-      }
-    })
+    const remaining = project.files.filter((candidate) => candidate.path !== file.path)
+    const nextActivePath = activePath === file.path ? remaining[0].path : activePath
+    updateCurrentProject((currentProject) => ({
+      ...currentProject,
+      entryPath: currentProject.entryPath === file.path ? defaultEntryPath(remaining, currentProject.kind) : currentProject.entryPath,
+      files: remaining,
+      updatedAt: new Date().toISOString(),
+    }))
     if (activePath !== nextActivePath) setActivePath(nextActivePath)
     setNotice(`${file.path} deleted.`)
   }
