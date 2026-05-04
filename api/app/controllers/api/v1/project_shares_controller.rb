@@ -1,7 +1,7 @@
 module Api
   module V1
     class ProjectSharesController < ApplicationController
-      MAX_FILES = 12
+      MAX_FILES = Project::MAX_FILES
       MAX_FILE_BYTES = 500_000
       SHARE_TTL = 30.days
 
@@ -61,6 +61,7 @@ module Api
         title = params.require(:title).to_s.strip
         kind = params.require(:kind).to_s
         files = params.require(:files)
+        entry_path = params[:entry_path].to_s.strip
         raise ArgumentError, "Title is required" if title.blank?
         raise ArgumentError, "Unsupported project type" unless Project::KINDS.include?(kind)
         raise ArgumentError, "At least one file is required" unless files.is_a?(Array) && files.any?
@@ -76,6 +77,11 @@ module Api
           next if path.blank?
           raise ArgumentError, "Unsupported file language" unless ProjectFile::LANGUAGES.include?(language)
           raise ArgumentError, "File content is too large" if content.bytesize > MAX_FILE_BYTES
+          validator = ProjectFile.new(path: path, language: language, content: content, position: permitted[:position] || index)
+          unless validator.valid?
+            path_errors = validator.errors.full_messages.grep(/\APath /)
+            raise ArgumentError, path_errors.first if path_errors.any?
+          end
 
           {
             path: path,
@@ -86,10 +92,14 @@ module Api
         end
 
         raise ArgumentError, "At least one valid file is required" if normalized_files.empty?
+        raise ArgumentError, "File paths must be unique" if normalized_files.map { |file| file.fetch(:path) }.uniq.length != normalized_files.length
+        entry_path = normalized_files.first.fetch(:path) if entry_path.blank?
+        raise ArgumentError, "Entry path must match a project file" unless normalized_files.any? { |file| file.fetch(:path) == entry_path }
 
         {
           title: title,
           kind: kind,
+          entryPath: entry_path,
           files: normalized_files
         }
       end

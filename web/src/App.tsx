@@ -4,9 +4,11 @@ import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/c
 import {
   Archive,
   BookOpen,
+  Check,
   Cloud,
   Copy,
   Download,
+  FilePlus2,
   Files,
   Globe,
   History,
@@ -18,8 +20,10 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Rocket,
   Save,
@@ -34,6 +38,8 @@ import './App.css'
 import {
   RUNNER_TIMEOUT_MS,
   buildHtmlPreview,
+  defaultEntryPath,
+  inferFileLanguage,
   type ProjectFile,
   type ProjectCheckpoint,
   type ProjectKind,
@@ -61,6 +67,13 @@ import { hasClerkPublishableKey } from './lib/clerk'
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
 type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
+type FileDialogMode = 'create' | 'rename' | 'duplicate'
+
+interface FileDialogState {
+  mode: FileDialogMode
+  path: string
+  sourcePath?: string
+}
 
 interface RunState {
   status: RunStatus
@@ -70,6 +83,7 @@ interface RunState {
 }
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
+const PROJECT_FILE_LIMIT = 50
 const kindLabels: Record<ProjectKind, string> = {
   ruby: 'Ruby',
   javascript: 'JavaScript',
@@ -80,7 +94,75 @@ function languageForFile(file: ProjectFile) {
   if (file.language === 'ruby') return 'ruby'
   if (file.language === 'html') return 'html'
   if (file.language === 'css') return 'css'
+  if (file.language === 'json') return 'json'
   return 'javascript'
+}
+
+function formatFileLanguage(file: ProjectFile) {
+  if (file.language === 'javascript') return 'JS'
+  if (file.language === 'plain') return 'Text'
+  return file.language.toUpperCase()
+}
+
+function normalizeWorkspacePath(path: string) {
+  return path.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
+}
+
+function validateWorkspacePath(path: string, project: SavedProject, currentPath?: string) {
+  const normalized = normalizeWorkspacePath(path)
+  if (!normalized) return 'Enter a file path.'
+  if (normalized.length > 160) return 'File paths must be 160 characters or fewer.'
+  if (normalized.endsWith('/')) return 'File paths cannot end with a slash.'
+  const segments = normalized.split('/')
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    return 'File paths cannot include empty, current, or parent directory segments.'
+  }
+  if (segments.some((segment) => segment.startsWith('.'))) {
+    return 'Hidden files and folders are not supported yet.'
+  }
+  if (project.files.some((file) => file.path === normalized && file.path !== currentPath)) {
+    return 'A file already exists at that path.'
+  }
+  return ''
+}
+
+function canAddWorkspaceFile(project: SavedProject) {
+  return project.files.length < PROJECT_FILE_LIMIT
+}
+
+function nextAvailableCopyPath(path: string, project: SavedProject) {
+  const dotIndex = path.lastIndexOf('.')
+  const slashIndex = path.lastIndexOf('/')
+  const hasExtension = dotIndex > slashIndex
+  const base = hasExtension ? path.slice(0, dotIndex) : path
+  const extension = hasExtension ? path.slice(dotIndex) : ''
+
+  for (let index = 1; index < 100; index += 1) {
+    const candidate = `${base}${index === 1 ? ' copy' : ` copy ${index}`}${extension}`
+    if (!project.files.some((file) => file.path === candidate)) return candidate
+  }
+
+  return `${base} copy ${crypto.randomUUID().slice(0, 8)}${extension}`
+}
+
+function starterContentForPath(path: string, kind: ProjectKind) {
+  const language = inferFileLanguage(path, kind)
+  if (language === 'ruby') return '# Write Ruby here\n'
+  if (language === 'javascript') return '// Write JavaScript here\n'
+  if (language === 'html') return '<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>New Page</title>\n  </head>\n  <body>\n    <h1>New page</h1>\n  </body>\n</html>\n'
+  if (language === 'css') return '/* Write CSS here */\n'
+  if (language === 'json') return '{\n  "message": "Hafa adai"\n}\n'
+  return ''
+}
+
+function starterPathForProject(kind: ProjectKind, files: ProjectFile[]) {
+  const candidates = kind === 'ruby'
+    ? ['helper.rb', 'greeting.rb', 'practice.rb']
+    : kind === 'javascript'
+      ? ['helper.js', 'utils.js', 'practice.js']
+      : ['about.html', 'styles.css', 'app.js']
+
+  return candidates.find((path) => !files.some((file) => file.path === path)) ?? `new-file-${files.length + 1}.${kind === 'ruby' ? 'rb' : kind === 'web' ? 'html' : 'js'}`
 }
 
 function formatUpdatedAt(value: string) {
@@ -113,7 +195,7 @@ function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notic
   }
 }
 
-function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFile: ProjectFile }) {
+function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const [runState, setRunState] = useState<RunState>(emptyRunState)
   const workerRef = useRef<Worker | null>(null)
   const timeoutRef = useRef<number | null>(null)
@@ -179,7 +261,14 @@ function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFil
       setRunState({ status: 'error', stdout: '', stderr: event.message || 'Runner failed.', durationMs: Math.round(performance.now() - startedAt) })
     }
 
-    worker.postMessage({ id: runId, code: activeFile.content, language: project.kind as RunnerLanguage, timeoutMs: RUNNER_TIMEOUT_MS })
+    worker.postMessage({
+      id: runId,
+      entryPath: entryFile.path,
+      files: project.files,
+      code: entryFile.content,
+      language: project.kind as RunnerLanguage,
+      timeoutMs: RUNNER_TIMEOUT_MS,
+    })
   }
 
   useEffect(() => {
@@ -210,7 +299,7 @@ function RunnerPanel({ project, activeFile }: { project: SavedProject; activeFil
             <Square size={16} /> Stop
           </button>
         ) : (
-          <button onClick={run} disabled={!activeFile.content.trim()}>
+          <button onClick={run} disabled={!entryFile.content.trim()}>
             <Play size={16} /> Run {project.kind === 'ruby' ? 'Ruby' : 'JS'}
           </button>
         )}
@@ -244,19 +333,27 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
   return level === 'log' || level === 'warn' || level === 'error'
 }
 
-function WebPreview({ files }: { files: ProjectFile[] }) {
-  const preview = useMemo(() => buildHtmlPreview(files), [files])
+function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: string }) {
+  const draftPreview = useMemo(() => buildHtmlPreview(files, entryPath), [entryPath, files])
+  const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const previewPortRef = useRef<MessagePort | null>(null)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
+  const previewIsStale = draftPreview !== renderedPreview
 
-  const sendPreviewToFrame = useCallback(() => {
+  const sendPreviewToFrame = useCallback((html: string) => {
     previewPortRef.current?.postMessage({
       source: 'hafa-code-preview-update',
-      html: preview,
+      html,
     })
-  }, [preview])
+  }, [])
+
+  const refreshPreview = useCallback(() => {
+    setRenderedPreview(draftPreview)
+    setConsoleMessages([])
+    sendPreviewToFrame(draftPreview)
+  }, [draftPreview, sendPreviewToFrame])
 
   const connectPreviewPort = useCallback((port: MessagePort) => {
     previewPortRef.current?.close()
@@ -282,9 +379,9 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
 
     port.postMessage({
       source: 'hafa-code-preview-update',
-      html: preview,
+      html: renderedPreview,
     })
-  }, [preview])
+  }, [renderedPreview])
 
   useEffect(() => {
     const handlePreviewConnect = (event: MessageEvent) => {
@@ -301,10 +398,6 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
     return () => window.removeEventListener('message', handlePreviewConnect)
   }, [connectPreviewPort])
 
-  useEffect(() => {
-    sendPreviewToFrame()
-  }, [sendPreviewToFrame])
-
   useEffect(() => () => {
     previewPortRef.current?.close()
     previewPortRef.current = null
@@ -316,8 +409,11 @@ function WebPreview({ files }: { files: ProjectFile[] }) {
         <div>
           <p className="eyebrow">Preview</p>
           <h2><Globe size={18} /> Web page</h2>
-          <p className="helper-text">Sandboxed iframe, no same-origin access.</p>
+          <p className="helper-text">{previewIsStale ? 'Preview has unsaved changes.' : 'Sandboxed iframe, no same-origin access.'}</p>
         </div>
+        <button className={previewIsStale ? '' : 'secondary'} type="button" onClick={refreshPreview}>
+          <RefreshCw size={16} /> Refresh
+        </button>
       </div>
       <iframe
         ref={iframeRef}
@@ -437,11 +533,15 @@ export default function App() {
   const [projectActionsOpen, setProjectActionsOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [pendingCheckpoint, setPendingCheckpoint] = useState<ProjectCheckpoint | null>(null)
+  const [fileDialog, setFileDialog] = useState<FileDialogState | null>(null)
+  const [fileDialogError, setFileDialogError] = useState('')
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
+  const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
   const syncTimerRef = useRef<number | null>(null)
   const replacingCloudIdRef = useRef(false)
   const libraryRef = useRef(library)
@@ -452,13 +552,16 @@ export default function App() {
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
+  const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
   const archivedProjects = library.projects.filter(isArchived)
   const visibleProjects = showArchived ? archivedProjects : activeProjects
+  const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
 
   const activateProject = (nextProject: SavedProject) => {
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
     setActivePath(nextProject.files[0].path)
+    setCheckpointMenuOpen(false)
   }
 
   const activateFallbackProject = (projects: SavedProject[], archivedView = showArchived) => {
@@ -527,6 +630,26 @@ export default function App() {
     const timeout = window.setTimeout(() => setNotice(''), 4_500)
     return () => window.clearTimeout(timeout)
   }, [notice])
+
+  useEffect(() => {
+    if (!checkpointMenuOpen) return undefined
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (checkpointMenuRef.current?.contains(event.target as Node)) return
+      setCheckpointMenuOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCheckpointMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [checkpointMenuOpen])
 
   useEffect(() => {
     if (!isSignedIn || hasLoadedCloudProjects) return
@@ -755,6 +878,131 @@ export default function App() {
           }
         : candidate),
     }))
+  }
+
+  const updateCurrentProject = (updater: (currentProject: SavedProject) => SavedProject) => {
+    setLibrary((current) => ({
+      ...current,
+      projects: current.projects.map((candidate) => candidate.id === project.id ? updater(candidate) : candidate),
+    }))
+  }
+
+  const openCreateFileDialog = () => {
+    if (!canAddWorkspaceFile(project)) {
+      setNotice(`Projects can include up to ${PROJECT_FILE_LIMIT} files.`)
+      return
+    }
+    setFileDialogError('')
+    setFileDialog({ mode: 'create', path: starterPathForProject(project.kind, project.files) })
+  }
+
+  const openRenameFileDialog = (file: ProjectFile) => {
+    setFileDialogError('')
+    setFileDialog({ mode: 'rename', path: file.path, sourcePath: file.path })
+  }
+
+  const openDuplicateFileDialog = (file: ProjectFile) => {
+    if (!canAddWorkspaceFile(project)) {
+      setNotice(`Projects can include up to ${PROJECT_FILE_LIMIT} files.`)
+      return
+    }
+    setFileDialogError('')
+    setFileDialog({ mode: 'duplicate', path: nextAvailableCopyPath(file.path, project), sourcePath: file.path })
+  }
+
+  const submitFileDialog = () => {
+    if (!fileDialog) return
+
+    const nextPath = normalizeWorkspacePath(fileDialog.path)
+    const error = validateWorkspacePath(nextPath, project, fileDialog.mode === 'rename' ? fileDialog.sourcePath : undefined)
+    if (error) {
+      setFileDialogError(error)
+      return
+    }
+
+    if (fileDialog.mode === 'create') {
+      if (!canAddWorkspaceFile(project)) {
+        setFileDialogError(`Projects can include up to ${PROJECT_FILE_LIMIT} files.`)
+        return
+      }
+      const nextFile: ProjectFile = {
+        path: nextPath,
+        language: inferFileLanguage(nextPath, project.kind),
+        content: starterContentForPath(nextPath, project.kind),
+      }
+      updateCurrentProject((currentProject) => ({
+        ...currentProject,
+        entryPath: currentProject.entryPath || nextPath,
+        files: [...currentProject.files, nextFile],
+        updatedAt: new Date().toISOString(),
+      }))
+      setActivePath(nextPath)
+      setNotice(`${nextPath} created.`)
+    }
+
+    if (fileDialog.mode === 'rename' && fileDialog.sourcePath) {
+      updateCurrentProject((currentProject) => ({
+        ...currentProject,
+        entryPath: currentProject.entryPath === fileDialog.sourcePath ? nextPath : currentProject.entryPath,
+        files: currentProject.files.map((file) => file.path === fileDialog.sourcePath
+          ? { ...file, path: nextPath, language: inferFileLanguage(nextPath, currentProject.kind) }
+          : file),
+        updatedAt: new Date().toISOString(),
+      }))
+      if (activePath === fileDialog.sourcePath) setActivePath(nextPath)
+      setNotice(`${fileDialog.sourcePath} renamed.`)
+    }
+
+    if (fileDialog.mode === 'duplicate' && fileDialog.sourcePath) {
+      if (!canAddWorkspaceFile(project)) {
+        setFileDialogError(`Projects can include up to ${PROJECT_FILE_LIMIT} files.`)
+        return
+      }
+      const sourceFile = project.files.find((file) => file.path === fileDialog.sourcePath)
+      if (!sourceFile) return
+      const nextFile = {
+        ...sourceFile,
+        path: nextPath,
+        language: inferFileLanguage(nextPath, project.kind),
+      }
+      updateCurrentProject((currentProject) => ({
+        ...currentProject,
+        files: [...currentProject.files, nextFile],
+        updatedAt: new Date().toISOString(),
+      }))
+      setActivePath(nextPath)
+      setNotice(`${nextPath} duplicated.`)
+    }
+
+    setFileDialog(null)
+    setFileDialogError('')
+  }
+
+  const deleteFile = (file: ProjectFile) => {
+    if (project.files.length <= 1) {
+      setNotice('Keep at least one file in the project.')
+      return
+    }
+
+    const remaining = project.files.filter((candidate) => candidate.path !== file.path)
+    const nextActivePath = activePath === file.path ? remaining[0].path : activePath
+    updateCurrentProject((currentProject) => ({
+      ...currentProject,
+      entryPath: currentProject.entryPath === file.path ? defaultEntryPath(remaining, currentProject.kind) : currentProject.entryPath,
+      files: remaining,
+      updatedAt: new Date().toISOString(),
+    }))
+    if (activePath !== nextActivePath) setActivePath(nextActivePath)
+    setNotice(`${file.path} deleted.`)
+  }
+
+  const setEntryPath = (file: ProjectFile) => {
+    updateCurrentProject((currentProject) => ({
+      ...currentProject,
+      entryPath: file.path,
+      updatedAt: new Date().toISOString(),
+    }))
+    setNotice(`${file.path} is now the entry file.`)
   }
 
   const runFromMobileCode = () => {
@@ -1062,6 +1310,47 @@ export default function App() {
               </small>
             </div>
             <div className="toolbar-actions">
+              <details
+                ref={checkpointMenuRef}
+                className="checkpoint-menu"
+                open={checkpointMenuIsOpen}
+                onToggle={(event) => {
+                  if (mobileTab !== 'history') setCheckpointMenuOpen(event.currentTarget.open)
+                }}
+              >
+                <summary>
+                  <History size={16} />
+                  <span>History</span>
+                  <small>{checkpoints.length}</small>
+                </summary>
+                <div className="checkpoint-popover">
+                  <div className="checkpoint-popover-header">
+                    <strong>Checkpoints</strong>
+                    <button className="secondary compact" type="button" onClick={saveCheckpoint}>
+                      <Save size={14} /> Save
+                    </button>
+                  </div>
+                  <div className="checkpoint-list">
+                    {checkpoints.length === 0 ? (
+                      <p className="empty-project-list">No checkpoints yet.</p>
+                    ) : checkpoints.slice(0, 5).map((checkpoint) => (
+                      <button
+                        key={checkpoint.id}
+                        className="checkpoint-card secondary"
+                        type="button"
+                        onClick={() => {
+                          setCheckpointMenuOpen(false)
+                          requestRestoreCheckpoint(checkpoint)
+                        }}
+                        title={`Restore ${checkpoint.title}`}
+                      >
+                        <span>{checkpoint.title}</span>
+                        <small>{formatCheckpointTime(checkpoint.createdAt)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
               {isArchived(project) ? (
                 <button className="secondary" onClick={restoreProject}><RotateCcw size={16} /> Restore</button>
               ) : (
@@ -1075,34 +1364,6 @@ export default function App() {
           </button>
           </div>
 
-          <section className="history-panel panel surface-grid" aria-label="Project checkpoints">
-            <div className="history-header">
-              <div>
-                <p className="eyebrow">History</p>
-                <h2><History size={17} /> Checkpoints</h2>
-              </div>
-              <button className="secondary compact" type="button" onClick={saveCheckpoint}>
-                <Save size={14} /> Save checkpoint
-              </button>
-            </div>
-            <div className="checkpoint-list">
-              {checkpoints.length === 0 ? (
-                <p className="empty-project-list">No checkpoints yet.</p>
-              ) : checkpoints.slice(0, 5).map((checkpoint) => (
-                <button
-                  key={checkpoint.id}
-                  className="checkpoint-card secondary"
-                  type="button"
-                  onClick={() => requestRestoreCheckpoint(checkpoint)}
-                  title={`Restore ${checkpoint.title}`}
-                >
-                  <span>{checkpoint.title}</span>
-                  <small>{formatCheckpointTime(checkpoint.createdAt)}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-
           <div className="workspace">
             <section className="panel editor-panel">
               <div className="file-tabs">
@@ -1110,9 +1371,19 @@ export default function App() {
                   {project.files.map((file) => (
                     <button key={file.path} className={file.path === activeFile.path ? 'active' : ''} onClick={() => setActivePath(file.path)}>
                       {file.path}
+                      {file.path === project.entryPath && <span className="entry-dot">entry</span>}
                     </button>
                   ))}
                 </div>
+                <button
+                  className="ghost icon-button"
+                  type="button"
+                  aria-label="Create file"
+                  title="Create file"
+                  onClick={openCreateFileDialog}
+                >
+                  <FilePlus2 size={17} />
+                </button>
                 <button
                   className="ghost icon-button editor-focus-button"
                   type="button"
@@ -1123,8 +1394,45 @@ export default function App() {
                   {editorExpanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
                 </button>
               </div>
+              <details className="file-browser" aria-label="Project files">
+                <summary>
+                  <span><Files size={15} /> Files</span>
+                  <small>{project.files.length} files · entry {project.entryPath}</small>
+                </summary>
+                <div className="file-browser-actions">
+                  <button className="secondary compact" type="button" onClick={openCreateFileDialog}>
+                    <FilePlus2 size={14} /> New file
+                  </button>
+                </div>
+                <div className="file-browser-list">
+                  {project.files.map((file) => (
+                    <div key={file.path} className={`file-row ${file.path === activeFile.path ? 'active' : ''}`}>
+                      <button type="button" className="file-row-main" onClick={() => setActivePath(file.path)}>
+                        <span>{file.path}</span>
+                        <small>{formatFileLanguage(file)}{file.path === project.entryPath ? ' · entry' : ''}</small>
+                      </button>
+                      <div className="file-row-actions">
+                        {file.path !== project.entryPath && (
+                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)}>
+                            <Check size={15} />
+                          </button>
+                        )}
+                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)}>
+                          <Pencil size={15} />
+                        </button>
+                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)}>
+                          <Copy size={15} />
+                        </button>
+                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={project.files.length <= 1}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
               <div className="mobile-code-runbar">
-                <button type="button" onClick={runFromMobileCode} disabled={project.kind !== 'web' && !activeFile.content.trim()}>
+                <button type="button" onClick={runFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()}>
                   {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
                   {project.kind === 'web' ? 'Open preview' : `Run ${project.kind === 'ruby' ? 'Ruby' : 'JS'}`}
                 </button>
@@ -1149,7 +1457,9 @@ export default function App() {
               />
             </section>
 
-            {project.kind === 'web' ? <WebPreview files={project.files} /> : <RunnerPanel key={`${project.id}:${activeFile.path}`} project={project} activeFile={activeFile} />}
+            {project.kind === 'web'
+              ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} />
+              : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} />}
           </div>
         </section>
       </div>
@@ -1176,6 +1486,57 @@ export default function App() {
           <span>History</span>
         </button>
       </nav>
+
+      {fileDialog && (
+        <div className="modal-backdrop" role="presentation" onClick={() => {
+          setFileDialog(null)
+          setFileDialogError('')
+        }}>
+          <section className="modal-sheet file-dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="file-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Workspace file</p>
+                <h2 id="file-dialog-title">
+                  {fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}
+                </h2>
+              </div>
+              <button className="ghost icon-button" aria-label="Close file dialog" onClick={() => {
+                setFileDialog(null)
+                setFileDialogError('')
+              }}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="file-path-field" htmlFor="file-path-input">
+              <span>Path</span>
+              <input
+                id="file-path-input"
+                value={fileDialog.path}
+                autoFocus
+                onChange={(event) => {
+                  setFileDialog((current) => current ? { ...current, path: event.target.value } : current)
+                  setFileDialogError('')
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') submitFileDialog()
+                }}
+                placeholder="lib/helper.rb"
+              />
+            </label>
+            {fileDialogError && <p className="form-error" role="alert">{fileDialogError}</p>}
+            <p className="helper-text">Use a simple filename like `helper.rb`, `about.html`, or `styles.css`. Add folders later with paths like `assets/logo.svg`.</p>
+            <div className="confirm-actions">
+              <button className="secondary" onClick={() => {
+                setFileDialog(null)
+                setFileDialogError('')
+              }}>Cancel</button>
+              <button onClick={submitFileDialog}>
+                {fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {projectActionsOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setProjectActionsOpen(false)}>

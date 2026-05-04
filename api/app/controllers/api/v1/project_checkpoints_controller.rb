@@ -2,7 +2,7 @@ module Api
   module V1
     class ProjectCheckpointsController < ApplicationController
       MAX_CHECKPOINTS_PER_PROJECT = 30
-      MAX_FILES_PER_CHECKPOINT = 12
+      MAX_FILES_PER_CHECKPOINT = Project::MAX_FILES
       MAX_FILE_BYTES = 500_000
 
       before_action :authenticate_user!
@@ -37,9 +37,10 @@ module Api
         snapshot = @checkpoint.snapshot
 
         Project.transaction do
-          @project.update!(
+          @project.assign_attributes(
             title: snapshot.fetch("title", @project.title),
-            kind: snapshot.fetch("kind", @project.kind)
+            kind: snapshot.fetch("kind", @project.kind),
+            entry_path: snapshot.fetch("entryPath", snapshot.fetch("entry_path", @project.entry_path))
           )
           @project.project_files.destroy_all
           Array(snapshot["files"]).each_with_index do |file, index|
@@ -86,6 +87,7 @@ module Api
         {
           title: project.title,
           kind: project.kind,
+          entryPath: project.entry_path,
           files: project.project_files.map.with_index do |file, index|
             raise ArgumentError, "File content is too large for checkpoint" if file.content.to_s.bytesize > MAX_FILE_BYTES
 

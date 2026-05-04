@@ -20,10 +20,16 @@ interface ApiProjectFile {
   position?: number
 }
 
+type ApiProjectSnapshot = Omit<ProjectSnapshot, 'entryPath'> & {
+  entryPath?: string
+  entry_path?: string
+}
+
 interface ApiProject {
   id: number
   title: string
   kind: ProjectKind
+  entry_path: string | null
   visibility: 'private' | 'unlisted' | 'public'
   archived_at: string | null
   created_at: string
@@ -40,7 +46,7 @@ interface ApiCheckpoint {
   id: number
   title: string
   created_at: string
-  snapshot?: ProjectSnapshot
+  snapshot?: ApiProjectSnapshot
 }
 
 interface ApiShare {
@@ -48,7 +54,7 @@ interface ApiShare {
   title: string
   kind: ProjectKind
   created_at: string
-  snapshot: ProjectSnapshot
+  snapshot: ApiProjectSnapshot
 }
 
 export function setAuthTokenGetter(getter: () => Promise<string | null>) {
@@ -83,14 +89,16 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 }
 
 function apiProjectToSavedProject(project: ApiProject): SavedProject {
+  const files = project.files
+    .slice()
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((file) => ({ path: file.path, language: file.language, content: file.content }))
   const normalized = normalizeProject({
     id: String(project.id),
     title: project.title,
     kind: project.kind,
-    files: project.files
-      .slice()
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-      .map((file) => ({ path: file.path, language: file.language, content: file.content })),
+    entryPath: project.entry_path ?? undefined,
+    files,
     createdAt: project.created_at,
     updatedAt: project.updated_at,
     archivedAt: project.archived_at,
@@ -104,6 +112,7 @@ function savedProjectPayload(project: SavedProject) {
   return {
     title: project.title,
     kind: project.kind,
+    entry_path: project.entryPath,
     visibility: 'private',
     files: project.files.map((file, index) => ({ ...file, position: index })),
   }
@@ -114,7 +123,14 @@ function apiCheckpointToProjectCheckpoint(checkpoint: ApiCheckpoint): ProjectChe
     id: String(checkpoint.id),
     title: checkpoint.title,
     createdAt: checkpoint.created_at,
-    snapshot: checkpoint.snapshot,
+    snapshot: checkpoint.snapshot
+      ? {
+          title: checkpoint.snapshot.title,
+          kind: checkpoint.snapshot.kind,
+          entryPath: checkpoint.snapshot.entryPath ?? checkpoint.snapshot.entry_path ?? '',
+          files: checkpoint.snapshot.files,
+        }
+      : undefined,
   }
 }
 
@@ -124,6 +140,7 @@ function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
     id: crypto.randomUUID(),
     title: share.snapshot.title || share.title,
     kind: share.snapshot.kind || share.kind,
+    entryPath: share.snapshot.entryPath ?? share.snapshot.entry_path ?? undefined,
     files: share.snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })),
     createdAt: now,
     updatedAt: now,

@@ -20,23 +20,23 @@ module Api
         if project.save
           render json: { project: project_json(project) }, status: :created
         else
-          render json: { errors: project.errors.full_messages }, status: :unprocessable_entity
+          render json: { errors: validation_errors(project) }, status: :unprocessable_entity
         end
       end
 
       def update
         Project.transaction do
-          @project.update!(project_attrs)
+          @project.assign_attributes(project_attrs)
           if params.key?(:files)
             @project.project_files.destroy_all
             assign_files(@project)
-            @project.save!
           end
+          @project.save!
         end
 
         render json: { project: project_json(@project.reload) }
       rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: validation_errors(e.record) }, status: :unprocessable_entity
       end
 
       def destroy
@@ -58,6 +58,7 @@ module Api
         copy = current_user.projects.new(
           title: "#{@project.title} Copy",
           kind: @project.kind,
+          entry_path: @project.entry_path,
           visibility: "private",
           forked_from: @project
         )
@@ -84,7 +85,7 @@ module Api
       end
 
       def project_attrs
-        params.permit(:title, :kind, :visibility)
+        params.permit(:title, :kind, :visibility, :entry_path)
       end
 
       def files_param
@@ -99,12 +100,20 @@ module Api
 
           permitted = ActionController::Parameters.new(file.to_unsafe_h).permit(:path, :language, :content, :position)
           project.project_files.build(
-            path: permitted[:path],
+            path: permitted[:path].to_s.strip,
             language: permitted[:language],
             content: permitted[:content].to_s,
             position: permitted[:position] || index
           )
         end
+      end
+
+      def validation_errors(project)
+        file_errors = project.project_files.flat_map.with_index do |file, index|
+          file.errors.full_messages.map { |message| "File #{index + 1}: #{message}" }
+        end
+
+        (project.errors.full_messages + file_errors).uniq
       end
     end
   end
