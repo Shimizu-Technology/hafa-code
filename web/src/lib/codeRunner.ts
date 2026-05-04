@@ -191,7 +191,10 @@ function shouldRewritePath(path: string) {
 
 function normalizeReferencePath(basePath: string, reference: string) {
   const [withoutQuery] = reference.split(/[?#]/)
-  const segments = `${basePath ? `${basePath}/` : ''}${withoutQuery.replace(/^\.\//, '')}`.split('/')
+  const relativePath = withoutQuery.startsWith('/')
+    ? withoutQuery.replace(/^\/+/, '')
+    : `${basePath ? `${basePath}/` : ''}${withoutQuery.replace(/^\.\//, '')}`
+  const segments = relativePath.split('/')
   const normalized: string[] = []
 
   segments.forEach((segment) => {
@@ -274,7 +277,10 @@ function previewBridge(files: ProjectFile[], basePath: string) {
         const __hafaResolvePath = (reference) => {
           if (/^(?:[a-z][a-z0-9+.-]*:|#|\\/\\/)/i.test(reference)) return null
           const path = String(reference).split(/[?#]/)[0]
-          const parts = ((__hafaBasePath ? __hafaBasePath + '/' : '') + path.replace(/^\\.\\//, '')).split('/')
+          const relativePath = path.startsWith('/')
+            ? path.replace(/^\\/+/g, '')
+            : ((__hafaBasePath ? __hafaBasePath + '/' : '') + path.replace(/^\\.\\//, ''))
+          const parts = relativePath.split('/')
           const normalized = []
           for (const part of parts) {
             if (!part || part === '.') continue
