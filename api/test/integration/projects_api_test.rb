@@ -632,4 +632,75 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     get "/api/v1/projects/#{private_project.id}", headers: other_headers
     assert_response :success
   end
+
+  test "organization listings do not expose unlisted projects to student members" do
+    other_student = User.create!(
+      clerk_id: "test_clerk_unlisted_member",
+      email: "unlisted-member@example.com",
+      first_name: "Other",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Unlisted School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    organization.organization_memberships.create!(user: other_student, role: :student)
+    organization_project = @user.projects.create!(
+      organization: organization,
+      title: "Class Ruby",
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'class'") ]
+    )
+    unlisted_project = @user.projects.create!(
+      organization: organization,
+      title: "Link Only Ruby",
+      kind: "ruby",
+      visibility: "unlisted",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'link only'") ]
+    )
+    other_headers = {
+      "Authorization" => "Bearer test_token_#{other_student.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/projects", headers: other_headers
+    assert_response :success
+    assert_equal [ organization_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects", params: { organization_id: organization.id }, headers: other_headers
+    assert_response :success
+    assert_equal [ organization_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects/#{unlisted_project.id}", headers: other_headers
+    assert_response :success
+  end
+
+  test "duplicating an unlisted org project outside the org creates a personal copy" do
+    outsider = User.create!(
+      clerk_id: "test_clerk_outsider",
+      email: "outsider@example.com",
+      first_name: "Outside",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Source School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    source_project = @user.projects.create!(
+      organization: organization,
+      title: "Shareable Ruby",
+      kind: "ruby",
+      visibility: "unlisted",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
+    )
+    outsider_headers = {
+      "Authorization" => "Bearer test_token_#{outsider.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/projects/#{source_project.id}/duplicate", headers: outsider_headers
+
+    assert_response :created
+    copy = Project.find(response.parsed_body.dig("project", "id"))
+    assert_equal outsider, copy.user
+    assert_nil copy.organization_id
+    assert_equal source_project, copy.forked_from
+  end
 end

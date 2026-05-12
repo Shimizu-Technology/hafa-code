@@ -138,7 +138,7 @@ module Api
         organization.projects.where(
           "user_id = :user_id OR visibility IN (:member_visibilities)",
           user_id: current_user.id,
-          member_visibilities: %w[organization unlisted public]
+          member_visibilities: %w[organization public]
         )
       end
 

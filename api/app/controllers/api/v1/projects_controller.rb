@@ -62,7 +62,7 @@ module Api
           kind: @project.kind,
           entry_path: @project.entry_path,
           visibility: "private",
-          organization: @project.organization,
+          organization: duplicate_organization,
           forked_from: @project
         )
         @project.project_files.each_with_index do |file, index|
@@ -92,7 +92,7 @@ module Api
               WHERE organization_memberships.organization_id = projects.organization_id
               AND organization_memberships.user_id = :user_id
               AND organization_memberships.role IN (:instructor_roles)
-            )", user_id: current_user.id, member_visibilities: %w[organization unlisted public], instructor_roles: [ OrganizationMembership.roles[:instructor], OrganizationMembership.roles[:owner] ])
+            )", user_id: current_user.id, member_visibilities: %w[organization public], instructor_roles: [ OrganizationMembership.roles[:instructor], OrganizationMembership.roles[:owner] ])
         end
 
         current_user.projects.where(organization_id: nil)
@@ -115,6 +115,12 @@ module Api
         return nil if params[:organization_id].blank?
 
         current_user.organizations.find(params[:organization_id])
+      end
+
+      def duplicate_organization
+        return nil unless @project.organization
+
+        current_user.organizations.find_by(id: @project.organization_id)
       end
 
       def files_param
