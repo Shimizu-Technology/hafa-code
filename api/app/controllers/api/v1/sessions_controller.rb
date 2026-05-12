@@ -4,7 +4,10 @@ module Api
       before_action :authenticate_user!
 
       def create
-        render json: { user: user_json(current_user) }
+        render json: {
+          user: user_json(current_user),
+          organizations: current_user.organizations.order(:name).map { |organization| organization_json(organization) }
+        }
       end
 
       private
@@ -17,6 +20,16 @@ module Api
           last_name: user.last_name,
           full_name: user.full_name,
           role: user.role
+        }
+      end
+
+      def organization_json(organization)
+        membership = organization_membership_for(current_user, organization)
+        {
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          role: membership&.role
         }
       end
     end

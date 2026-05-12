@@ -43,6 +43,7 @@ import {
   type ProjectFile,
   type ProjectCheckpoint,
   type ProjectKind,
+  type ProjectVisibility,
   type RunnerLanguage,
   type SavedProject,
 } from './lib/codeRunner'
@@ -61,13 +62,21 @@ import {
   type ProjectLibrary,
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
-import { api } from './lib/api'
+import { api, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
 type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
 type FileDialogMode = 'create' | 'rename' | 'duplicate'
+type ThemePreference = 'system' | 'light' | 'dark'
+type ColorModePreference = 'default' | 'colorblind'
+type ShareDialogState = {
+  url: string
+  mode: 'server' | 'offline'
+  copied: boolean
+  error?: string | null
+} | null
 
 interface FileDialogState {
   mode: FileDialogMode
@@ -84,10 +93,26 @@ interface RunState {
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 const PROJECT_FILE_LIMIT = 50
+const THEME_STORAGE_KEY = 'hafa-code-theme-v1'
+const COLOR_MODE_STORAGE_KEY = 'hafa-code-color-mode-v1'
 const kindLabels: Record<ProjectKind, string> = {
   ruby: 'Ruby',
   javascript: 'JavaScript',
   web: 'HTML/CSS/JS',
+}
+
+const visibilityLabels: Record<ProjectVisibility, string> = {
+  private: 'Private',
+  organization: 'Org',
+  unlisted: 'Unlisted',
+  public: 'Public',
+}
+
+const visibilityDescriptions: Record<ProjectVisibility, string> = {
+  private: 'Only you. In orgs, instructors can view.',
+  organization: 'Visible to members of this org.',
+  unlisted: 'Anyone with the link can view a copy.',
+  public: 'Publicly viewable when live links ship.',
 }
 
 function languageForFile(file: ProjectFile) {
@@ -197,6 +222,7 @@ function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notic
 
 function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const [runState, setRunState] = useState<RunState>(emptyRunState)
+  const [stdin, setStdin] = useState('')
   const workerRef = useRef<Worker | null>(null)
   const timeoutRef = useRef<number | null>(null)
   const runIdRef = useRef<string | null>(null)
@@ -266,6 +292,7 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
       entryPath: entryFile.path,
       files: project.files,
       code: entryFile.content,
+      stdin,
       language: project.kind as RunnerLanguage,
       timeoutMs: RUNNER_TIMEOUT_MS,
     })
@@ -304,6 +331,17 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
           </button>
         )}
       </div>
+      {project.kind === 'ruby' && (
+        <label className="stdin-panel">
+          <span>Program input</span>
+          <textarea
+            value={stdin}
+            onChange={(event) => setStdin(event.target.value)}
+            placeholder={"One line per gets call\nExample: Leon"}
+            rows={3}
+          />
+        </label>
+      )}
       <div className="terminal">
         {runState.status === 'running' && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
         {runState.status !== 'running' && outputIsEmpty && (
@@ -496,14 +534,25 @@ async function writeClipboardText(text: string) {
   }
 }
 
-function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary): ProjectLibrary {
-  const localOnlyProjects = localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
+function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary, organizationId: string | null): ProjectLibrary {
+  const localOnlyProjects = organizationId ? [] : localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
   const projects = [...cloudProjects, ...localOnlyProjects]
-  const activeProjectId = projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
+  if (projects.length === 0) return localLibrary
+  const activeProjectId = organizationId && cloudProjects.length > 0
+    ? cloudProjects[0].id
+    : projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
     ? localLibrary.activeProjectId
     : projects[0].id
 
   return { activeProjectId, projects }
+}
+
+function projectContextMatches(project: SavedProject, organizationId: string | null) {
+  return organizationId ? project.organizationId === organizationId : !project.organizationId
+}
+
+function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
+  return organizationId ? ['private', 'organization', 'unlisted', 'public'] : ['private', 'unlisted', 'public']
 }
 
 function useResponsiveEditorFontSize() {
@@ -521,6 +570,15 @@ function useResponsiveEditorFontSize() {
   return fontSize
 }
 
+function loadThemePreference(): ThemePreference {
+  const value = localStorage.getItem(THEME_STORAGE_KEY)
+  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+}
+
+function loadColorModePreference(): ColorModePreference {
+  return localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'colorblind' ? 'colorblind' : 'default'
+}
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
@@ -535,6 +593,14 @@ export default function App() {
   const [pendingCheckpoint, setPendingCheckpoint] = useState<ProjectCheckpoint | null>(null)
   const [fileDialog, setFileDialog] = useState<FileDialogState | null>(null)
   const [fileDialogError, setFileDialogError] = useState('')
+  const [shareDialog, setShareDialog] = useState<ShareDialogState>(null)
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
+  const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
+  const [instructorPanelOpen, setInstructorPanelOpen] = useState(false)
+  const [orgCreateOpen, setOrgCreateOpen] = useState(false)
+  const [orgNameDraft, setOrgNameDraft] = useState('')
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadThemePreference())
+  const [colorModePreference, setColorModePreference] = useState<ColorModePreference>(() => loadColorModePreference())
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
@@ -546,7 +612,7 @@ export default function App() {
   const replacingCloudIdRef = useRef(false)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
-  const { isSignedIn, user } = useAuthContext()
+  const { isSignedIn, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
 
@@ -555,8 +621,16 @@ export default function App() {
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
   const archivedProjects = library.projects.filter(isArchived)
-  const visibleProjects = showArchived ? archivedProjects : activeProjects
+  const activeContextProjects = activeProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+  const archivedContextProjects = archivedProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+  const visibleProjects = showArchived ? archivedContextProjects : activeContextProjects
   const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
+  const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? null
+  const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
+  const resolvedTheme = themePreference === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : themePreference
 
   const activateProject = (nextProject: SavedProject) => {
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
@@ -581,6 +655,14 @@ export default function App() {
     libraryRef.current = library
     saveProjectLibrary(library)
   }, [library])
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+  }, [themePreference])
+
+  useEffect(() => {
+    localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+  }, [colorModePreference])
 
   useEffect(() => {
     const requestId = checkpointRequestIdRef.current + 1
@@ -632,6 +714,14 @@ export default function App() {
   }, [notice])
 
   useEffect(() => {
+    queueMicrotask(() => {
+      setHasLoadedCloudProjects(false)
+      setInstructorPanelOpen(false)
+      setOrgMembers([])
+    })
+  }, [activeOrganizationId])
+
+  useEffect(() => {
     if (!checkpointMenuOpen) return undefined
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -652,29 +742,56 @@ export default function App() {
   }, [checkpointMenuOpen])
 
   useEffect(() => {
+    if (!isSignedIn || !activeOrganizationId || !canUseInstructorPanel) return
+
+    api.getOrgMembers(activeOrganizationId).then((res) => {
+      if (res.data) setOrgMembers(res.data)
+      if (res.error) setNotice(`Could not load organization roster: ${res.error}`)
+    })
+  }, [activeOrganizationId, canUseInstructorPanel, isSignedIn])
+
+  useEffect(() => {
     if (!isSignedIn || hasLoadedCloudProjects) return
 
-    api.getProjects().then((res) => {
+    api.getProjects(activeOrganizationId).then((res) => {
       if (res.error) {
         setNotice(`Cloud sync unavailable: ${res.error}`)
+        setHasLoadedCloudProjects(true)
         return
       }
       if (res.data && res.data.length > 0) {
-        const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current)
+        const remainingContextProjects = libraryRef.current.projects.filter((candidate) => !projectContextMatches(candidate, activeOrganizationId))
+        const baseLibrary = { ...libraryRef.current, projects: remainingContextProjects }
+        const merged = mergeCloudAndLocalProjects(res.data, baseLibrary, activeOrganizationId)
         const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
-        setNotice(`Loaded ${res.data.length} cloud project${res.data.length === 1 ? '' : 's'} and kept local drafts.`)
+        setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
       } else {
-        setNotice('Signed in. Local projects will sync to your account as you edit.')
+        if (activeOrganizationId) {
+          const contextProjects = libraryRef.current.projects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+          if (contextProjects.length === 0) {
+            const next = createProject('ruby', `${activeOrganization?.name || 'Org'} Ruby Playground`)
+            const orgProject = {
+              ...next,
+              organizationId: activeOrganizationId,
+              organization: activeOrganization,
+              visibility: 'private' as ProjectVisibility,
+            }
+            setLibrary((current) => ({ activeProjectId: orgProject.id, projects: [orgProject, ...current.projects] }))
+            setActivePath(orgProject.files[0].path)
+          }
+        } else {
+          setNotice('Signed in. Local projects will sync to your account as you edit.')
+        }
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, hasLoadedCloudProjects, isSignedIn])
 
   useEffect(() => {
-    if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current) return
+    if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
     if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
 
     syncTimerRef.current = window.setTimeout(async () => {
@@ -701,7 +818,7 @@ export default function App() {
     return () => {
       if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
     }
-  }, [hasLoadedCloudProjects, isSignedIn, library, project])
+  }, [canEditProject, hasLoadedCloudProjects, isSignedIn, library, project])
 
   const setActiveProject = (projectId: string) => {
     const nextProject = library.projects.find((candidate) => candidate.id === projectId)
@@ -711,7 +828,13 @@ export default function App() {
   }
 
   const addProject = (kind: ProjectKind) => {
-    const next = createProject(kind)
+    const starter = createProject(kind)
+    const next = {
+      ...starter,
+      organizationId: activeOrganizationId,
+      organization: activeOrganization,
+      visibility: 'private' as ProjectVisibility,
+    }
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
@@ -719,8 +842,37 @@ export default function App() {
     setNotice(`${next.title} created.`)
   }
 
+  const updateProjectVisibility = (visibility: ProjectVisibility) => {
+    updateCurrentProject((currentProject) => ({
+      ...currentProject,
+      visibility,
+      updatedAt: new Date().toISOString(),
+    }))
+    setNotice(`Visibility set to ${visibilityLabels[visibility]}.`)
+  }
+
+  const createOrganization = async () => {
+    const name = orgNameDraft.trim()
+    if (!name) {
+      setNotice('Enter an organization name.')
+      return
+    }
+
+    const res = await api.createOrganization(name)
+    if (res.error || !res.data) {
+      setNotice(`Could not create organization: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    await syncSession()
+    setActiveOrganizationId(String(res.data.id))
+    setOrgNameDraft('')
+    setOrgCreateOpen(false)
+    setNotice(`${res.data.name} created.`)
+  }
+
   const requestArchiveProject = () => {
-    if (activeProjects.length <= 1) {
+    if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
     }
@@ -779,7 +931,7 @@ export default function App() {
   }
 
   const archiveProject = async () => {
-    if (activeProjects.length <= 1) {
+    if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
     }
@@ -859,6 +1011,7 @@ export default function App() {
   }
 
   const renameProject = (title: string) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id
@@ -868,6 +1021,7 @@ export default function App() {
   }
 
   const updateActiveFile = (content: string) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id
@@ -881,6 +1035,7 @@ export default function App() {
   }
 
   const updateCurrentProject = (updater: (currentProject: SavedProject) => SavedProject) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id ? updater(candidate) : candidate),
@@ -1093,15 +1248,18 @@ export default function App() {
       ? `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
       : `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
     const didCopy = await writeClipboardText(url)
-    if (!didCopy) {
-      window.prompt('Copy this share link:', url)
-    }
+    setShareDialog({
+      url,
+      mode: share.data ? 'server' : 'offline',
+      copied: didCopy,
+      error: share.error,
+    })
     if (share.data) {
-      setNotice(didCopy ? 'Share snapshot link copied.' : 'Clipboard was blocked, so I opened a copyable share link.')
+      setNotice(didCopy ? 'Share snapshot link copied.' : 'Share snapshot link is ready to copy.')
     } else {
       setNotice(didCopy
         ? `Offline share link copied.${share.error ? ` Server share failed: ${share.error}` : ''}`
-        : 'Clipboard was blocked, so I opened a copyable share link.')
+        : 'Offline share link is ready to copy.')
     }
   }
 
@@ -1121,7 +1279,11 @@ export default function App() {
   }
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} mobile-tab-${mobileTab}`}>
+    <main
+      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} mobile-tab-${mobileTab}`}
+      data-theme={resolvedTheme}
+      data-color-mode={colorModePreference}
+    >
       <header className="hero panel hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
@@ -1138,7 +1300,7 @@ export default function App() {
           <div className="orbit orbit-two" />
           <div className="hero-card-inner">
             <Layers3 size={26} />
-            <strong>{activeProjects.length}</strong>
+            <strong>{activeContextProjects.length}</strong>
             <span>{isSignedIn ? 'active cloud projects' : 'active local projects'}</span>
           </div>
         </div>
@@ -1170,6 +1332,96 @@ export default function App() {
         </div>
       )}
 
+      <section className="context-bar panel surface-grid" aria-label="Project context">
+        <div className="context-copy">
+          <p className="eyebrow">Workspace</p>
+          <h2>{activeOrganization ? activeOrganization.name : 'Personal projects'}</h2>
+          <p className="helper-text">
+            {activeOrganization
+              ? `${activeOrganization.role} workspace. Private projects are still visible to instructors.`
+              : 'Your own projects, separate from any classroom or organization.'}
+          </p>
+        </div>
+        <div className="context-actions">
+          <button
+            className={!activeOrganizationId ? 'active context-chip' : 'secondary context-chip'}
+            type="button"
+            onClick={() => setActiveOrganizationId(null)}
+          >
+            Personal
+          </button>
+          {organizations.map((organization) => (
+            <button
+              key={organization.id}
+              className={String(organization.id) === activeOrganizationId ? 'active context-chip' : 'secondary context-chip'}
+              type="button"
+              onClick={() => setActiveOrganizationId(String(organization.id))}
+            >
+              {organization.name}
+            </button>
+          ))}
+          {isSignedIn && (
+            <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
+              <Plus size={14} /> Org
+            </button>
+          )}
+          {canUseInstructorPanel && (
+            <button className="secondary context-chip" type="button" onClick={() => setInstructorPanelOpen((current) => !current)}>
+              <ShieldCheck size={14} /> Students
+            </button>
+          )}
+        </div>
+        <div className="preference-actions" aria-label="Display preferences">
+          <button className={themePreference === 'system' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('system')}>System</button>
+          <button className={themePreference === 'light' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('light')}>Light</button>
+          <button className={themePreference === 'dark' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('dark')}>Dark</button>
+          <button
+            className={colorModePreference === 'colorblind' ? 'active' : 'secondary'}
+            type="button"
+            onClick={() => setColorModePreference((current) => current === 'colorblind' ? 'default' : 'colorblind')}
+          >
+            Color-safe
+          </button>
+        </div>
+      </section>
+
+      {instructorPanelOpen && activeOrganization && (
+        <section className="instructor-panel panel surface-grid">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Instructor</p>
+              <h2><ShieldCheck size={18} /> Student work</h2>
+              <p className="helper-text">Read-only view of projects in {activeOrganization.name}.</p>
+            </div>
+            <button className="ghost" type="button" onClick={() => setInstructorPanelOpen(false)}>Close</button>
+          </div>
+          <div className="student-grid">
+            {orgMembers.filter((member) => member.organization_role === 'student').length === 0 && (
+              <p className="empty-project-list">No students in this organization yet.</p>
+            )}
+            {orgMembers.filter((member) => member.organization_role === 'student').map((member) => {
+              const studentProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
+              return (
+                <article key={member.id} className="student-card">
+                  <div>
+                    <strong>{member.full_name}</strong>
+                    <small>{member.email}</small>
+                  </div>
+                  <span>{studentProjects.length} project{studentProjects.length === 1 ? '' : 's'}</span>
+                  <div className="student-project-list">
+                    {studentProjects.slice(0, 4).map((studentProject) => (
+                      <button key={studentProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(studentProject.id)}>
+                        {studentProject.title}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="mobile-home-panel panel surface-grid">
         <div>
           <p className="eyebrow">Welcome</p>
@@ -1179,8 +1431,8 @@ export default function App() {
           </p>
         </div>
         <div className="mobile-home-stats" aria-label="Project summary">
-          <span><strong>{activeProjects.length}</strong> active</span>
-          <span><strong>{archivedProjects.length}</strong> archived</span>
+          <span><strong>{activeContextProjects.length}</strong> active</span>
+          <span><strong>{archivedContextProjects.length}</strong> archived</span>
           <span><strong>{checkpoints.length}</strong> checkpoints</span>
         </div>
         <div className="mobile-home-create" aria-label="Create new project">
@@ -1205,7 +1457,7 @@ export default function App() {
           <div className="sidebar-header">
             <h2><Files size={18} /> Projects</h2>
             <div className="sidebar-tools">
-              <span>{showArchived ? archivedProjects.length : activeProjects.length}</span>
+              <span>{showArchived ? archivedContextProjects.length : activeContextProjects.length}</span>
               <button
                 className="ghost icon-button desktop-only"
                 type="button"
@@ -1227,15 +1479,15 @@ export default function App() {
           <details className="mobile-project-menu" open={mobileTab === 'projects' ? true : undefined}>
             <summary>
               <span>{project.title || 'Untitled Project'}</span>
-              <small>{showArchived ? `${archivedProjects.length} archived` : `${activeProjects.length} active`}</small>
+              <small>{showArchived ? `${archivedContextProjects.length} archived` : `${activeContextProjects.length} active`}</small>
             </summary>
             <div className="mobile-project-content">
               <div className="project-view-toggle" aria-label="Project view">
                 <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                  Active <span>{activeProjects.length}</span>
+                  Active <span>{activeContextProjects.length}</span>
                 </button>
                 <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                  Archived <span>{archivedProjects.length}</span>
+                  Archived <span>{archivedContextProjects.length}</span>
                 </button>
               </div>
               <div className="new-project-grid">
@@ -1266,10 +1518,10 @@ export default function App() {
             <p className="sidebar-note">{isSignedIn ? `Signed in${user?.full_name ? ` as ${user.full_name}` : ''}. Projects sync to your account.` : 'Everything is private to this browser until you export, share, or sign in.'}</p>
             <div className="project-view-toggle" aria-label="Project view">
               <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                Active <span>{activeProjects.length}</span>
+                Active <span>{activeContextProjects.length}</span>
               </button>
               <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                Archived <span>{archivedProjects.length}</span>
+                Archived <span>{archivedContextProjects.length}</span>
               </button>
             </div>
           <div className="new-project-grid">
@@ -1301,13 +1553,28 @@ export default function App() {
           <div className="project-toolbar panel surface-grid">
             <div className="title-field">
               <label htmlFor="project-title">Project name</label>
-              <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} />
+              <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} disabled={!canEditProject} />
               <small>
                 {isSignedIn ? 'Autosaved to cloud + local backup' : 'Autosaved locally'}
                 {isArchived(project) ? ' · archived' : ''}
+                {!canEditProject ? ' · read-only instructor view' : ''}
                 {' · updated '}
                 {formatUpdatedAt(project.updatedAt)}
               </small>
+              <div className="visibility-control" aria-label="Project visibility">
+                {availableVisibilityOptions(activeOrganizationId).map((visibility) => (
+                  <button
+                    key={visibility}
+                    className={project.visibility === visibility ? 'active' : ''}
+                    type="button"
+                    title={visibilityDescriptions[visibility]}
+                    disabled={!canEditProject}
+                    onClick={() => updateProjectVisibility(visibility)}
+                  >
+                    {visibilityLabels[visibility]}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="toolbar-actions">
               <details
@@ -1326,7 +1593,7 @@ export default function App() {
                 <div className="checkpoint-popover">
                   <div className="checkpoint-popover-header">
                     <strong>Checkpoints</strong>
-                    <button className="secondary compact" type="button" onClick={saveCheckpoint}>
+                    <button className="secondary compact" type="button" onClick={saveCheckpoint} disabled={!canEditProject}>
                       <Save size={14} /> Save
                     </button>
                   </div>
@@ -1352,12 +1619,12 @@ export default function App() {
                 </div>
               </details>
               {isArchived(project) ? (
-                <button className="secondary" onClick={restoreProject}><RotateCcw size={16} /> Restore</button>
+                <button className="secondary" onClick={restoreProject} disabled={!canEditProject}><RotateCcw size={16} /> Restore</button>
               ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={activeProjects.length <= 1}><Archive size={16} /> Archive</button>
+                <button className="secondary" onClick={requestArchiveProject} disabled={!canEditProject || activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={requestDeleteProject}><Trash2 size={16} /> Delete</button>
+              <button className="danger" onClick={requestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
             </div>
           <button className="secondary mobile-project-actions-button" onClick={() => setProjectActionsOpen(true)}>
             <MoreHorizontal size={16} /> Actions
@@ -1381,6 +1648,7 @@ export default function App() {
                   aria-label="Create file"
                   title="Create file"
                   onClick={openCreateFileDialog}
+                  disabled={!canEditProject}
                 >
                   <FilePlus2 size={17} />
                 </button>
@@ -1400,7 +1668,7 @@ export default function App() {
                   <small>{project.files.length} files · entry {project.entryPath}</small>
                 </summary>
                 <div className="file-browser-actions">
-                  <button className="secondary compact" type="button" onClick={openCreateFileDialog}>
+                  <button className="secondary compact" type="button" onClick={openCreateFileDialog} disabled={!canEditProject}>
                     <FilePlus2 size={14} /> New file
                   </button>
                 </div>
@@ -1413,17 +1681,17 @@ export default function App() {
                       </button>
                       <div className="file-row-actions">
                         {file.path !== project.entryPath && (
-                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)}>
+                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)} disabled={!canEditProject}>
                             <Check size={15} />
                           </button>
                         )}
-                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)}>
+                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)} disabled={!canEditProject}>
                           <Pencil size={15} />
                         </button>
-                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)}>
+                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)} disabled={!canEditProject}>
                           <Copy size={15} />
                         </button>
-                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={project.files.length <= 1}>
+                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={!canEditProject || project.files.length <= 1}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -1440,11 +1708,12 @@ export default function App() {
               <MonacoEditor
                 height="var(--workspace-pane-height)"
                 language={languageForFile(activeFile)}
-                theme="vs-dark"
+                theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
                 value={activeFile.content}
                 loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
                 onChange={(value) => updateActiveFile(value ?? '')}
                 options={{
+                  readOnly: !canEditProject,
                   minimap: { enabled: false },
                   fontSize: editorFontSize,
                   tabSize: 2,
@@ -1538,6 +1807,76 @@ export default function App() {
         </div>
       )}
 
+      {shareDialog && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShareDialog(null)}>
+          <section className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Snapshot share</p>
+                <h2 id="share-dialog-title">Copy project link</h2>
+              </div>
+              <button className="ghost icon-button" aria-label="Close share dialog" onClick={() => setShareDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <p className="helper-text">
+              {shareDialog.mode === 'server'
+                ? 'This link imports a server snapshot of the project.'
+                : 'The server share could not be created, so this offline link carries a copy in the URL.'}
+            </p>
+            {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
+            <label className="file-path-field" htmlFor="share-url">
+              <span>Share URL</span>
+              <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
+            </label>
+            <div className="confirm-actions">
+              <button className="secondary" type="button" onClick={() => setShareDialog(null)}>Done</button>
+              <button type="button" onClick={async () => {
+                const copied = await writeClipboardText(shareDialog.url)
+                setShareDialog((current) => current ? { ...current, copied } : current)
+                setNotice(copied ? 'Share link copied.' : 'Clipboard blocked. Select the link to copy it.')
+              }}>
+                <Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {orgCreateOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setOrgCreateOpen(false)}>
+          <section className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="org-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Organization</p>
+                <h2 id="org-dialog-title">Create workspace</h2>
+              </div>
+              <button className="ghost icon-button" aria-label="Close organization dialog" onClick={() => setOrgCreateOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="file-path-field" htmlFor="org-name">
+              <span>Name</span>
+              <input
+                id="org-name"
+                value={orgNameDraft}
+                autoFocus
+                onChange={(event) => setOrgNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') createOrganization()
+                }}
+                placeholder="Code School of Guam"
+              />
+            </label>
+            <p className="helper-text">Use organizations for classes, cohorts, or schools. You can keep personal projects separate.</p>
+            <div className="confirm-actions">
+              <button className="secondary" type="button" onClick={() => setOrgCreateOpen(false)}>Cancel</button>
+              <button type="button" onClick={createOrganization}>Create workspace</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {projectActionsOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setProjectActionsOpen(false)}>
           <section className="modal-sheet project-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="project-actions-title" onClick={(event) => event.stopPropagation()}>
@@ -1557,7 +1896,7 @@ export default function App() {
                   restoreProject()
                 }}><RotateCcw size={16} /> Restore</button>
               ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={activeProjects.length <= 1}><Archive size={16} /> Archive</button>
+                <button className="secondary" onClick={requestArchiveProject} disabled={activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
               <button className="danger" onClick={requestDeleteProject}><Trash2 size={16} /> Delete</button>

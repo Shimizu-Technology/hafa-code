@@ -2,10 +2,11 @@ module Api
   module V1
     class ProjectsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_project, only: [ :show, :update, :destroy, :archive, :duplicate, :unarchive ]
+      before_action :set_accessible_project, only: [ :show, :duplicate ]
+      before_action :set_owned_project, only: [ :update, :destroy, :archive, :unarchive ]
 
       def index
-        projects = current_user.projects.includes(:project_files).order(updated_at: :desc)
+        projects = scoped_projects.includes(:project_files, :user, :organization).order(updated_at: :desc)
         render json: { projects: projects.map { |project| project_json(project) } }
       end
 
@@ -15,6 +16,7 @@ module Api
 
       def create
         project = current_user.projects.new(project_attrs)
+        project.organization = project_organization
         assign_files(project)
 
         if project.save
@@ -60,6 +62,7 @@ module Api
           kind: @project.kind,
           entry_path: @project.entry_path,
           visibility: "private",
+          organization: @project.organization,
           forked_from: @project
         )
         @project.project_files.each_with_index do |file, index|
@@ -80,12 +83,38 @@ module Api
 
       private
 
-      def set_project
-        @project = current_user.projects.includes(:project_files).find(params[:id])
+      def scoped_projects
+        if params[:organization_id].present?
+          organization = current_user.organizations.find(params[:organization_id])
+          return Project.where(organization: organization)
+            .where("user_id = :user_id OR visibility IN (:member_visibilities) OR EXISTS (
+              SELECT 1 FROM organization_memberships
+              WHERE organization_memberships.organization_id = projects.organization_id
+              AND organization_memberships.user_id = :user_id
+              AND organization_memberships.role IN (:instructor_roles)
+            )", user_id: current_user.id, member_visibilities: %w[organization unlisted public], instructor_roles: [ OrganizationMembership.roles[:instructor], OrganizationMembership.roles[:owner] ])
+        end
+
+        current_user.projects.where(organization_id: nil)
+      end
+
+      def set_accessible_project
+        @project = Project.includes(:project_files, :user, :organization).find(params[:id])
+        render_forbidden unless can_view_project?(current_user, @project)
+      end
+
+      def set_owned_project
+        @project = current_user.projects.includes(:project_files, :user, :organization).find(params[:id])
       end
 
       def project_attrs
         params.permit(:title, :kind, :visibility, :entry_path)
+      end
+
+      def project_organization
+        return nil if params[:organization_id].blank?
+
+        current_user.organizations.find(params[:organization_id])
       end
 
       def files_param

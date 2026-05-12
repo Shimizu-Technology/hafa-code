@@ -365,4 +365,81 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
   ensure
     Rails.cache = original_cache
   end
+
+  test "organization instructors can view student private organization projects but cannot edit them" do
+    instructor = User.create!(
+      clerk_id: "test_clerk_instructor",
+      email: "teacher@example.com",
+      first_name: "Test",
+      last_name: "Teacher"
+    )
+    organization = Organization.create!(name: "Code School", created_by: instructor)
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    organization.organization_memberships.create!(user: @user, role: :student)
+
+    student_project = @user.projects.create!(
+      organization: organization,
+      title: "Student Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'student'") ]
+    )
+
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/projects/#{student_project.id}", headers: instructor_headers
+    assert_response :success
+    assert_equal "Student Ruby", response.parsed_body.dig("project", "title")
+    assert_equal "teacher@example.com", instructor.email
+
+    patch "/api/v1/projects/#{student_project.id}",
+      params: {
+        title: "Edited by teacher",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'changed'" } ]
+      }.to_json,
+      headers: instructor_headers
+
+    assert_response :not_found
+    assert_equal "Student Ruby", student_project.reload.title
+
+    get "/api/v1/organizations/#{organization.id}/members", headers: instructor_headers
+    assert_response :success
+    assert_equal [ "teacher@example.com", "student@example.com" ].sort, response.parsed_body.fetch("members").map { |member| member.fetch("email") }.sort
+  end
+
+  test "organization students cannot view another student's private organization project" do
+    other_student = User.create!(
+      clerk_id: "test_clerk_2",
+      email: "other@example.com",
+      first_name: "Other",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Code School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    organization.organization_memberships.create!(user: other_student, role: :student)
+
+    private_project = @user.projects.create!(
+      organization: organization,
+      title: "Private Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'private'") ]
+    )
+
+    other_headers = {
+      "Authorization" => "Bearer test_token_#{other_student.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/projects/#{private_project.id}", headers: other_headers
+    assert_response :forbidden
+
+    private_project.update!(visibility: "organization")
+    get "/api/v1/projects/#{private_project.id}", headers: other_headers
+    assert_response :success
+  end
 end

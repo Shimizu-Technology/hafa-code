@@ -1,9 +1,10 @@
-import { defaultEntryPath, inferFileLanguage, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type SavedProject } from './codeRunner'
+import { defaultEntryPath, inferFileLanguage, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
 const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
 const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
+const PROJECT_VISIBILITIES = new Set<ProjectVisibility>(['private', 'organization', 'unlisted', 'public'])
 const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css', 'json', 'plain'])
 type FileLanguage = SavedProject['files'][number]['language']
 type StoredProjectSnapshot = Partial<ProjectSnapshot> & {
@@ -34,6 +35,10 @@ function isFileLanguage(value: unknown): value is FileLanguage {
   return typeof value === 'string' && FILE_LANGUAGES.has(value)
 }
 
+function isProjectVisibility(value: unknown): value is ProjectVisibility {
+  return typeof value === 'string' && PROJECT_VISIBILITIES.has(value as ProjectVisibility)
+}
+
 export function normalizeProject(candidate: Partial<SavedProject> | null | undefined): SavedProject | null {
   if (!candidate?.id || !candidate.title || !isProjectKind(candidate.kind) || !Array.isArray(candidate.files)) {
     return null
@@ -54,6 +59,10 @@ export function normalizeProject(candidate: Partial<SavedProject> | null | undef
     id: String(candidate.id),
     title: String(candidate.title),
     kind: candidate.kind,
+    visibility: isProjectVisibility(candidate.visibility) ? candidate.visibility : 'private',
+    organizationId: candidate.organizationId ? String(candidate.organizationId) : null,
+    owner: candidate.owner ?? null,
+    organization: candidate.organization ?? null,
     entryPath: files.some((file) => file.path === candidate.entryPath)
       ? String(candidate.entryPath)
       : defaultEntryPath(files, candidate.kind),
@@ -189,6 +198,8 @@ export function duplicateProject(project: SavedProject): SavedProject {
     ...project,
     id: crypto.randomUUID(),
     title: `${project.title} Copy`,
+    visibility: 'private',
+    organizationId: project.organizationId ?? null,
     files: project.files.map((file) => ({ ...file })),
     createdAt: now,
     updatedAt: now,

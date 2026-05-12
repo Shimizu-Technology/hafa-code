@@ -10,6 +10,7 @@ interface RunRequest {
   code: string
   entryPath?: string
   files?: ProjectFile[]
+  stdin?: string
   language: RunnerLanguage
   timeoutMs: number
 }
@@ -280,7 +281,7 @@ function captureRubyOutput(args: unknown[], stream: string[]) {
   stream.push(text.endsWith('\n') ? text : `${text}\n`)
 }
 
-async function runRuby(id: string, code: string, files: ProjectFile[] = [], entryPath = 'main.rb') {
+async function runRuby(id: string, code: string, files: ProjectFile[] = [], entryPath = 'main.rb', stdin = '') {
   const stdout: string[] = []
   const stderr: string[] = []
   const originalLog = console.log
@@ -304,8 +305,13 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
       vm.eval(`
         $hafa_code_files = { ${rubyHash} }
         $hafa_code_loaded = {}
+        $hafa_code_stdin = ${rubyStringLiteral(stdin)}.lines
 
         module Kernel
+          def gets(*)
+            $hafa_code_stdin.shift
+          end
+
           def require_relative(path)
             caller_path = caller_locations(1, 1)&.first&.path.to_s
             base = caller_path.include?("/") ? caller_path.split("/")[0...-1].join("/") : ""
@@ -318,6 +324,12 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
             $hafa_code_loaded[candidate] = true
             TOPLEVEL_BINDING.eval(source, candidate)
             true
+          end
+        end
+
+        class << STDIN
+          def gets(*)
+            $hafa_code_stdin.shift
           end
         end
 
@@ -336,9 +348,9 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
 
 self.onmessage = (event: MessageEvent<RunRequest>) => {
   const startedAt = performance.now()
-  const { id, code, entryPath, files, language, timeoutMs } = event.data
+  const { id, code, entryPath, files, stdin, language, timeoutMs } = event.data
   const run = language === 'ruby'
-    ? runRuby(id, code, files, entryPath)
+    ? runRuby(id, code, files, entryPath, stdin)
     : runJavaScript(id, code, timeoutMs, files, entryPath)
 
   run

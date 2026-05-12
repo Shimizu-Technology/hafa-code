@@ -19,6 +19,20 @@ Rails.application.routes.draw do
         end
       end
       resources :shares, controller: "project_shares", param: :token, only: [ :create, :show ]
+      resources :organizations, only: [ :index, :show, :create ] do
+        member do
+          get :members
+          get :projects
+          get "students/:student_id/projects", to: "organizations#student_projects"
+          get :invitations
+          post :invite
+        end
+      end
+      resources :invitations, controller: "organization_invitations", param: :token, only: [ :show ] do
+        member do
+          post :accept
+        end
+      end
     end
   end
 end

@@ -118,6 +118,49 @@ button.icon-button {
   padding: 1.5rem 0 2.2rem;
 }
 
+.app-shell[data-theme="dark"] {
+  color: #f5efe7;
+  --ink: #f5efe7;
+  --muted: #c2b8ad;
+  --paper: #181512;
+  --line: rgba(245, 239, 231, 0.16);
+  --brand: #ff684f;
+  --brand-dark: #ff806b;
+  --gold: #ffd166;
+  --lagoon: #56c7b2;
+  --terminal: #080706;
+}
+
+.app-shell[data-theme="dark"] .panel,
+.app-shell[data-theme="dark"] .modal-sheet {
+  background: rgba(24, 21, 18, 0.86);
+}
+
+.app-shell[data-theme="dark"] button.secondary,
+.app-shell[data-theme="dark"] .project-card,
+.app-shell[data-theme="dark"] .student-card,
+.app-shell[data-theme="dark"] .title-field input,
+.app-shell[data-theme="dark"] .file-path-field input,
+.app-shell[data-theme="dark"] .mobile-actions-menu summary,
+.app-shell[data-theme="dark"] .mobile-project-menu summary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5efe7;
+}
+
+.app-shell[data-theme="dark"] .project-card.active,
+.app-shell[data-theme="dark"] button.context-chip.active,
+.app-shell[data-theme="dark"] .visibility-control button.active {
+  background: #f5efe7;
+  color: #14110f;
+}
+
+.app-shell[data-color-mode="colorblind"] {
+  --brand: #0072b2;
+  --brand-dark: #005a8f;
+  --gold: #e69f00;
+  --lagoon: #009e73;
+}
+
 .panel {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -280,6 +323,101 @@ h2 {
 
 .notice button {
   flex: 0 0 auto;
+}
+
+.context-bar {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.context-copy {
+  min-width: 0;
+}
+
+.context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.preference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.preference-actions button {
+  border-radius: 0.75rem;
+  font-size: 0.72rem;
+  padding: 0.45rem 0.58rem;
+}
+
+.preference-actions button.active {
+  background: var(--lagoon);
+  color: white;
+}
+
+button.context-chip {
+  border-radius: 0.85rem;
+  padding: 0.58rem 0.75rem;
+}
+
+button.context-chip.active,
+.visibility-control button.active {
+  background: #14110f;
+  color: #fffaf1;
+}
+
+.instructor-panel {
+  margin-bottom: 1rem;
+}
+
+.student-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding: 1rem;
+}
+
+.student-card {
+  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+}
+
+.student-card strong,
+.student-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.student-card > span {
+  color: var(--lagoon);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.student-project-list {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .layout-grid {
@@ -607,6 +745,29 @@ h2 {
   font-weight: 800;
 }
 
+.visibility-control {
+  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+
+.visibility-control button {
+  background: transparent;
+  border-radius: 0.7rem;
+  box-shadow: none;
+  color: #5b5048;
+  font-size: 0.74rem;
+  padding: 0.42rem 0.52rem;
+}
+
+.visibility-control button:hover:not(:disabled) {
+  box-shadow: none;
+}
+
 .panel-header {
   min-height: 86px;
   padding: 1rem;
@@ -817,6 +978,33 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.84rem;
   line-height: 1.65;
+}
+
+.stdin-panel {
+  background: #191511;
+  border-bottom: 1px solid #2a2521;
+  color: #d8cbbb;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+}
+
+.stdin-panel span {
+  color: #b9aa99;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.stdin-panel textarea {
+  background: rgba(255, 250, 241, 0.08);
+  border: 1px solid rgba(216, 203, 187, 0.18);
+  border-radius: 0.75rem;
+  color: #f3eadc;
+  font: inherit;
+  min-height: 76px;
+  padding: 0.65rem;
+  resize: vertical;
 }
 
 .terminal pre {
@@ -1069,6 +1257,32 @@ h2 {
   .hero {
     gap: 0.55rem;
     margin-bottom: 0.65rem;
+  }
+
+  .context-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+    padding: 0.72rem;
+  }
+
+  .context-actions {
+    justify-content: stretch;
+  }
+
+  .context-actions button,
+  .preference-actions button {
+    flex: 1 1 auto;
+  }
+
+  .preference-actions {
+    justify-content: stretch;
+  }
+
+  .student-grid {
+    grid-template-columns: 1fr;
+    padding: 0.72rem;
   }
 
   .mobile-home-panel {

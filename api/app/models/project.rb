@@ -1,9 +1,10 @@
 class Project < ApplicationRecord
   KINDS = %w[ruby javascript web].freeze
-  VISIBILITIES = %w[private unlisted public].freeze
+  VISIBILITIES = %w[private organization unlisted public].freeze
   MAX_FILES = 50
 
   belongs_to :user
+  belongs_to :organization, optional: true
   belongs_to :forked_from, class_name: "Project", optional: true
   has_many :project_files, -> { order(:position, :id) }, dependent: :destroy, inverse_of: :project
   has_many :project_checkpoints, -> { order(created_at: :desc) }, dependent: :destroy
