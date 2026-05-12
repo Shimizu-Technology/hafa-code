@@ -545,6 +545,44 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_nil invitation.reload.accepted_at
   end
 
+  test "accepting an invitation rolls back membership when marking accepted fails" do
+    owner = User.create!(
+      clerk_id: "test_clerk_atomic_owner",
+      email: "atomic-owner@example.com",
+      first_name: "Atomic",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Atomic School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_update = OrganizationInvitation.instance_method(:update!)
+
+    begin
+      OrganizationInvitation.define_method(:update!) do |*args, **kwargs|
+        attributes = args.first || kwargs
+        if id == invitation.id && attributes.respond_to?(:key?) && attributes.key?(:accepted_at)
+          raise ActiveRecord::StatementInvalid, "transient accepted_at failure"
+        end
+
+        original_update.bind(self).call(*args, **kwargs)
+      end
+
+      assert_raises(ActiveRecord::StatementInvalid) do
+        post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+      end
+    ensure
+      OrganizationInvitation.define_method(:update!, original_update)
+    end
+
+    assert_nil OrganizationMembership.find_by(organization: organization, user: @user)
+    assert_nil invitation.reload.accepted_at
+  end
+
   test "accepting a weaker invitation does not downgrade an existing owner" do
     owner = User.create!(
       clerk_id: "test_clerk_direct_owner",
