@@ -309,7 +309,7 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
 
         module Kernel
           def gets(*)
-            $hafa_code_stdin.shift
+            $hafa_code_stdin.shift || ""
           end
 
           def require_relative(path)
@@ -329,7 +329,7 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
 
         class << STDIN
           def gets(*)
-            $hafa_code_stdin.shift
+            $hafa_code_stdin.shift || ""
           end
         end
 
