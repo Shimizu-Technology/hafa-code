@@ -82,6 +82,39 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body.fetch("errors"), "Project files must include at least one file"
   end
 
+  test "rejects organization visibility without an organization" do
+    post "/api/v1/projects",
+      params: {
+        title: "Orphan Organization Project",
+        kind: "ruby",
+        visibility: "organization",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'orphan'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Organization must be present for organization visibility"
+
+    project = @user.projects.create!(
+      title: "Personal Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'personal'") ]
+    )
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Personal Ruby",
+        kind: "ruby",
+        visibility: "organization"
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Organization must be present for organization visibility"
+    assert_equal "private", project.reload.visibility
+  end
+
   test "rejects unsafe file paths and entry paths" do
     post "/api/v1/projects",
       params: {
