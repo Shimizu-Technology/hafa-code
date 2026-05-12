@@ -6,7 +6,8 @@ class OrganizationInvitation < ApplicationRecord
   belongs_to :organization
   belongs_to :invited_by, class_name: "User"
 
-  validates :email, presence: true, length: { maximum: 255 }
+  validates :email, presence: true, length: { maximum: 255 },
+    format: { with: URI::MailTo::EMAIL_REGEXP, message: "is invalid" }
   validates :role, presence: true
   validates :token, presence: true, uniqueness: true
 

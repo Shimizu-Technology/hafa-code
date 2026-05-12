@@ -154,6 +154,22 @@ button.icon-button {
   color: #14110f;
 }
 
+.app-shell[data-theme="dark"] .project-card:hover:not(:disabled):not(.active) {
+  background: rgba(245, 239, 231, 0.16);
+  color: #fffaf1;
+  border-color: rgba(245, 239, 231, 0.34);
+}
+
+.app-shell[data-theme="dark"] .project-card:hover:not(:disabled):not(.active) small {
+  color: #e5d8cb;
+}
+
+.app-shell[data-theme="dark"] .project-card.active small,
+.app-shell[data-theme="dark"] .project-card.active:hover small,
+.app-shell[data-theme="dark"] .project-card.active:focus-visible small {
+  color: #5f554b;
+}
+
 .app-shell[data-color-mode="colorblind"] {
   --brand: #0072b2;
   --brand-dark: #005a8f;

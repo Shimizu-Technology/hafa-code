@@ -490,6 +490,36 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_nil invitation.reload.accepted_at
   end
 
+  test "organization invitations reject invalid role and email cleanly" do
+    owner = User.create!(
+      clerk_id: "test_clerk_invite_owner",
+      email: "invite-owner@example.com",
+      first_name: "Invite",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Invite School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "student@example.com", role: "owner" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "Role is not valid" ], response.parsed_body.fetch("errors")
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "not-an-email", role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Email is invalid"
+  end
+
   test "organization students cannot view another student's private organization project" do
     other_student = User.create!(
       clerk_id: "test_clerk_2",

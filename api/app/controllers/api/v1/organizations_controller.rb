@@ -41,9 +41,9 @@ module Api
       end
 
       def projects
-        projects = @organization.projects.includes(:project_files, :user, :organization)
-          .select { |project| can_view_project?(current_user, project) }
-          .sort_by(&:updated_at).reverse
+        projects = visible_organization_projects(@organization)
+          .includes(:project_files, :user, :organization)
+          .order(updated_at: :desc)
         render json: { projects: projects.map { |project| project_json(project) } }
       end
 
@@ -59,11 +59,13 @@ module Api
 
       def invite
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
+        role = invitation_role_param
+        return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
 
         invitation = @organization.organization_invitations.new(
           invited_by: current_user,
           email: params[:email],
-          role: params[:role].presence || "student"
+          role: role
         )
 
         if invitation.save
@@ -127,6 +129,24 @@ module Api
           expires_at: invitation.expires_at,
           created_at: invitation.created_at
         }
+      end
+
+      def visible_organization_projects(organization)
+        membership = organization_membership_for(current_user, organization)
+        return organization.projects if current_user.admin? || membership&.instructor? || membership&.owner?
+
+        organization.projects.where(
+          "user_id = :user_id OR visibility IN (:member_visibilities)",
+          user_id: current_user.id,
+          member_visibilities: %w[organization unlisted public]
+        )
+      end
+
+      def invitation_role_param
+        role = params[:role].presence || "student"
+        return role if OrganizationInvitation.roles.key?(role)
+
+        nil
       end
     end
   end
