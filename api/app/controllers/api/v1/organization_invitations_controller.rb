@@ -16,13 +16,7 @@ module Api
           return render_forbidden("This invitation is for #{invitation.email}.")
         end
 
-        membership = OrganizationMembership.find_or_initialize_by(organization: invitation.organization, user: current_user)
-        invited_role_rank = OrganizationMembership.roles.fetch(invitation.role)
-        current_role_rank = membership.role ? OrganizationMembership.roles.fetch(membership.role) : -1
-        if membership.new_record? || invited_role_rank > current_role_rank
-          membership.role = invitation.role
-        end
-        membership.save!
+        accept_membership!(invitation)
         invitation.update!(accepted_at: Time.current)
 
         render json: { organization: organization_json(invitation.organization) }
@@ -31,6 +25,25 @@ module Api
       end
 
       private
+
+      def accept_membership!(invitation)
+        retries = 0
+
+        begin
+          membership = OrganizationMembership.find_or_initialize_by(organization: invitation.organization, user: current_user)
+          invited_role_rank = OrganizationMembership.roles.fetch(invitation.role)
+          current_role_rank = membership.role ? OrganizationMembership.roles.fetch(membership.role) : -1
+          if membership.new_record? || invited_role_rank > current_role_rank
+            membership.role = invitation.role
+          end
+          membership.save!
+        rescue ActiveRecord::RecordNotUnique
+          retries += 1
+          retry if retries < 2
+
+          raise
+        end
+      end
 
       def organization_json(organization)
         membership = organization_membership_for(current_user, organization)

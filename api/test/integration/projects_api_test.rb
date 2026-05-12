@@ -498,6 +498,53 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_nil invitation.reload.accepted_at
   end
 
+  test "accepting an invitation retries when membership is created concurrently" do
+    owner = User.create!(
+      clerk_id: "test_clerk_retry_owner",
+      email: "retry-owner@example.com",
+      first_name: "Retry",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Retry School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_lookup = OrganizationMembership.method(:find_or_initialize_by)
+    first_lookup = true
+
+    begin
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by) do |attributes|
+        unless first_lookup
+          next original_lookup.call(attributes)
+        end
+
+        first_lookup = false
+        membership = OrganizationMembership.new(attributes)
+        membership.define_singleton_method(:save!) do
+          OrganizationMembership.create!(
+            organization: attributes.fetch(:organization),
+            user: attributes.fetch(:user),
+            role: :student
+          )
+          raise ActiveRecord::RecordNotUnique, "membership already exists"
+        end
+        membership
+      end
+
+      post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+    ensure
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by, original_lookup)
+    end
+
+    assert_response :success
+    assert_equal "instructor", OrganizationMembership.find_by!(organization: organization, user: @user).role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
   test "accepting a weaker invitation does not downgrade an existing owner" do
     owner = User.create!(
       clerk_id: "test_clerk_direct_owner",
