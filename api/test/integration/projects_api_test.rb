@@ -608,6 +608,52 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_nil invitation.reload.accepted_at
   end
 
+  test "accepting an invitation succeeds when concurrent membership retries are exhausted" do
+    owner = User.create!(
+      clerk_id: "test_clerk_exhausted_owner",
+      email: "exhausted-owner@example.com",
+      first_name: "Exhausted",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Exhausted Retry School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_lookup = OrganizationMembership.method(:find_or_initialize_by)
+    attempts = 0
+
+    begin
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by) do |attributes|
+        if attempts < 2
+          attempts += 1
+          membership = OrganizationMembership.new(attributes)
+          membership.define_singleton_method(:save!) do
+            OrganizationMembership.find_or_create_by!(
+              organization: attributes.fetch(:organization),
+              user: attributes.fetch(:user)
+            ) { |existing| existing.role = :student }
+            raise ActiveRecord::RecordNotUnique, "membership already exists"
+          end
+          next membership
+        end
+
+        original_lookup.call(attributes)
+      end
+
+      post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+    ensure
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by, original_lookup)
+    end
+
+    assert_response :success
+    assert_equal "instructor", OrganizationMembership.find_by!(organization: organization, user: @user).role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
   test "accepting an invitation rolls back membership when marking accepted fails" do
     owner = User.create!(
       clerk_id: "test_clerk_atomic_owner",

@@ -37,7 +37,10 @@ module Api
           retries += 1
           retry if retries < 2
 
-          raise
+          ApplicationRecord.transaction do
+            accept_membership!(invitation)
+            invitation.update!(accepted_at: Time.current)
+          end
         end
       end
 
