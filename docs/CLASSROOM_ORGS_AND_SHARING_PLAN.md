@@ -1,6 +1,6 @@
 # Classroom, Sharing, Accessibility, and Runner Plan
 
-This document captures the next major product direction for Hafa Code after the personal playground MVP: reliable sharing, organization/classroom support, instructor visibility, interactive input, dark mode, color-blind mode, and a future full terminal experience.
+This document captures the next major product direction for Hafa Code after the personal playground MVP: reliable sharing, organization/classroom support, instructor visibility, an interactive runner terminal, dark mode, color-blind mode, and a future command-shell experience.
 
 The guiding idea is to keep Hafa Code simple for individual learners while adding enough classroom structure for teachers to see student work without turning the app into a full LMS.
 
@@ -14,7 +14,7 @@ Hafa Code currently has:
 - Project records with `visibility`, but the frontend always saves cloud projects as `private`.
 - Snapshot share links through `/api/v1/shares`.
 - Browser-side code execution only: Ruby through Ruby WASM, JavaScript through QuickJS, and web projects through a sandboxed iframe.
-- Output panels for stdout/stderr/browser console, but no interactive stdin.
+- Output panels for stdout/stderr/browser console, with Ruby stdin now moving into an interactive terminal-style runner.
 - A light visual theme with hard-coded colors in several places and Monaco forced to `vs-dark`.
 
 The current architecture is strong for a personal learning playground. The next step is to add a permission model that supports classrooms without breaking personal accounts.
@@ -251,29 +251,29 @@ Defer:
 
 Those can be added later once the view-only classroom workflow is solid.
 
-## Interactive Input for `gets.chomp`
+## Interactive Runner Terminal
 
-The current runner captures output but does not support stdin. Ruby programs that use `gets.chomp` need an interactive bridge.
+Ruby programs that use `gets.chomp` need an interactive bridge that feels like a terminal without exposing a general-purpose shell.
 
-Recommended first pass:
+Implemented shape:
 
-1. Extend the worker protocol with:
+1. The existing Run button starts the selected entry file.
+2. The output panel renders a terminal transcript.
+3. Ruby `Kernel#gets` and `STDIN.gets` call a worker-hosted async stdin bridge.
+4. When Ruby requests input, the worker posts an input request, the UI shows an inline terminal input row, and execution resumes after Enter.
+5. Stop still terminates the worker, and the execution timeout pauses while the program is waiting for human input.
+
+The worker protocol supports:
 
 ```ts
 type RunnerMessage =
   | { type: 'started' }
-  | { type: 'stdout'; text: string }
-  | { type: 'stderr'; text: string }
-  | { type: 'stdin-request'; prompt?: string }
+  | { type: 'output'; stream: 'stdout' | 'stderr'; text: string }
+  | { type: 'input_request' }
   | { type: 'result'; stdout: string; stderr: string; durationMs: number }
 ```
 
-2. Add an input row to the terminal panel when the worker requests stdin.
-3. Send `stdin-response` back to the worker when the user submits.
-4. Patch Ruby `gets` / `STDIN.gets` inside the Ruby WASM eval environment so it reads from the bridged input queue.
-5. Keep the existing timeout and Stop button.
-
-Do not build a full terminal emulator yet. The first goal is to make beginner Ruby exercises like this work:
+This makes beginner Ruby exercises like this work:
 
 ```ruby
 puts "What is your name?"
@@ -319,7 +319,7 @@ Implementation notes:
 7. Frontend project context switcher.
 8. Organization project creation/listing.
 9. Instructor dashboard read-only project viewer.
-10. Interactive Ruby stdin for `gets.chomp`.
+10. Interactive runner terminal for Ruby `gets.chomp`.
 11. Dark mode and color-blind mode preferences.
 12. Future live project links and public gallery/search.
 
@@ -352,13 +352,13 @@ Frontend tests/manual QA:
 - Ruby `gets.chomp` prompts for input and resumes correctly.
 - Theme and color mode preferences persist; system theme follows OS changes; Monaco remains dark.
 
-## Future: Full Browser Terminal
+## Future: Command Shell
 
-A full terminal is a different feature from stdin support. It should be treated as a later advanced runtime tier.
+A command shell is a different feature from the runner terminal. It should be treated as a later advanced runtime tier.
 
 Possible terminal goals:
 
-- Real terminal UI with command history.
+- Command history.
 - File tree commands like `ls`, `cat`, `ruby main.rb`, and `node main.js`.
 - Persistent browser-side filesystem for a project.
 - Package installation for selected ecosystems, if a safe runtime supports it.
@@ -381,13 +381,13 @@ Recommended future shape:
 
 ```txt
 Beginner mode:
-  Run button + output panel + stdin prompt
+  Run button + interactive runner terminal
 
 Advanced mode:
-  Browser terminal + virtual filesystem + richer runtime
+  Browser command shell + virtual filesystem + richer runtime
 
 Server sandbox mode:
   Optional future service, isolated from Rails
 ```
 
-The next implementation should only do the beginner stdin prompt. The full terminal belongs after organization visibility and instructor workflows are stable.
+The current implementation intentionally stops at interactive program I/O. Shell commands should wait until the virtual filesystem and command surface are designed together.

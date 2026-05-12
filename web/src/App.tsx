@@ -91,6 +91,12 @@ interface RunState {
   durationMs: number | null
 }
 
+type TerminalLine = {
+  id: string
+  kind: 'command' | 'stdout' | 'stderr' | 'input' | 'system'
+  text: string
+}
+
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 const PROJECT_FILE_LIMIT = 50
 const THEME_STORAGE_KEY = 'hafa-code-theme-v1'
@@ -240,21 +246,44 @@ function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notic
 
 function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const [runState, setRunState] = useState<RunState>(emptyRunState)
-  const [stdin, setStdin] = useState('')
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
+  const [terminalInput, setTerminalInput] = useState('')
+  const [awaitingInput, setAwaitingInput] = useState(false)
   const workerRef = useRef<Worker | null>(null)
   const timeoutRef = useRef<number | null>(null)
   const runIdRef = useRef<string | null>(null)
   const runRef = useRef<() => void>(() => {})
+  const armExecutionTimeoutRef = useRef<() => void>(() => {})
+  const outputEmittedRef = useRef(false)
+  const terminalScrollRef = useRef<HTMLDivElement | null>(null)
+  const terminalInputRef = useRef<HTMLInputElement | null>(null)
 
-  const stopWorker = () => {
+  const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
+    setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
+  }
+
+  const clearRunTimer = useCallback(() => {
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
     timeoutRef.current = null
+  }, [])
+
+  const stopWorker = useCallback(() => {
+    clearRunTimer()
     workerRef.current?.terminate()
     workerRef.current = null
     runIdRef.current = null
-  }
+    setAwaitingInput(false)
+  }, [clearRunTimer])
 
-  useEffect(() => stopWorker, [])
+  useEffect(() => stopWorker, [stopWorker])
+
+  useEffect(() => {
+    terminalScrollRef.current?.scrollTo({ top: terminalScrollRef.current.scrollHeight })
+  }, [terminalLines, awaitingInput])
+
+  useEffect(() => {
+    if (awaitingInput) terminalInputRef.current?.focus()
+  }, [awaitingInput])
 
   const run = () => {
     if (project.kind === 'web') return
@@ -266,6 +295,16 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
     workerRef.current = worker
     runIdRef.current = runId
+    outputEmittedRef.current = false
+    setAwaitingInput(false)
+    setTerminalInput('')
+    setTerminalLines([
+      {
+        id: crypto.randomUUID(),
+        kind: 'command',
+        text: project.kind === 'ruby' ? `ruby ${entryFile.path}` : `node ${entryFile.path}`,
+      },
+    ])
     setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
 
     timeoutRef.current = window.setTimeout(() => {
@@ -273,23 +312,46 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
       setRunState({ status: 'timeout', stdout: '', stderr: 'Code runner did not start in time.', durationMs: Math.round(performance.now() - startedAt) })
     }, 30_000)
 
-    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'result'; stdout?: string; stderr?: string; durationMs?: number }>) => {
+    const armExecutionTimeout = () => {
+      clearRunTimer()
+      timeoutRef.current = window.setTimeout(() => {
+        stopWorker()
+        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
+        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
+      }, RUNNER_TIMEOUT_MS + 250)
+    }
+    armExecutionTimeoutRef.current = armExecutionTimeout
+
+    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'output' | 'input_request' | 'result'; stream?: 'stdout' | 'stderr'; text?: string; stdout?: string; stderr?: string; durationMs?: number }>) => {
       if (event.data.id !== runIdRef.current) return
 
       if (event.data.type === 'started') {
-        if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-        timeoutRef.current = window.setTimeout(() => {
-          stopWorker()
-          setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
-        }, RUNNER_TIMEOUT_MS + 250)
+        armExecutionTimeout()
         return
       }
 
-      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
+      if (event.data.type === 'output') {
+        outputEmittedRef.current = true
+        appendTerminalLine({ kind: event.data.stream === 'stderr' ? 'stderr' : 'stdout', text: event.data.text ?? '' })
+        return
+      }
+
+      if (event.data.type === 'input_request') {
+        clearRunTimer()
+        setAwaitingInput(true)
+        return
+      }
+
+      clearRunTimer()
       workerRef.current?.terminate()
       workerRef.current = null
       runIdRef.current = null
+      setAwaitingInput(false)
+
+      if (!outputEmittedRef.current) {
+        if (event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
+        if (event.data.stderr) appendTerminalLine({ kind: 'stderr', text: event.data.stderr })
+      }
 
       const stderr = event.data.stderr ?? ''
       setRunState({
@@ -302,6 +364,7 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
     worker.onerror = (event) => {
       stopWorker()
+      appendTerminalLine({ kind: 'stderr', text: event.message || 'Runner failed.' })
       setRunState({ status: 'error', stdout: '', stderr: event.message || 'Runner failed.', durationMs: Math.round(performance.now() - startedAt) })
     }
 
@@ -310,7 +373,6 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
       entryPath: entryFile.path,
       files: project.files,
       code: entryFile.content,
-      stdin,
       language: project.kind as RunnerLanguage,
       timeoutMs: RUNNER_TIMEOUT_MS,
     })
@@ -321,6 +383,18 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
   })
 
   const outputIsEmpty = !runState.stdout && !runState.stderr
+
+  const submitTerminalInput = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!awaitingInput || !workerRef.current || !runIdRef.current) return
+
+    const value = terminalInput
+    appendTerminalLine({ kind: 'input', text: value })
+    setTerminalInput('')
+    setAwaitingInput(false)
+    workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value })
+    armExecutionTimeoutRef.current()
+  }
 
   useEffect(() => {
     const handleRunRequest = () => runRef.current()
@@ -349,31 +423,36 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
           </button>
         )}
       </div>
-      {project.kind === 'ruby' && (
-        <label className="stdin-panel">
-          <span>Program input</span>
-          <textarea
-            value={stdin}
-            onChange={(event) => setStdin(event.target.value)}
-            placeholder={"One line per gets call\nExample: Leon"}
-            rows={3}
-          />
-        </label>
-      )}
-      <div className="terminal">
-        {runState.status === 'running' && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
-        {runState.status !== 'running' && outputIsEmpty && (
+      <div className="terminal" ref={terminalScrollRef}>
+        {runState.status === 'running' && terminalLines.length <= 1 && !awaitingInput && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
+        {runState.status !== 'running' && outputIsEmpty && terminalLines.length === 0 && (
           <div className="empty-output">
             <Zap size={28} />
-            <p>Press Run to see stdout and errors here.</p>
+            <p>Press Run to start a browser terminal session.</p>
           </div>
         )}
-        {runState.stdout && <pre>{runState.stdout}</pre>}
-        {runState.stderr && <pre className="error-text">{runState.stderr}</pre>}
+        {terminalLines.map((line) => (
+          <pre key={line.id} className={`terminal-line ${line.kind}`}>{line.text}</pre>
+        ))}
+        {awaitingInput && (
+          <form className="terminal-input-row" onSubmit={submitTerminalInput}>
+            <span aria-hidden="true">&gt;</span>
+            <input
+              ref={terminalInputRef}
+              value={terminalInput}
+              onChange={(event) => setTerminalInput(event.target.value)}
+              placeholder="Type input, then press Enter"
+              aria-label="Program input"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </form>
+        )}
       </div>
       <div className="terminal-footer">
-        <span>{runState.status === 'idle' ? 'Ready' : runState.status}</span>
-        <span>{runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
+        <span>{awaitingInput ? 'waiting for input' : runState.status === 'idle' ? 'Ready' : runState.status}</span>
+        <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
       </div>
     </section>
   )

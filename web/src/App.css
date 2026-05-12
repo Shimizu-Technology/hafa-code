@@ -1035,6 +1035,8 @@ button.context-chip.active,
 
 .terminal {
   min-height: calc(var(--workspace-pane-height) - 94px);
+  max-height: calc(var(--workspace-pane-height) - 94px);
+  overflow-y: auto;
   padding: 1rem;
   background: var(--terminal);
   color: #f3eadc;
@@ -1043,37 +1045,61 @@ button.context-chip.active,
   line-height: 1.65;
 }
 
-.stdin-panel {
-  background: #191511;
-  border-bottom: 1px solid #2a2521;
-  color: #d8cbbb;
-  display: grid;
-  gap: 0.4rem;
-  padding: 0.75rem 1rem;
-}
-
-.stdin-panel span {
-  color: #b9aa99;
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.stdin-panel textarea {
-  background: rgba(255, 250, 241, 0.08);
-  border: 1px solid rgba(216, 203, 187, 0.18);
-  border-radius: 0.75rem;
-  color: #f3eadc;
-  font: inherit;
-  min-height: 76px;
-  padding: 0.65rem;
-  resize: vertical;
-}
-
 .terminal pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.terminal-line.command {
+  color: #ffd38a;
+}
+
+.terminal-line.command::before {
+  color: #7dd3c7;
+  content: "$ ";
+}
+
+.terminal-line.input {
+  color: #7dd3c7;
+}
+
+.terminal-line.input::before {
+  color: #b9aa99;
+  content: "> ";
+}
+
+.terminal-line.stderr,
+.terminal-line.system {
+  color: #ffb3a7;
+}
+
+.terminal-input-row {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.terminal-input-row span {
+  color: #b9aa99;
+  flex: 0 0 auto;
+}
+
+.terminal-input-row input {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: #f3eadc;
+  flex: 1 1 auto;
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+}
+
+.terminal-input-row input::placeholder {
+  color: #776d62;
 }
 
 .empty-output {
