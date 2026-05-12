@@ -6,7 +6,12 @@ module Authorizable
   def organization_membership_for(user, organization)
     return nil unless user && organization
 
-    organization.organization_memberships.find_by(user: user)
+    memberships = organization.organization_memberships
+    if memberships.loaded?
+      memberships.find { |membership| membership.user_id == user.id }
+    else
+      memberships.find_by(user: user)
+    end
   end
 
   def organization_instructor?(user, organization)
