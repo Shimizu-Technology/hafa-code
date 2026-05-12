@@ -438,6 +438,11 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
 
+    get "/api/v1/projects", params: { organization_id: organization.id }, headers: admin_headers
+
+    assert_response :success
+    assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
     get "/api/v1/organizations/#{organization.id}/members", headers: admin_headers
 
     assert_response :success

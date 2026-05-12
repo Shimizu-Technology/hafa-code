@@ -86,6 +86,8 @@ module Api
       def scoped_projects
         if params[:organization_id].present?
           organization = organization_scope.find(params[:organization_id])
+          return Project.where(organization: organization) if current_user.admin?
+
           return Project.where(organization: organization)
             .where("user_id = :user_id OR visibility IN (:member_visibilities) OR EXISTS (
               SELECT 1 FROM organization_memberships
