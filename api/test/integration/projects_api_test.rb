@@ -411,6 +411,40 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal [ "teacher@example.com", "student@example.com" ].sort, response.parsed_body.fetch("members").map { |member| member.fetch("email") }.sort
   end
 
+  test "platform admins can list and open private organization projects" do
+    admin = User.create!(
+      clerk_id: "test_clerk_admin",
+      email: "admin@example.com",
+      first_name: "Test",
+      last_name: "Admin",
+      role: :admin
+    )
+    organization = Organization.create!(name: "Admin School", created_by: admin)
+    organization.organization_memberships.create!(user: admin, role: :owner)
+    organization.organization_memberships.create!(user: @user, role: :student)
+    private_project = @user.projects.create!(
+      organization: organization,
+      title: "Admin Visible Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'admin visible'") ]
+    )
+    admin_headers = {
+      "Authorization" => "Bearer test_token_#{admin.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/projects", headers: admin_headers
+
+    assert_response :success
+    assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects/#{private_project.id}", headers: admin_headers
+
+    assert_response :success
+    assert_equal "Admin Visible Ruby", response.parsed_body.dig("project", "title")
+  end
+
   test "only platform mentors and admins can create organizations" do
     post "/api/v1/organizations",
       params: { name: "Student Org" }.to_json,

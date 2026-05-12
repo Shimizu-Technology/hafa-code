@@ -50,7 +50,7 @@ module Api
       def student_projects
         return render_forbidden unless can_view_org_roster?(current_user, @organization)
 
-        student = @organization.members.find(params[:student_id])
+        student = @organization.members.find_by!(id: params[:student_id])
         projects = @organization.projects.includes(:project_files, :user, :organization)
           .where(user: student)
           .order(updated_at: :desc)

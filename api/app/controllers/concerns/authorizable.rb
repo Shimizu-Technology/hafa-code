@@ -24,6 +24,7 @@ module Authorizable
   end
 
   def can_view_project?(user, project)
+    return true if user&.admin?
     return true if project.user_id == user&.id
     return true if project.visibility.in?(%w[public unlisted])
     return false unless project.organization
