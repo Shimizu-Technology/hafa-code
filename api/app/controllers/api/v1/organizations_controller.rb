@@ -5,7 +5,7 @@ module Api
       before_action :set_organization, only: [ :show, :members, :projects, :student_projects, :invite, :invitations ]
 
       def index
-        organizations = current_user.organizations.includes(:organization_memberships).order(:name)
+        organizations = organization_scope.includes(:organization_memberships).order(:name)
         render json: { organizations: organizations.map { |organization| organization_json(organization) } }
       end
 
@@ -85,7 +85,11 @@ module Api
       private
 
       def set_organization
-        @organization = current_user.organizations.find(params[:id])
+        @organization = organization_scope.find(params[:id])
+      end
+
+      def organization_scope
+        current_user.admin? ? Organization.all : current_user.organizations
       end
 
       def organization_json(organization)

@@ -2,7 +2,13 @@ class ApplicationController < ActionController::API
   include ClerkAuthenticatable
   include Authorizable
 
+  rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
+
   private
+
+  def render_not_found
+    render json: { error: "Not found" }, status: :not_found
+  end
 
   def project_json(project)
     {

@@ -420,7 +420,6 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       role: :admin
     )
     organization = Organization.create!(name: "Admin School", created_by: admin)
-    organization.organization_memberships.create!(user: admin, role: :owner)
     organization.organization_memberships.create!(user: @user, role: :student)
     private_project = @user.projects.create!(
       organization: organization,
@@ -439,10 +438,36 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
 
+    get "/api/v1/organizations/#{organization.id}/members", headers: admin_headers
+
+    assert_response :success
+    assert_equal [ "student@example.com" ], response.parsed_body.fetch("members").map { |member| member.fetch("email") }
+
     get "/api/v1/projects/#{private_project.id}", headers: admin_headers
 
     assert_response :success
     assert_equal "Admin Visible Ruby", response.parsed_body.dig("project", "title")
+  end
+
+  test "bad organization ids return not found for project list and create" do
+    missing_id = SecureRandom.uuid
+
+    get "/api/v1/projects", params: { organization_id: missing_id }, headers: @headers
+
+    assert_response :not_found
+    assert_equal "Not found", response.parsed_body.fetch("error")
+
+    post "/api/v1/projects",
+      params: {
+        organization_id: missing_id,
+        title: "Missing Org Ruby",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'missing'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :not_found
+    assert_equal "Not found", response.parsed_body.fetch("error")
   end
 
   test "only platform mentors and admins can create organizations" do

@@ -85,7 +85,7 @@ module Api
 
       def scoped_projects
         if params[:organization_id].present?
-          organization = current_user.organizations.find(params[:organization_id])
+          organization = organization_scope.find(params[:organization_id])
           return Project.where(organization: organization)
             .where("user_id = :user_id OR visibility IN (:member_visibilities) OR EXISTS (
               SELECT 1 FROM organization_memberships
@@ -114,13 +114,17 @@ module Api
       def project_organization
         return nil if params[:organization_id].blank?
 
-        current_user.organizations.find(params[:organization_id])
+        organization_scope.find(params[:organization_id])
       end
 
       def duplicate_organization
         return nil unless @project.organization
 
         current_user.organizations.find_by(id: @project.organization_id)
+      end
+
+      def organization_scope
+        current_user.admin? ? Organization.all : current_user.organizations
       end
 
       def files_param
