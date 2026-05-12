@@ -161,6 +161,31 @@ button.icon-button {
   --lagoon: #009e73;
 }
 
+.app-shell[data-color-mode="colorblind"] button.active,
+.app-shell[data-color-mode="colorblind"] .project-card.active,
+.app-shell[data-color-mode="colorblind"] .file-row.active,
+.app-shell[data-color-mode="colorblind"] .file-tabs button.active,
+.app-shell[data-color-mode="colorblind"] .file-tab-list button.active {
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 2px currentColor;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.app-shell[data-color-mode="colorblind"] .notice,
+.app-shell[data-color-mode="colorblind"] .form-error,
+.app-shell[data-color-mode="colorblind"] .error-text {
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
+
+.app-shell[data-color-mode="colorblind"] .preview-console-line.warn,
+.app-shell[data-color-mode="colorblind"] .preview-console-line.error {
+  border-left: 4px solid currentColor;
+  padding-left: 0.85rem;
+}
+
 .panel {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -745,6 +770,28 @@ button.context-chip.active,
   font-weight: 800;
 }
 
+.visibility-section {
+  align-items: start;
+  display: inline-grid;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  max-width: 100%;
+  width: max-content;
+}
+
+.visibility-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.visibility-row > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 .visibility-control {
   background: rgba(255,255,255,0.62);
   border: 1px solid var(--line);
@@ -766,6 +813,22 @@ button.context-chip.active,
 
 .visibility-control button:hover:not(:disabled) {
   box-shadow: none;
+}
+
+.visibility-help {
+  max-width: 28rem;
+}
+
+.app-shell[data-theme="dark"] .visibility-control {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-shell[data-theme="dark"] .visibility-control button {
+  color: #f5efe7;
+}
+
+.app-shell[data-theme="dark"] .visibility-control button.active {
+  color: #14110f;
 }
 
 .panel-header {
@@ -1261,10 +1324,15 @@ button.context-chip.active,
 
   .context-bar {
     align-items: stretch;
+    display: none;
     flex-direction: column;
     gap: 0.75rem;
     margin-bottom: 0.65rem;
     padding: 0.72rem;
+  }
+
+  .mobile-tab-projects .context-bar {
+    display: flex;
   }
 
   .context-actions {
@@ -1328,6 +1396,15 @@ button.context-chip.active,
     font-family: 'Space Grotesk', 'Outfit', sans-serif;
     font-size: 1.35rem;
     line-height: 1;
+  }
+
+  .app-shell[data-theme="dark"] .mobile-home-stats span {
+    background: #f5efe7;
+    color: #3a332c;
+  }
+
+  .app-shell[data-theme="dark"] .mobile-home-stats strong {
+    color: #14110f;
   }
 
   .mobile-home-create button {

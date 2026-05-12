@@ -19,7 +19,7 @@ class Organization < ApplicationRecord
     base = name.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-|-+\z/, "").presence || "organization"
     candidate = base
     suffix = 2
-    while self.class.exists?(slug: candidate)
+    while self.class.where(slug: candidate).exists?
       candidate = "#{base}-#{suffix}"
       suffix += 1
     end

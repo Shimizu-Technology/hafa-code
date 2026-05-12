@@ -42,4 +42,8 @@ module Authorizable
   def can_invite_org_member?(user, organization)
     can_manage_org?(user, organization) || organization_instructor?(user, organization)
   end
+
+  def can_create_org?(user)
+    user&.admin? || user&.mentor? || ActiveModel::Type::Boolean.new.cast(ENV["ALLOW_ORGANIZATION_CREATION"])
+  end
 end

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
 import {
@@ -200,6 +200,24 @@ function formatCheckpointTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'just now'
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
+}
+
+function subscribeSystemTheme(callback: () => void) {
+  const query = window.matchMedia('(prefers-color-scheme: dark)')
+  query.addEventListener('change', callback)
+  return () => query.removeEventListener('change', callback)
+}
+
+function getSystemThemeSnapshot() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function getServerSystemThemeSnapshot() {
+  return false
+}
+
+function useSystemDarkMode() {
+  return useSyncExternalStore(subscribeSystemTheme, getSystemThemeSnapshot, getServerSystemThemeSnapshot)
 }
 
 function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notice: string } {
@@ -615,6 +633,7 @@ export default function App() {
   const { isSignedIn, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
+  const systemDark = useSystemDarkMode()
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
@@ -627,9 +646,10 @@ export default function App() {
   const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
   const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? null
   const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
   const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
   const resolvedTheme = themePreference === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    ? (systemDark ? 'dark' : 'light')
     : themePreference
 
   const activateProject = (nextProject: SavedProject) => {
@@ -1360,7 +1380,7 @@ export default function App() {
               {organization.name}
             </button>
           ))}
-          {isSignedIn && (
+          {isSignedIn && canCreateOrganization && (
             <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
               <Plus size={14} /> Org
             </button>
@@ -1561,19 +1581,26 @@ export default function App() {
                 {' · updated '}
                 {formatUpdatedAt(project.updatedAt)}
               </small>
-              <div className="visibility-control" aria-label="Project visibility">
-                {availableVisibilityOptions(activeOrganizationId).map((visibility) => (
-                  <button
-                    key={visibility}
-                    className={project.visibility === visibility ? 'active' : ''}
-                    type="button"
-                    title={visibilityDescriptions[visibility]}
-                    disabled={!canEditProject}
-                    onClick={() => updateProjectVisibility(visibility)}
-                  >
-                    {visibilityLabels[visibility]}
-                  </button>
-                ))}
+              <div className="visibility-section">
+                <div className="visibility-row">
+                  <span>Visibility</span>
+                  <div className="visibility-control" aria-label="Project visibility">
+                    {availableVisibilityOptions(activeOrganizationId).map((visibility) => (
+                      <button
+                        key={visibility}
+                        className={project.visibility === visibility ? 'active' : ''}
+                        type="button"
+                        title={visibilityDescriptions[visibility]}
+                        aria-label={`${visibilityLabels[visibility]}: ${visibilityDescriptions[visibility]}`}
+                        disabled={!canEditProject}
+                        onClick={() => updateProjectVisibility(visibility)}
+                      >
+                        {visibilityLabels[visibility]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <small className="visibility-help">{visibilityDescriptions[project.visibility]}</small>
               </div>
             </div>
             <div className="toolbar-actions">
@@ -1708,7 +1735,7 @@ export default function App() {
               <MonacoEditor
                 height="var(--workspace-pane-height)"
                 language={languageForFile(activeFile)}
-                theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                theme="vs-dark"
                 value={activeFile.content}
                 loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
                 onChange={(value) => updateActiveFile(value ?? '')}
@@ -1868,7 +1895,7 @@ export default function App() {
                 placeholder="Code School of Guam"
               />
             </label>
-            <p className="helper-text">Use organizations for classes, cohorts, or schools. You can keep personal projects separate.</p>
+            <p className="helper-text">Platform admins and mentors create organization workspaces, then invite instructors and students.</p>
             <div className="confirm-actions">
               <button className="secondary" type="button" onClick={() => setOrgCreateOpen(false)}>Cancel</button>
               <button type="button" onClick={createOrganization}>Create workspace</button>

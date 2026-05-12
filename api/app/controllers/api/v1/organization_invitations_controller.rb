@@ -16,9 +16,13 @@ module Api
           return render_forbidden("This invitation is for #{invitation.email}.")
         end
 
-        OrganizationMembership.find_or_create_by!(organization: invitation.organization, user: current_user) do |membership|
+        membership = OrganizationMembership.find_or_initialize_by(organization: invitation.organization, user: current_user)
+        invited_role_rank = OrganizationMembership.roles.fetch(invitation.role)
+        current_role_rank = membership.role ? OrganizationMembership.roles.fetch(membership.role) : -1
+        if membership.new_record? || invited_role_rank > current_role_rank
           membership.role = invitation.role
         end
+        membership.save!
         invitation.update!(accepted_at: Time.current)
 
         render json: { organization: organization_json(invitation.organization) }

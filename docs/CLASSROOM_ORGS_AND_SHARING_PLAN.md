@@ -108,6 +108,8 @@ project_files
 
 Keep `projects.user_id` as the owner even for organization projects. The organization answers "which classroom/workspace does this belong to?" while `user_id` answers "who created and edits this?"
 
+Organization creation should be controlled at the platform level for the first classroom release. Free users keep personal projects by default. Platform admins and mentors can create organization workspaces, then organization owners and instructors invite students and instructors into that workspace. This avoids public org spam while still supporting real classes, cohorts, and schools.
+
 ## Visibility Model
 
 Replace the current practical behavior of "everything is private" with explicit visibility that works in both personal and organization contexts.
@@ -301,8 +303,8 @@ Store these in localStorage and apply them as attributes:
 Implementation notes:
 
 - Replace hard-coded CSS colors with semantic tokens.
-- Keep Monaco theme in sync with app theme.
-- Color-blind mode should not rely only on hue; use text, icons, borders, and patterns/states.
+- Keep the Monaco/code editor surface dark in every app theme so code stays visually stable between light and dark preference changes.
+- Color-blind mode should not rely only on hue; use text, icons, borders, underlines, and state shapes.
 - Verify warning/error/success colors in terminal, preview console, buttons, notices, and project cards.
 - Keep contrast high enough for classroom projectors and older student devices.
 
@@ -334,6 +336,8 @@ Backend tests:
 - Organization instructor cannot edit student project in first pass.
 - Organization student can view org-visible projects in the same org.
 - Organization student cannot view another student's private org project unless instructor/owner.
+- Students cannot create organizations unless the platform explicitly enables open org creation.
+- Invitation acceptance upgrades an existing member when invited to a stronger role and does not silently leave them at the old role.
 - Anonymous user can view public/unlisted project routes, once live project links exist.
 - Invitations can be created, accepted, expired, and cannot be reused.
 
@@ -346,7 +350,7 @@ Frontend tests/manual QA:
 - Visibility selector round-trips through cloud save/load.
 - Instructor dashboard cannot edit student files.
 - Ruby `gets.chomp` prompts for input and resumes correctly.
-- Theme and color mode preferences persist and update Monaco.
+- Theme and color mode preferences persist; system theme follows OS changes; Monaco remains dark.
 
 ## Future: Full Browser Terminal
 

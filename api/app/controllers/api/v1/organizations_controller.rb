@@ -14,12 +14,22 @@ module Api
       end
 
       def create
-        organization = current_user.created_organizations.new(params.permit(:name))
-        if organization.save
-          organization.organization_memberships.create!(user: current_user, role: :owner)
-          render json: { organization: organization_json(organization.reload) }, status: :created
-        else
-          render json: { errors: organization.errors.full_messages }, status: :unprocessable_entity
+        return render_forbidden("Only platform admins and mentors can create organizations.") unless can_create_org?(current_user)
+
+        retries = 0
+        begin
+          organization = current_user.created_organizations.new(params.permit(:name))
+          if organization.save
+            organization.organization_memberships.create!(user: current_user, role: :owner)
+            render json: { organization: organization_json(organization.reload) }, status: :created
+          else
+            render json: { errors: organization.errors.full_messages }, status: :unprocessable_entity
+          end
+        rescue ActiveRecord::RecordNotUnique
+          retries += 1
+          retry if retries < 3
+
+          render json: { errors: [ "Organization slug is already taken. Please try again." ] }, status: :unprocessable_entity
         end
       end
 

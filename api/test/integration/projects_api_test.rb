@@ -411,6 +411,85 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal [ "teacher@example.com", "student@example.com" ].sort, response.parsed_body.fetch("members").map { |member| member.fetch("email") }.sort
   end
 
+  test "only platform mentors and admins can create organizations" do
+    post "/api/v1/organizations",
+      params: { name: "Student Org" }.to_json,
+      headers: @headers
+
+    assert_response :forbidden
+
+    mentor = User.create!(
+      clerk_id: "test_clerk_mentor",
+      email: "mentor@example.com",
+      first_name: "Test",
+      last_name: "Mentor",
+      role: :mentor
+    )
+    mentor_headers = {
+      "Authorization" => "Bearer test_token_#{mentor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations",
+      params: { name: "Mentor Org" }.to_json,
+      headers: mentor_headers
+
+    assert_response :created
+    organization = Organization.find(response.parsed_body.dig("organization", "id"))
+    assert_equal "Mentor Org", organization.name
+    assert organization.organization_memberships.find_by(user: mentor).owner?
+  end
+
+  test "accepting a stronger invitation updates an existing membership" do
+    instructor = User.create!(
+      clerk_id: "test_clerk_owner",
+      email: "owner@example.com",
+      first_name: "Org",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Code School", created_by: instructor)
+    organization.organization_memberships.create!(user: instructor, role: :owner)
+    membership = organization.organization_memberships.create!(user: @user, role: :student)
+    invitation = organization.organization_invitations.create!(
+      invited_by: instructor,
+      email: @user.email,
+      role: :instructor
+    )
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+
+    assert_response :success
+    assert_equal "instructor", membership.reload.role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
+  test "accepting a weaker invitation does not downgrade an existing owner" do
+    owner = User.create!(
+      clerk_id: "test_clerk_direct_owner",
+      email: "owner-student@example.com",
+      first_name: "Direct",
+      last_name: "Owner"
+    )
+    organization = Organization.create!(name: "Code School", created_by: owner)
+    membership = organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: owner.email,
+      role: :student
+    )
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: owner_headers
+
+    assert_response :success
+    assert_equal "owner", membership.reload.role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
   test "organization students cannot view another student's private organization project" do
     other_student = User.create!(
       clerk_id: "test_clerk_2",
