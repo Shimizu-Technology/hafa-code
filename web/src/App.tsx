@@ -612,7 +612,7 @@ function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: str
   )
 }
 
-function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
+function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
   const { isLoaded } = useAuth()
   const [loadTimedOut, setLoadTimedOut] = useState(false)
 
@@ -631,7 +631,7 @@ function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
     return <span className="cloud-pill muted"><Cloud size={15} /> Cloud sign-in unavailable</span>
   }
 
-  if (!isLoaded) {
+  if (!isLoaded || sessionLoading) {
     return <span className="cloud-pill muted"><Loader2 className="spin" size={15} /> Loading sign-in</span>
   }
 
@@ -755,7 +755,7 @@ export default function App() {
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
-  const { isSignedIn, user, organizations, syncSession } = useAuthContext()
+  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
@@ -769,7 +769,16 @@ export default function App() {
   const archivedContextProjects = archivedProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
   const visibleProjects = showArchived ? archivedContextProjects : activeContextProjects
   const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
-  const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? null
+  const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
+    ? {
+        id: pendingInvitation.organization.id,
+        name: pendingInvitation.organization.name,
+        slug: pendingInvitation.organization.slug,
+        role: pendingInvitation.role,
+      }
+    : null
+  const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? optimisticInvitationOrganization
+  const workspaceIsSettling = cloudEnabled && authLoading
   const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canManageOrgMembers = activeOrganization?.role === 'owner' || user?.role === 'admin'
@@ -1604,7 +1613,7 @@ export default function App() {
           </div>
         </div>
         <div className="hero-actions desktop-hero-actions">
-          <AuthControls cloudEnabled={cloudEnabled} />
+          <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
           <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
           <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
           <button onClick={copyShareLink}><Copy size={16} /> Share</button>
@@ -1616,7 +1625,7 @@ export default function App() {
             <strong>{isSignedIn ? 'Cloud on' : 'Local only'}</strong>
           </summary>
           <div className="mobile-actions-content">
-            <AuthControls cloudEnabled={cloudEnabled} />
+            <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
             <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
             <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
             <button onClick={copyShareLink}><Copy size={16} /> Share</button>
@@ -1675,6 +1684,7 @@ export default function App() {
               <select
                 id="workspace-select"
                 className="workspace-select"
+                disabled={workspaceIsSettling}
                 value={activeOrganizationId ?? 'personal'}
                 onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
               >
@@ -1686,12 +1696,14 @@ export default function App() {
                 ))}
               </select>
             </label>
-            {isSignedIn && canCreateOrganization && (
+            {isSignedIn && canCreateOrganization ? (
               <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
                 <Plus size={14} /> Org
               </button>
+            ) : (
+              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
             )}
-            {activeOrganization && canUseInstructorPanel && (
+            {activeOrganization && canUseInstructorPanel ? (
               <button
                 className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
                 type="button"
@@ -1699,6 +1711,8 @@ export default function App() {
               >
                 <ShieldCheck size={14} /> Classroom
               </button>
+            ) : (
+              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
             )}
           </div>
         </div>

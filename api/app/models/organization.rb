@@ -1,4 +1,8 @@
+require "securerandom"
+
 class Organization < ApplicationRecord
+  SLUG_RANDOM_SUFFIX_LENGTH = 6
+
   belongs_to :created_by, class_name: "User"
   has_many :organization_memberships, dependent: :destroy
   has_many :members, through: :organization_memberships, source: :user
@@ -17,12 +21,18 @@ class Organization < ApplicationRecord
     return if slug.present?
 
     base = name.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-|-+\z/, "").presence || "organization"
-    candidate = base
-    suffix = 2
-    while self.class.where(slug: candidate).exists?
-      candidate = "#{base}-#{suffix}"
-      suffix += 1
+    self.slug = if self.class.where(slug: base).exists?
+      random_slug_for(base)
+    else
+      base
     end
-    self.slug = candidate
+  end
+
+  def random_slug_for(base)
+    loop do
+      suffix = SecureRandom.alphanumeric(SLUG_RANDOM_SUFFIX_LENGTH).downcase
+      candidate = [ base, suffix ].join("-").first(80).gsub(/-+\z/, "")
+      return candidate unless self.class.where(slug: candidate).exists?
+    end
   end
 end
