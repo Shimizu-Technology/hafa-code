@@ -62,6 +62,7 @@ module Api
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
         role = invitation_role_param
         return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
+        return render_forbidden("Only organization owners can invite instructors.") if role == "instructor" && !can_manage_org?(current_user, @organization)
 
         invitation = @organization.organization_invitations.new(
           invited_by: current_user,

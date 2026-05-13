@@ -765,6 +765,31 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal false, invitation.fetch("email_sent")
     assert_match "#invite=", invitation.fetch("invitation_url")
 
+    instructor = User.create!(
+      clerk_id: "test_clerk_invite_instructor",
+      email: "org-instructor@example.com",
+      first_name: "Org",
+      last_name: "Instructor"
+    )
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "peer-instructor@example.com", role: "instructor" }.to_json,
+      headers: instructor_headers
+
+    assert_response :forbidden
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "new-student@example.com", role: "student" }.to_json,
+      headers: instructor_headers
+
+    assert_response :created
+    assert_equal "student", response.parsed_body.dig("invitation", "role")
+
     organization.organization_invitations.create!(
       invited_by: owner,
       email: "accepted@example.com",
@@ -782,10 +807,11 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     invitations = response.parsed_body.fetch("invitations")
-    assert_equal [ invitation.fetch("id") ], invitations.map { |candidate| candidate.fetch("id") }
-    assert_equal [ "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
-    assert invitations.first.key?("token")
-    assert invitations.first.key?("invitation_url")
+    assert_equal [ "new-student@example.com", "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
+    invitations.each do |pending_invitation|
+      assert pending_invitation.key?("token")
+      assert pending_invitation.key?("invitation_url")
+    end
   end
 
   test "organization students cannot view another student's private organization project" do
