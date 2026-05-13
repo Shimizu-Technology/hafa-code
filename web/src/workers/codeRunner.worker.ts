@@ -22,6 +22,11 @@ interface StdinRequest {
   value: string
 }
 
+interface AbortRequest {
+  id: string
+  type: 'abort'
+}
+
 interface RunResponse {
   id: string
   type: 'started' | 'output' | 'input_request' | 'result'
@@ -32,13 +37,13 @@ interface RunResponse {
   durationMs?: number
 }
 
-type WorkerRequest = RunRequest | StdinRequest
+type WorkerRequest = RunRequest | StdinRequest | AbortRequest
 
 const quickJsModulePromise = newQuickJSWASMModule(
   newVariant(RELEASE_SYNC, { wasmLocation: quickJsWasmUrl }),
 )
 let rubyModulePromise: Promise<WebAssembly.Module> | null = null
-const pendingInputResolvers = new Map<string, (value: string) => void>()
+const pendingInputResolvers = new Map<string, { resolve: (value: string) => void; reject: (reason: Error) => void }>()
 
 function getRubyModule() {
   rubyModulePromise ??= fetch(rubyWasmUrl)
@@ -312,10 +317,16 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
     if (!queuedLine.done) return Promise.resolve(queuedLine.value)
 
     self.postMessage({ id, type: 'input_request' } satisfies RunResponse)
-    return new Promise<string>((resolve) => {
-      pendingInputResolvers.set(id, (value) => {
-        pendingInputResolvers.delete(id)
-        resolve(value.endsWith('\n') ? value : `${value}\n`)
+    return new Promise<string>((resolve, reject) => {
+      pendingInputResolvers.set(id, {
+        resolve: (value) => {
+          pendingInputResolvers.delete(id)
+          resolve(value.endsWith('\n') ? value : `${value}\n`)
+        },
+        reject: (reason) => {
+          pendingInputResolvers.delete(id)
+          reject(reason)
+        },
       })
     })
   }
@@ -384,7 +395,12 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (event.data.type === 'stdin') {
-    pendingInputResolvers.get(event.data.id)?.(event.data.value)
+    pendingInputResolvers.get(event.data.id)?.resolve(event.data.value)
+    return
+  }
+
+  if (event.data.type === 'abort') {
+    pendingInputResolvers.get(event.data.id)?.reject(new Error('Execution stopped.'))
     return
   }
 

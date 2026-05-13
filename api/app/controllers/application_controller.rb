@@ -21,8 +21,7 @@ class ApplicationController < ActionController::API
       forked_from_id: project.forked_from_id,
       owner: project.user && {
         id: project.user.id,
-        full_name: project.user.full_name,
-        email: project.user.email
+        full_name: project.user.full_name
       },
       organization: project.organization && {
         id: project.organization.id,

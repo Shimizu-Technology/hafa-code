@@ -141,7 +141,7 @@ function clearHashParam(name: string) {
 function projectOwnerLabel(project: SavedProject, currentUserId?: number) {
   if (!project.owner) return ''
   if (project.owner.id === currentUserId) return 'You'
-  return project.owner.fullName || project.owner.email
+  return project.owner.fullName
 }
 
 function languageForFile(file: ProjectFile) {
@@ -292,7 +292,10 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
   const stopWorker = useCallback(() => {
     clearRunTimer()
-    workerRef.current?.terminate()
+    const worker = workerRef.current
+    const runId = runIdRef.current
+    if (worker && runId) worker.postMessage({ id: runId, type: 'abort' })
+    window.setTimeout(() => worker?.terminate(), 0)
     workerRef.current = null
     runIdRef.current = null
     setAwaitingInput(false)

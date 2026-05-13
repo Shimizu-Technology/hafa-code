@@ -18,7 +18,7 @@ export interface SavedProject {
   owner?: {
     id: number
     fullName: string
-    email: string
+    email?: string
   } | null
   organization?: {
     id: number

@@ -426,6 +426,10 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     get "/api/v1/projects/#{student_project.id}", headers: instructor_headers
     assert_response :success
     assert_equal "Student Ruby", response.parsed_body.dig("project", "title")
+    owner = response.parsed_body.dig("project", "owner")
+    assert_equal @user.id, owner.fetch("id")
+    assert_equal @user.full_name, owner.fetch("full_name")
+    assert_not owner.key?("email")
     assert_equal "teacher@example.com", instructor.email
 
     patch "/api/v1/projects/#{student_project.id}",
