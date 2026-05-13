@@ -9,6 +9,7 @@ class Organization < ApplicationRecord
   has_many :organization_invitations, dependent: :destroy
   has_many :projects, dependent: :nullify
 
+  before_destroy :privatize_organization_visible_projects, prepend: true
   validates :name, presence: true, length: { maximum: 120 }
   validates :slug, presence: true, uniqueness: true, length: { maximum: 80 },
     format: { with: /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/ }
@@ -16,6 +17,10 @@ class Organization < ApplicationRecord
   before_validation :set_slug
 
   private
+
+  def privatize_organization_visible_projects
+    projects.where(visibility: "organization").update_all(visibility: "private", updated_at: Time.current)
+  end
 
   def set_slug
     return if slug.present?

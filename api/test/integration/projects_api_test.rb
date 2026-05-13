@@ -1048,4 +1048,23 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_nil copy.organization_id
     assert_equal source_project, copy.forked_from
   end
+
+  test "destroying an organization keeps formerly organization-visible projects valid" do
+    organization = Organization.create!(name: "Closing School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    project = @user.projects.create!(
+      organization: organization,
+      title: "Class Ruby",
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'bye'") ]
+    )
+
+    organization.destroy!
+
+    project.reload
+    assert_nil project.organization_id
+    assert_equal "private", project.visibility
+    assert_predicate project, :valid?
+  end
 end
