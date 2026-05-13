@@ -46,11 +46,13 @@ module Api
       end
 
       def create_membership_for_invitation!(invitation)
-        OrganizationMembership.create!(
-          organization: invitation.organization,
-          user: current_user,
-          role: invitation.role
-        )
+        OrganizationMembership.transaction(requires_new: true) do
+          OrganizationMembership.create!(
+            organization: invitation.organization,
+            user: current_user,
+            role: invitation.role
+          )
+        end
       rescue ActiveRecord::RecordNotUnique
         OrganizationMembership.find_by!(organization: invitation.organization, user: current_user)
       end
