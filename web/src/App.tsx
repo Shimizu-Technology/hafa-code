@@ -1669,36 +1669,38 @@ export default function App() {
           </p>
         </div>
         <div className="context-actions">
-          <label className="workspace-select-label" htmlFor="workspace-select">
-            <span>Switch workspace</span>
-            <select
-              id="workspace-select"
-              className="workspace-select"
-              value={activeOrganizationId ?? 'personal'}
-              onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
-            >
-              <option value="personal">Personal projects</option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {isSignedIn && canCreateOrganization && (
-            <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
-              <Plus size={14} /> Org
-            </button>
-          )}
-          {canUseInstructorPanel && (
-            <button
-              className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
-              type="button"
-              onClick={() => setInstructorPanelOpen((current) => !current)}
-            >
-              <ShieldCheck size={14} /> Classroom
-            </button>
-          )}
+          <div className="workspace-toolbar" aria-label="Workspace actions">
+            <label className="workspace-select-label" htmlFor="workspace-select">
+              <span>Switch workspace</span>
+              <select
+                id="workspace-select"
+                className="workspace-select"
+                value={activeOrganizationId ?? 'personal'}
+                onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
+              >
+                <option value="personal">Personal projects</option>
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isSignedIn && canCreateOrganization && (
+              <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
+                <Plus size={14} /> Org
+              </button>
+            )}
+            {activeOrganization && canUseInstructorPanel && (
+              <button
+                className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
+                type="button"
+                onClick={() => setInstructorPanelOpen((current) => !current)}
+              >
+                <ShieldCheck size={14} /> Classroom
+              </button>
+            )}
+          </div>
         </div>
         <div className="preference-actions" aria-label="Display preferences">
           <button className={themePreference === 'system' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('system')}>System</button>
@@ -1827,14 +1829,19 @@ export default function App() {
             )}
             {filteredOrgMembers.map((member) => {
               const memberProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
+              const isCurrentMember = member.id === user?.id
               return (
                 <article key={member.id} className="member-row">
                   <div className="member-main">
                     <strong>{member.full_name}</strong>
-                    <small>{member.email} · {member.organization_role}</small>
+                    <small>{member.email}</small>
+                    <div className="member-badges">
+                      <span>{member.organization_role}</span>
+                      {isCurrentMember && <span>You</span>}
+                    </div>
                   </div>
                   <span className="member-count">{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
-                  {canManageOrgMembers && (
+                  {canManageOrgMembers && !isCurrentMember ? (
                     <div className="member-actions">
                       <select
                         aria-label={`Role for ${member.full_name}`}
@@ -1849,6 +1856,10 @@ export default function App() {
                       <button className="danger compact" type="button" onClick={() => removeOrgMember(member)}>
                         <Trash2 size={14} /> Remove
                       </button>
+                    </div>
+                  ) : (
+                    <div className="member-actions member-actions-readonly">
+                      <span>{isCurrentMember ? 'Signed in as you' : 'Managed by owner'}</span>
                     </div>
                   )}
                   <div className="member-project-list">

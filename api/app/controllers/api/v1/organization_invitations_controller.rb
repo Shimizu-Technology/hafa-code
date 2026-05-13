@@ -13,7 +13,7 @@ module Api
       def accept
         invitation = OrganizationInvitation.pending.find_by!(token: params[:token])
         if invitation.email != current_user.email.downcase
-          return render_forbidden("This invitation is for #{invitation.email}.")
+          return render_forbidden("This invitation is for a different account.")
         end
 
         accept_invitation!(invitation)

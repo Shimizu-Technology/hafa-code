@@ -62,7 +62,7 @@ interface ApiProject {
   entry_path: string | null
   visibility: ProjectVisibility
   organization_id: number | null
-  owner?: { id: number; full_name: string; email?: string } | null
+  owner?: { id: number; full_name: string } | null
   organization?: { id: number; name: string; slug: string } | null
   archived_at: string | null
   created_at: string

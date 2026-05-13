@@ -122,6 +122,7 @@ module Api
 
       def update_member
         return render_forbidden unless can_manage_org?(current_user, @organization)
+        return render json: { errors: [ "You cannot change your own organization role." ] }, status: :unprocessable_entity if @membership.user_id == current_user.id
 
         role = membership_role_param
         return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
@@ -135,6 +136,8 @@ module Api
 
       def destroy_member
         return render_forbidden unless can_manage_org?(current_user, @organization)
+        return render json: { errors: [ "You cannot remove yourself from the organization." ] }, status: :unprocessable_entity if @membership.user_id == current_user.id
+
         if @membership.owner? && last_owner_membership?(@membership)
           return render json: { errors: [ "Organization must keep at least one owner" ] }, status: :unprocessable_entity
         end

@@ -565,6 +565,29 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_nil invitation.reload.accepted_at
   end
 
+  test "accepting an invitation with the wrong account does not expose invitee email" do
+    owner = User.create!(
+      clerk_id: "test_clerk_wrong_account_owner",
+      email: "wrong-account-owner@example.com",
+      first_name: "Wrong",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Wrong Account School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "private-invitee@example.com",
+      role: :student
+    )
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+
+    assert_response :forbidden
+    assert_equal "This invitation is for a different account.", response.parsed_body.fetch("error")
+    assert_no_match "private-invitee@example.com", response.body
+  end
+
   test "accepting an invitation retries when membership is created concurrently" do
     owner = User.create!(
       clerk_id: "test_clerk_retry_owner",
@@ -908,7 +931,13 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       headers: owner_headers
 
     assert_response :unprocessable_entity
-    assert_equal [ "Organization must keep at least one owner" ], response.parsed_body.fetch("errors")
+    assert_equal [ "You cannot change your own organization role." ], response.parsed_body.fetch("errors")
+
+    delete "/api/v1/organizations/#{organization.id}/members/#{owner_membership.id}",
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "You cannot remove yourself from the organization." ], response.parsed_body.fetch("errors")
 
     delete "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
       headers: owner_headers
