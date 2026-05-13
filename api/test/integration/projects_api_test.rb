@@ -747,9 +747,16 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_includes response.parsed_body.fetch("errors"), "Email is invalid"
 
-    post "/api/v1/organizations/#{organization.id}/invite",
-      params: { email: "student@example.com", role: "student" }.to_json,
-      headers: owner_headers
+    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
+    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+
+    begin
+      post "/api/v1/organizations/#{organization.id}/invite",
+        params: { email: "student@example.com", role: "student" }.to_json,
+        headers: owner_headers
+    ensure
+      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+    end
 
     assert_response :created
     invitation = response.parsed_body.fetch("invitation")
@@ -757,6 +764,28 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal "student", invitation.fetch("role")
     assert_equal false, invitation.fetch("email_sent")
     assert_match "#invite=", invitation.fetch("invitation_url")
+
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "accepted@example.com",
+      role: :student,
+      accepted_at: Time.current
+    )
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "expired@example.com",
+      role: :student,
+      expires_at: 1.day.ago
+    )
+
+    get "/api/v1/organizations/#{organization.id}/invitations", headers: owner_headers
+
+    assert_response :success
+    invitations = response.parsed_body.fetch("invitations")
+    assert_equal [ invitation.fetch("id") ], invitations.map { |candidate| candidate.fetch("id") }
+    assert_equal [ "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
+    assert invitations.first.key?("token")
+    assert invitations.first.key?("invitation_url")
   end
 
   test "organization students cannot view another student's private organization project" do

@@ -18,13 +18,14 @@ module Api
 
         retries = 0
         begin
-          organization = current_user.created_organizations.new(params.permit(:name))
-          if organization.save
+          organization = nil
+          ApplicationRecord.transaction do
+            organization = current_user.created_organizations.create!(params.permit(:name))
             organization.organization_memberships.create!(user: current_user, role: :owner)
-            render json: { organization: organization_json(organization.reload) }, status: :created
-          else
-            render json: { errors: organization.errors.full_messages }, status: :unprocessable_entity
           end
+          render json: { organization: organization_json(organization.reload) }, status: :created
+        rescue ActiveRecord::RecordInvalid => e
+          render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
         rescue ActiveRecord::RecordNotUnique
           retries += 1
           retry if retries < 3
@@ -81,7 +82,7 @@ module Api
       def invitations
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
 
-        invitations = @organization.organization_invitations.order(created_at: :desc).limit(50)
+        invitations = @organization.organization_invitations.pending.order(created_at: :desc).limit(50)
         render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation)) } }
       end
 
