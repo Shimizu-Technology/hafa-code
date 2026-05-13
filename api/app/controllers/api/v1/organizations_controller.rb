@@ -69,7 +69,10 @@ module Api
         )
 
         if invitation.save
-          render json: { invitation: invitation_json(invitation) }, status: :created
+          invitation_url = organization_invitation_url(invitation)
+          email_sent = OrganizationInviteEmailService.send_invite(invitation: invitation, invitation_url: invitation_url)
+
+          render json: { invitation: invitation_json(invitation, invitation_url: invitation_url, email_sent: email_sent) }, status: :created
         else
           render json: { errors: invitation.errors.full_messages }, status: :unprocessable_entity
         end
@@ -79,7 +82,7 @@ module Api
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
 
         invitations = @organization.organization_invitations.order(created_at: :desc).limit(50)
-        render json: { invitations: invitations.map { |invitation| invitation_json(invitation) } }
+        render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation)) } }
       end
 
       private
@@ -123,16 +126,18 @@ module Api
         }
       end
 
-      def invitation_json(invitation)
+      def invitation_json(invitation, invitation_url: nil, email_sent: nil)
         {
           id: invitation.id,
           email: invitation.email,
           role: invitation.role,
           token: invitation.token,
+          invitation_url: invitation_url,
+          email_sent: email_sent,
           accepted_at: invitation.accepted_at,
           expires_at: invitation.expires_at,
           created_at: invitation.created_at
-        }
+        }.compact
       end
 
       def visible_organization_projects(organization)
@@ -151,6 +156,14 @@ module Api
         return role if OrganizationInvitation.roles.key?(role)
 
         nil
+      end
+
+      def organization_invitation_url(invitation)
+        "#{frontend_origin}#invite=#{ERB::Util.url_encode(invitation.token)}"
+      end
+
+      def frontend_origin
+        ENV["FRONTEND_URL"].presence || ENV["APP_URL"].presence || "http://localhost:5173"
       end
     end
   end

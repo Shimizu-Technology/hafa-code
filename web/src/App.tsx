@@ -1067,17 +1067,21 @@ export default function App() {
       return
     }
 
-    const url = invitationUrl(res.data.token)
+    const url = res.data.invitation_url || invitationUrl(res.data.token)
     setOrgInvitations((current) => [res.data!, ...current.filter((candidate) => candidate.id !== res.data!.id)])
     setInviteEmailDraft('')
     setInviteRoleDraft('student')
     setLastInviteUrl(url)
     const copied = await writeClipboardText(url)
-    setNotice(copied ? 'Invitation link copied.' : 'Invitation created. Copy the link from the classroom panel.')
+    if (res.data.email_sent) {
+      setNotice(copied ? 'Invitation email sent. Backup link copied.' : 'Invitation email sent. Backup link is in the classroom panel.')
+    } else {
+      setNotice(copied ? 'Invitation created. Email is not configured yet, so the link was copied.' : 'Invitation created. Email is not configured yet, so copy the link from the classroom panel.')
+    }
   }
 
-  const copyInvitationLink = async (token: string) => {
-    const url = invitationUrl(token)
+  const copyInvitationLink = async (invitation: CloudOrgInvitation) => {
+    const url = invitation.invitation_url || invitationUrl(invitation.token)
     const copied = await writeClipboardText(url)
     setLastInviteUrl(url)
     setNotice(copied ? 'Invitation link copied.' : 'Clipboard blocked. Select the invitation link to copy it.')
@@ -1652,9 +1656,9 @@ export default function App() {
                     <option value="instructor">Instructor</option>
                   </select>
                 </label>
-                <button type="submit"><Send size={16} /> Invite</button>
+                <button type="submit"><Send size={16} /> Send invite</button>
               </form>
-              <p className="helper-text">The invite link works for existing users and first-time signups. New students get their personal account first, then join this workspace.</p>
+              <p className="helper-text">Hafa Code emails the invitation when email is configured, and keeps the link here as a backup. New students create a personal account first, then join this workspace.</p>
               {lastInviteUrl && (
                 <label className="file-path-field invite-link-field" htmlFor="last-invite-url">
                   <span>Latest invite link</span>
@@ -1676,7 +1680,7 @@ export default function App() {
                     <small>{invitation.role}{invitation.accepted_at ? ' · accepted' : ' · pending'}</small>
                   </div>
                   {!invitation.accepted_at && (
-                    <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation.token)}>
+                    <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation)}>
                       <Copy size={14} /> Copy link
                     </button>
                   )}

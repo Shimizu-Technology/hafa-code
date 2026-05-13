@@ -31,6 +31,8 @@ export interface CloudOrgInvitation {
   token: string
   email: string
   role: 'student' | 'instructor'
+  invitation_url?: string
+  email_sent?: boolean
   accepted_at?: string | null
   expires_at: string
   created_at?: string

@@ -26,32 +26,33 @@ module Api
       private
 
       def accept_invitation!(invitation)
-        retries = 0
-
-        begin
-          ApplicationRecord.transaction do
-            accept_membership!(invitation)
-            invitation.update!(accepted_at: Time.current)
-          end
-        rescue ActiveRecord::RecordNotUnique
-          retries += 1
-          retry if retries < 2
-
-          ApplicationRecord.transaction do
-            accept_membership!(invitation)
-            invitation.update!(accepted_at: Time.current)
-          end
+        ApplicationRecord.transaction do
+          accept_membership!(invitation)
+          invitation.update!(accepted_at: Time.current)
         end
       end
 
       def accept_membership!(invitation)
-        membership = OrganizationMembership.find_or_initialize_by(organization: invitation.organization, user: current_user)
-        invited_role_rank = OrganizationMembership.roles.fetch(invitation.role)
-        current_role_rank = membership.role ? OrganizationMembership.roles.fetch(membership.role) : -1
-        if membership.new_record? || invited_role_rank > current_role_rank
-          membership.role = invitation.role
+        membership = OrganizationMembership.find_by(organization: invitation.organization, user: current_user) ||
+          create_membership_for_invitation!(invitation)
+
+        membership.with_lock do
+          invited_role_rank = OrganizationMembership.roles.fetch(invitation.role)
+          current_role_rank = membership.role ? OrganizationMembership.roles.fetch(membership.role) : -1
+          if invited_role_rank > current_role_rank
+            membership.update!(role: invitation.role)
+          end
         end
-        membership.save!
+      end
+
+      def create_membership_for_invitation!(invitation)
+        OrganizationMembership.create!(
+          organization: invitation.organization,
+          user: current_user,
+          role: invitation.role
+        )
+      rescue ActiveRecord::RecordNotUnique
+        OrganizationMembership.find_by!(organization: invitation.organization, user: current_user)
       end
 
       def organization_json(organization)

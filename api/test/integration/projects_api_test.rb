@@ -746,6 +746,17 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
     assert_includes response.parsed_body.fetch("errors"), "Email is invalid"
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "student@example.com", role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :created
+    invitation = response.parsed_body.fetch("invitation")
+    assert_equal "student@example.com", invitation.fetch("email")
+    assert_equal "student", invitation.fetch("role")
+    assert_equal false, invitation.fetch("email_sent")
+    assert_match "#invite=", invitation.fetch("invitation_url")
   end
 
   test "organization students cannot view another student's private organization project" do
