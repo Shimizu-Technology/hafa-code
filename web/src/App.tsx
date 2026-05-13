@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import MonacoEditor from '@monaco-editor/react'
-import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react'
 import {
   Archive,
   BookOpen,
@@ -27,10 +27,12 @@ import {
   RotateCcw,
   Rocket,
   Save,
+  Send,
   ShieldCheck,
   Square,
   Terminal,
   Trash2,
+  UserPlus,
   X,
   Zap,
 } from 'lucide-react'
@@ -62,7 +64,7 @@ import {
   type ProjectLibrary,
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
-import { api, type CloudOrgMember } from './lib/api'
+import { api, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
@@ -115,10 +117,31 @@ const visibilityLabels: Record<ProjectVisibility, string> = {
 }
 
 const visibilityDescriptions: Record<ProjectVisibility, string> = {
-  private: 'Only you. In orgs, instructors can view.',
-  organization: 'Visible to members of this org.',
-  unlisted: 'Anyone with the link can view a copy.',
-  public: 'Publicly viewable when live links ship.',
+  private: 'Only you can edit or list it. In orgs, instructors and owners can view and run it.',
+  organization: 'Members of this org can find, view, and run it. Only you can edit it.',
+  unlisted: 'Anyone with the direct link can view and run it, but it is hidden from org lists.',
+  public: 'Anyone with access to Hafa Code can view and run it, and org members can find it in lists.',
+}
+
+function invitationUrl(token: string) {
+  return `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`
+}
+
+function readHashParam(name: string) {
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get(name)
+}
+
+function clearHashParam(name: string) {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  params.delete(name)
+  const nextHash = params.toString()
+  window.history.replaceState(null, '', `${window.location.pathname}${nextHash ? `#${nextHash}` : ''}`)
+}
+
+function projectOwnerLabel(project: SavedProject, currentUserId?: number) {
+  if (!project.owner) return ''
+  if (project.owner.id === currentUserId) return 'You'
+  return project.owner.fullName || project.owner.email
 }
 
 function languageForFile(file: ProjectFile) {
@@ -693,6 +716,13 @@ export default function App() {
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null)
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
   const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
+  const [orgInvitations, setOrgInvitations] = useState<CloudOrgInvitation[]>([])
+  const [inviteEmailDraft, setInviteEmailDraft] = useState('')
+  const [inviteRoleDraft, setInviteRoleDraft] = useState<CloudOrgInvitation['role']>('student')
+  const [lastInviteUrl, setLastInviteUrl] = useState('')
+  const [pendingInvitationToken, setPendingInvitationToken] = useState(() => readHashParam('invite'))
+  const [pendingInvitation, setPendingInvitation] = useState<CloudOrgInvitation | null>(null)
+  const [invitationAccepting, setInvitationAccepting] = useState(false)
   const [instructorPanelOpen, setInstructorPanelOpen] = useState(false)
   const [orgCreateOpen, setOrgCreateOpen] = useState(false)
   const [orgNameDraft, setOrgNameDraft] = useState('')
@@ -707,6 +737,7 @@ export default function App() {
   const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
   const syncTimerRef = useRef<number | null>(null)
   const replacingCloudIdRef = useRef(false)
+  const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
   const { isSignedIn, user, organizations, syncSession } = useAuthContext()
@@ -725,8 +756,10 @@ export default function App() {
   const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
   const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? null
   const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
   const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
+  const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
     : themePreference
@@ -787,8 +820,7 @@ export default function App() {
   useEffect(() => {
     if (hasImportedServerShare) return
 
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    const shareToken = params.get('share')
+    const shareToken = readHashParam('share')
     if (!shareToken) return
 
     api.getShare(shareToken).then((res) => {
@@ -806,6 +838,44 @@ export default function App() {
   }, [hasImportedServerShare])
 
   useEffect(() => {
+    if (!pendingInvitationToken) return
+
+    api.getInvitation(pendingInvitationToken).then((res) => {
+      if (res.data) {
+        setPendingInvitation(res.data)
+      } else {
+        setNotice(`Could not load invitation: ${res.error || 'unknown error'}`)
+        setPendingInvitationToken(null)
+        clearHashParam('invite')
+      }
+    })
+  }, [pendingInvitationToken])
+
+  useEffect(() => {
+    if (!pendingInvitationToken || !isSignedIn || invitationAccepting) return
+    if (acceptingInvitationTokenRef.current === pendingInvitationToken) return
+
+    acceptingInvitationTokenRef.current = pendingInvitationToken
+    queueMicrotask(() => setInvitationAccepting(true))
+    api.acceptInvitation(pendingInvitationToken).then(async (res) => {
+      if (res.data) {
+        await syncSession()
+        setActiveOrganizationId(String(res.data.id))
+        setPendingInvitationToken(null)
+        setPendingInvitation(null)
+        clearHashParam('invite')
+        setNotice(`Joined ${res.data.name}.`)
+      } else {
+        setNotice(`Could not accept invitation: ${res.error || 'unknown error'}`)
+        setPendingInvitationToken(null)
+      }
+    }).finally(() => {
+      acceptingInvitationTokenRef.current = null
+      setInvitationAccepting(false)
+    })
+  }, [invitationAccepting, isSignedIn, pendingInvitationToken, syncSession])
+
+  useEffect(() => {
     if (!notice) return
 
     const timeout = window.setTimeout(() => setNotice(''), 4_500)
@@ -817,6 +887,8 @@ export default function App() {
       setHasLoadedCloudProjects(false)
       setInstructorPanelOpen(false)
       setOrgMembers([])
+      setOrgInvitations([])
+      setLastInviteUrl('')
     })
   }, [activeOrganizationId])
 
@@ -848,6 +920,15 @@ export default function App() {
       if (res.error) setNotice(`Could not load organization roster: ${res.error}`)
     })
   }, [activeOrganizationId, canUseInstructorPanel, isSignedIn])
+
+  useEffect(() => {
+    if (!isSignedIn || !activeOrganizationId || !canInviteOrgMembers) return
+
+    api.getOrgInvitations(activeOrganizationId).then((res) => {
+      if (res.data) setOrgInvitations(res.data)
+      if (res.error) setNotice(`Could not load invitations: ${res.error}`)
+    })
+  }, [activeOrganizationId, canInviteOrgMembers, isSignedIn])
 
   useEffect(() => {
     if (!isSignedIn || hasLoadedCloudProjects) return
@@ -968,6 +1049,38 @@ export default function App() {
     setOrgNameDraft('')
     setOrgCreateOpen(false)
     setNotice(`${res.data.name} created.`)
+  }
+
+  const inviteOrgMember = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeOrganizationId) return
+
+    const email = inviteEmailDraft.trim().toLowerCase()
+    if (!email) {
+      setNotice('Enter an email address to invite.')
+      return
+    }
+
+    const res = await api.createOrgInvitation(activeOrganizationId, email, inviteRoleDraft)
+    if (res.error || !res.data) {
+      setNotice(`Could not create invitation: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    const url = invitationUrl(res.data.token)
+    setOrgInvitations((current) => [res.data!, ...current.filter((candidate) => candidate.id !== res.data!.id)])
+    setInviteEmailDraft('')
+    setInviteRoleDraft('student')
+    setLastInviteUrl(url)
+    const copied = await writeClipboardText(url)
+    setNotice(copied ? 'Invitation link copied.' : 'Invitation created. Copy the link from the classroom panel.')
+  }
+
+  const copyInvitationLink = async (token: string) => {
+    const url = invitationUrl(token)
+    const copied = await writeClipboardText(url)
+    setLastInviteUrl(url)
+    setNotice(copied ? 'Invitation link copied.' : 'Clipboard blocked. Select the invitation link to copy it.')
   }
 
   const requestArchiveProject = () => {
@@ -1431,6 +1544,31 @@ export default function App() {
         </div>
       )}
 
+      {pendingInvitationToken && pendingInvitation && (
+        <section className="invite-accept-panel panel surface-grid" aria-label="Organization invitation">
+          <div>
+            <p className="eyebrow">Invitation</p>
+            <h2>{pendingInvitation.organization?.name || 'Organization'} invited you as {pendingInvitation.role === 'instructor' ? 'an instructor' : 'a student'}</h2>
+            <p className="helper-text">
+              {isSignedIn
+                ? invitationAccepting ? 'Accepting your invitation...' : `Signed in as ${user?.email || 'your account'}.`
+                : 'Sign in or create your account with the invited email, then this invitation will be accepted here.'}
+            </p>
+          </div>
+          {!isSignedIn && (
+            <div className="invite-auth-actions">
+              <SignInButton mode="modal">
+                <button className="secondary" type="button"><Cloud size={16} /> Sign in</button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button type="button"><UserPlus size={16} /> Create account</button>
+              </SignUpButton>
+            </div>
+          )}
+          {isSignedIn && invitationAccepting && <Loader2 className="spin" size={20} />}
+        </section>
+      )}
+
       <section className="context-bar panel surface-grid" aria-label="Project context">
         <div className="context-copy">
           <p className="eyebrow">Workspace</p>
@@ -1466,7 +1604,7 @@ export default function App() {
           )}
           {canUseInstructorPanel && (
             <button className="secondary context-chip" type="button" onClick={() => setInstructorPanelOpen((current) => !current)}>
-              <ShieldCheck size={14} /> Students
+              <ShieldCheck size={14} /> Classroom
             </button>
           )}
         </div>
@@ -1488,12 +1626,64 @@ export default function App() {
         <section className="instructor-panel panel surface-grid">
           <div className="panel-header">
             <div>
-              <p className="eyebrow">Instructor</p>
-              <h2><ShieldCheck size={18} /> Student work</h2>
-              <p className="helper-text">Read-only view of projects in {activeOrganization.name}.</p>
+              <p className="eyebrow">Classroom</p>
+              <h2><ShieldCheck size={18} /> Roster and student work</h2>
+              <p className="helper-text">Invite people, then review student projects in {activeOrganization.name}.</p>
             </div>
             <button className="ghost" type="button" onClick={() => setInstructorPanelOpen(false)}>Close</button>
           </div>
+          {canInviteOrgMembers && (
+            <div className="invite-workflow">
+              <form className="invite-form" onSubmit={inviteOrgMember}>
+                <label className="file-path-field" htmlFor="invite-email">
+                  <span>Email</span>
+                  <input
+                    id="invite-email"
+                    value={inviteEmailDraft}
+                    onChange={(event) => setInviteEmailDraft(event.target.value)}
+                    placeholder="student@example.com"
+                    type="email"
+                  />
+                </label>
+                <label className="file-path-field" htmlFor="invite-role">
+                  <span>Role</span>
+                  <select id="invite-role" value={inviteRoleDraft} onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}>
+                    <option value="student">Student</option>
+                    <option value="instructor">Instructor</option>
+                  </select>
+                </label>
+                <button type="submit"><Send size={16} /> Invite</button>
+              </form>
+              <p className="helper-text">The invite link works for existing users and first-time signups. New students get their personal account first, then join this workspace.</p>
+              {lastInviteUrl && (
+                <label className="file-path-field invite-link-field" htmlFor="last-invite-url">
+                  <span>Latest invite link</span>
+                  <input id="last-invite-url" readOnly value={lastInviteUrl} onFocus={(event) => event.currentTarget.select()} />
+                </label>
+              )}
+            </div>
+          )}
+          {canInviteOrgMembers && orgInvitations.length > 0 && (
+            <div className="pending-invite-list" aria-label="Pending invitations">
+              <div className="section-row">
+                <strong>Invitations</strong>
+                <small>{orgInvitations.filter((invitation) => !invitation.accepted_at).length} pending</small>
+              </div>
+              {orgInvitations.slice(0, 6).map((invitation) => (
+                <div key={invitation.id ?? invitation.token} className="invite-row">
+                  <div>
+                    <strong>{invitation.email}</strong>
+                    <small>{invitation.role}{invitation.accepted_at ? ' · accepted' : ' · pending'}</small>
+                  </div>
+                  {!invitation.accepted_at && (
+                    <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation.token)}>
+                      <Copy size={14} /> Copy link
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="student-grid">
             {orgMembers.filter((member) => member.organization_role === 'student').length === 0 && (
               <p className="empty-project-list">No students in this organization yet.</p>
@@ -1607,7 +1797,10 @@ export default function App() {
                     onClick={() => setActiveProject(candidate.id)}
                   >
                     <span>{candidate.title || 'Untitled Project'}</span>
-                    <small>{kindLabels[candidate.kind]}</small>
+                    <small>
+                      {kindLabels[candidate.kind]}
+                      {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
+                    </small>
                   </button>
                 ))}
               </div>
@@ -1641,7 +1834,10 @@ export default function App() {
                 onClick={() => setActiveProject(candidate.id)}
               >
                 <span>{candidate.title || 'Untitled Project'}</span>
-                <small>{kindLabels[candidate.kind]}</small>
+                <small>
+                  {kindLabels[candidate.kind]}
+                  {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
+                </small>
               </button>
             ))}
           </div>
@@ -1655,6 +1851,7 @@ export default function App() {
               <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} disabled={!canEditProject} />
               <small>
                 {isSignedIn ? 'Autosaved to cloud + local backup' : 'Autosaved locally'}
+                {activeOrganizationId && currentProjectOwnerLabel ? ` · by ${currentProjectOwnerLabel}` : ''}
                 {isArchived(project) ? ' · archived' : ''}
                 {!canEditProject ? ' · read-only instructor view' : ''}
                 {' · updated '}

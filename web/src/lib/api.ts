@@ -26,6 +26,21 @@ export interface CloudOrgMember extends CloudUser {
   joined_at: string
 }
 
+export interface CloudOrgInvitation {
+  id?: number
+  token: string
+  email: string
+  role: 'student' | 'instructor'
+  accepted_at?: string | null
+  expires_at: string
+  created_at?: string
+  organization?: {
+    id: number
+    name: string
+    slug: string
+  }
+}
+
 interface ApiProjectFile {
   path: string
   language: ProjectFile['language']
@@ -190,6 +205,25 @@ export const api = {
   getOrgMembers: async (organizationId: string) => {
     const res = await fetchApi<{ members: CloudOrgMember[] }>(`/api/v1/organizations/${organizationId}/members`)
     return res.error ? { data: null, error: res.error } : { data: res.data?.members ?? [], error: null }
+  },
+  getOrgInvitations: async (organizationId: string) => {
+    const res = await fetchApi<{ invitations: CloudOrgInvitation[] }>(`/api/v1/organizations/${organizationId}/invitations`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitations ?? [], error: null }
+  },
+  createOrgInvitation: async (organizationId: string, email: string, role: CloudOrgInvitation['role']) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/organizations/${organizationId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  getInvitation: async (token: string) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/invitations/${encodeURIComponent(token)}`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  acceptInvitation: async (token: string) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
   },
   getProjects: async (organizationId?: string | null) => {
     const endpoint = organizationId ? `/api/v1/projects?organization_id=${encodeURIComponent(organizationId)}` : '/api/v1/projects'

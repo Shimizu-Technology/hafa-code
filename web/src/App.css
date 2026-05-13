@@ -139,8 +139,10 @@ button.icon-button {
 .app-shell[data-theme="dark"] button.secondary,
 .app-shell[data-theme="dark"] .project-card,
 .app-shell[data-theme="dark"] .student-card,
+.app-shell[data-theme="dark"] .invite-row,
 .app-shell[data-theme="dark"] .title-field input,
 .app-shell[data-theme="dark"] .file-path-field input,
+.app-shell[data-theme="dark"] .file-path-field select,
 .app-shell[data-theme="dark"] .mobile-actions-menu summary,
 .app-shell[data-theme="dark"] .mobile-project-menu summary {
   background: rgba(255, 255, 255, 0.08);
@@ -417,6 +419,87 @@ button.context-chip.active,
 
 .instructor-panel {
   margin-bottom: 1rem;
+}
+
+.invite-accept-panel {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.invite-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
+
+.invite-workflow {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.invite-form {
+  align-items: end;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(220px, 1fr) minmax(130px, 0.45fr) auto;
+}
+
+.invite-form .file-path-field {
+  margin-top: 0;
+}
+
+.file-path-field select {
+  appearance: none;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  color: var(--ink);
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-weight: 800;
+  padding: 0.75rem 0.85rem;
+  width: 100%;
+}
+
+.pending-invite-list {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+}
+
+.section-row,
+.invite-row {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.section-row strong,
+.invite-row strong {
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+}
+
+.section-row small,
+.invite-row small {
+  color: var(--muted);
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.invite-row {
+  background: rgba(255,255,255,0.48);
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.65rem;
 }
 
 .student-grid {
@@ -1393,6 +1476,26 @@ button.context-chip.active,
   .student-grid {
     grid-template-columns: 1fr;
     padding: 0.72rem;
+  }
+
+  .invite-accept-panel,
+  .invite-form,
+  .section-row,
+  .invite-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .invite-accept-panel,
+  .section-row,
+  .invite-row {
+    flex-direction: column;
+  }
+
+  .invite-auth-actions,
+  .invite-row button {
+    justify-content: stretch;
+    width: 100%;
   }
 
   .mobile-home-panel {
