@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Rocket,
   Save,
+  Search,
   Send,
   ShieldCheck,
   Square,
@@ -73,6 +74,7 @@ type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
 type FileDialogMode = 'create' | 'rename' | 'duplicate'
 type ThemePreference = 'system' | 'light' | 'dark'
 type ColorModePreference = 'default' | 'colorblind'
+type ClassroomTab = 'people' | 'invitations'
 type ShareDialogState = {
   url: string
   mode: 'server' | 'offline'
@@ -731,6 +733,8 @@ export default function App() {
   const [inviteEmailDraft, setInviteEmailDraft] = useState('')
   const [inviteRoleDraft, setInviteRoleDraft] = useState<CloudOrgInvitation['role']>('student')
   const [lastInviteUrl, setLastInviteUrl] = useState('')
+  const [classroomTab, setClassroomTab] = useState<ClassroomTab>('people')
+  const [memberSearchDraft, setMemberSearchDraft] = useState('')
   const [pendingInvitationToken, setPendingInvitationToken] = useState(() => readHashParam('invite'))
   const [pendingInvitation, setPendingInvitation] = useState<CloudOrgInvitation | null>(null)
   const [invitationAccepting, setInvitationAccepting] = useState(false)
@@ -772,6 +776,14 @@ export default function App() {
   const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
   const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
   const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
+  const pendingInvitations = orgInvitations.filter((invitation) => !invitation.accepted_at)
+  const memberSearch = memberSearchDraft.trim().toLowerCase()
+  const filteredOrgMembers = orgMembers.filter((member) => {
+    if (!memberSearch) return true
+    return [member.full_name, member.email, member.organization_role]
+      .some((value) => value.toLowerCase().includes(memberSearch))
+  })
+  const inviteRequiresAuth = Boolean(pendingInvitationToken && pendingInvitation && !isSignedIn)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
     : themePreference
@@ -1091,6 +1103,7 @@ export default function App() {
     } else {
       setNotice(copied ? 'Invitation created. Email is not configured yet, so the link was copied.' : 'Invitation created. Email is not configured yet, so copy the link from the classroom panel.')
     }
+    setClassroomTab('invitations')
   }
 
   const copyInvitationLink = async (invitation: CloudOrgInvitation) => {
@@ -1566,7 +1579,7 @@ export default function App() {
 
   return (
     <main
-      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} mobile-tab-${mobileTab}`}
+      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} ${inviteRequiresAuth ? 'invite-auth-mode' : ''} mobile-tab-${mobileTab}`}
       data-theme={resolvedTheme}
       data-color-mode={colorModePreference}
     >
@@ -1619,7 +1632,7 @@ export default function App() {
       )}
 
       {pendingInvitationToken && pendingInvitation && (
-        <section className="invite-accept-panel panel surface-grid" aria-label="Organization invitation">
+        <section className={`invite-accept-panel panel surface-grid${inviteRequiresAuth ? ' invite-accept-panel-focused' : ''}`} aria-label="Organization invitation">
           <div>
             <p className="eyebrow">Invitation</p>
             <h2>{pendingInvitation.organization?.name || 'Organization'} invited you as {pendingInvitation.role === 'instructor' ? 'an instructor' : 'a student'}</h2>
@@ -1643,6 +1656,8 @@ export default function App() {
         </section>
       )}
 
+      {!inviteRequiresAuth && (
+      <>
       <section className="context-bar panel surface-grid" aria-label="Project context">
         <div className="context-copy">
           <p className="eyebrow">Workspace</p>
@@ -1654,30 +1669,33 @@ export default function App() {
           </p>
         </div>
         <div className="context-actions">
-          <button
-            className={!activeOrganizationId ? 'active context-chip' : 'secondary context-chip'}
-            type="button"
-            onClick={() => setActiveOrganizationId(null)}
-          >
-            Personal
-          </button>
-          {organizations.map((organization) => (
-            <button
-              key={organization.id}
-              className={String(organization.id) === activeOrganizationId ? 'active context-chip' : 'secondary context-chip'}
-              type="button"
-              onClick={() => setActiveOrganizationId(String(organization.id))}
+          <label className="workspace-select-label" htmlFor="workspace-select">
+            <span>Switch workspace</span>
+            <select
+              id="workspace-select"
+              className="workspace-select"
+              value={activeOrganizationId ?? 'personal'}
+              onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
             >
-              {organization.name}
-            </button>
-          ))}
+              <option value="personal">Personal projects</option>
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
+                </option>
+              ))}
+            </select>
+          </label>
           {isSignedIn && canCreateOrganization && (
             <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
               <Plus size={14} /> Org
             </button>
           )}
           {canUseInstructorPanel && (
-            <button className="secondary context-chip" type="button" onClick={() => setInstructorPanelOpen((current) => !current)}>
+            <button
+              className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
+              type="button"
+              onClick={() => setInstructorPanelOpen((current) => !current)}
+            >
               <ShieldCheck size={14} /> Classroom
             </button>
           )}
@@ -1701,12 +1719,38 @@ export default function App() {
           <div className="panel-header">
             <div>
               <p className="eyebrow">Classroom</p>
-              <h2><ShieldCheck size={18} /> Roster and student work</h2>
-              <p className="helper-text">Invite people, then review student projects in {activeOrganization.name}.</p>
+              <h2><ShieldCheck size={18} /> {activeOrganization.name}</h2>
+              <p className="helper-text">{orgMembers.length} member{orgMembers.length === 1 ? '' : 's'} · {pendingInvitations.length} pending invite{pendingInvitations.length === 1 ? '' : 's'}</p>
             </div>
-            <button className="ghost" type="button" onClick={() => setInstructorPanelOpen(false)}>Close</button>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => setInstructorPanelOpen(false)}
+            >
+              Close
+            </button>
           </div>
-          {canInviteOrgMembers && (
+          <div className="classroom-tabs" role="tablist" aria-label="Classroom tools">
+            <button
+              className={classroomTab === 'people' ? 'active' : 'secondary'}
+              type="button"
+              role="tab"
+              aria-selected={classroomTab === 'people'}
+              onClick={() => setClassroomTab('people')}
+            >
+              People
+            </button>
+            <button
+              className={classroomTab === 'invitations' ? 'active' : 'secondary'}
+              type="button"
+              role="tab"
+              aria-selected={classroomTab === 'invitations'}
+              onClick={() => setClassroomTab('invitations')}
+            >
+              Invitations
+            </button>
+          </div>
+          {classroomTab === 'invitations' && canInviteOrgMembers && (
             <div className="invite-workflow">
               <form className="invite-form" onSubmit={inviteOrgMember}>
                 <label className="file-path-field" htmlFor="invite-email">
@@ -1737,11 +1781,11 @@ export default function App() {
               )}
             </div>
           )}
-          {canInviteOrgMembers && orgInvitations.length > 0 && (
+          {classroomTab === 'invitations' && canInviteOrgMembers && orgInvitations.length > 0 && (
             <div className="pending-invite-list" aria-label="Pending invitations">
               <div className="section-row">
                 <strong>Invitations</strong>
-                <small>{orgInvitations.filter((invitation) => !invitation.accepted_at).length} pending</small>
+                <small>{pendingInvitations.length} pending</small>
               </div>
               {orgInvitations.slice(0, 6).map((invitation) => (
                 <div key={invitation.id ?? invitation.token} className="invite-row">
@@ -1766,19 +1810,30 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="student-grid">
-            {orgMembers.length === 0 && (
-              <p className="empty-project-list">No members in this organization yet.</p>
+          {classroomTab === 'people' && (
+          <div className="people-panel">
+            <label className="classroom-search" htmlFor="member-search">
+              <Search size={16} />
+              <input
+                id="member-search"
+                value={memberSearchDraft}
+                onChange={(event) => setMemberSearchDraft(event.target.value)}
+                placeholder="Search people by name, email, or role"
+              />
+            </label>
+            <div className="member-list" aria-label="Organization members">
+            {filteredOrgMembers.length === 0 && (
+              <p className="empty-project-list">{orgMembers.length === 0 ? 'No members in this organization yet.' : 'No people match that search.'}</p>
             )}
-            {orgMembers.map((member) => {
+            {filteredOrgMembers.map((member) => {
               const memberProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
               return (
-                <article key={member.id} className="student-card">
-                  <div>
+                <article key={member.id} className="member-row">
+                  <div className="member-main">
                     <strong>{member.full_name}</strong>
                     <small>{member.email} · {member.organization_role}</small>
                   </div>
-                  <span>{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
+                  <span className="member-count">{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
                   {canManageOrgMembers && (
                     <div className="member-actions">
                       <select
@@ -1796,7 +1851,7 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  <div className="student-project-list">
+                  <div className="member-project-list">
                     {memberProjects.slice(0, 4).map((memberProject) => (
                       <button key={memberProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(memberProject.id)}>
                         {memberProject.title}
@@ -1806,8 +1861,12 @@ export default function App() {
                 </article>
               )
             })}
+            </div>
           </div>
+          )}
         </section>
+      )}
+      </>
       )}
 
       <section className="mobile-home-panel panel surface-grid">
