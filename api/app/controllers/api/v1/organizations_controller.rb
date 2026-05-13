@@ -98,7 +98,7 @@ module Api
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
 
         invitations = @organization.organization_invitations.pending.order(created_at: :desc).limit(50)
-        render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation)) } }
+        render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation, require_configured_origin: false)) } }
       end
 
       def resend_invitation
@@ -126,11 +126,19 @@ module Api
 
         role = membership_role_param
         return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
-        if @membership.owner? && role != "owner" && last_owner_membership?(@membership)
-          return render json: { errors: [ "Organization must keep at least one owner" ] }, status: :unprocessable_entity
-        end
 
-        @membership.update!(role: role)
+        owner_guard_error = nil
+        ApplicationRecord.transaction do
+          lock_owner_memberships!(@membership.organization) if @membership.owner? && role != "owner"
+          if @membership.owner? && role != "owner" && last_owner_membership?(@membership)
+            owner_guard_error = "Organization must keep at least one owner"
+            raise ActiveRecord::Rollback
+          end
+
+          @membership.update!(role: role)
+        end
+        return render json: { errors: [ owner_guard_error ] }, status: :unprocessable_entity if owner_guard_error
+
         render json: { member: member_json(@membership.reload) }
       end
 
@@ -138,11 +146,18 @@ module Api
         return render_forbidden unless can_manage_org?(current_user, @organization)
         return render json: { errors: [ "You cannot remove yourself from the organization." ] }, status: :unprocessable_entity if @membership.user_id == current_user.id
 
-        if @membership.owner? && last_owner_membership?(@membership)
-          return render json: { errors: [ "Organization must keep at least one owner" ] }, status: :unprocessable_entity
-        end
+        owner_guard_error = nil
+        ApplicationRecord.transaction do
+          lock_owner_memberships!(@membership.organization) if @membership.owner?
+          if @membership.owner? && last_owner_membership?(@membership)
+            owner_guard_error = "Organization must keep at least one owner"
+            raise ActiveRecord::Rollback
+          end
 
-        @membership.destroy!
+          @membership.destroy!
+        end
+        return render json: { errors: [ owner_guard_error ] }, status: :unprocessable_entity if owner_guard_error
+
         head :no_content
       end
 
@@ -246,19 +261,23 @@ module Api
         membership.organization.organization_memberships.where(role: :owner).where.not(id: membership.id).none?
       end
 
-      def organization_invitation_url(invitation)
-        origin = frontend_origin
+      def lock_owner_memberships!(organization)
+        organization.organization_memberships.where(role: :owner).lock.to_a
+      end
+
+      def organization_invitation_url(invitation, require_configured_origin: true)
+        origin = frontend_origin(log_missing: require_configured_origin)
         return nil unless origin
 
         "#{origin}#invite=#{ERB::Util.url_encode(invitation.token)}"
       end
 
-      def frontend_origin
+      def frontend_origin(log_missing: true)
         origin = ENV["FRONTEND_URL"].presence || ENV["APP_URL"].presence
         return origin.delete_suffix("/") if origin
         return "http://localhost:5173" unless Rails.env.production?
 
-        Rails.logger.error("[OrganizationsController] FRONTEND_URL or APP_URL must be set before sending organization invitation links")
+        Rails.logger.error("[OrganizationsController] FRONTEND_URL or APP_URL must be set before sending organization invitation links") if log_missing
         nil
       end
 
