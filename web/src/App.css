@@ -143,6 +143,7 @@ button.icon-button {
 .app-shell[data-theme="dark"] .title-field input,
 .app-shell[data-theme="dark"] .file-path-field input,
 .app-shell[data-theme="dark"] .file-path-field select,
+.app-shell[data-theme="dark"] .member-role-select,
 .app-shell[data-theme="dark"] .mobile-actions-menu summary,
 .app-shell[data-theme="dark"] .mobile-project-menu summary {
   background: rgba(255, 255, 255, 0.08);
@@ -500,6 +501,27 @@ button.context-chip.active,
   border: 1px solid var(--line);
   border-radius: 0.85rem;
   padding: 0.55rem 0.65rem;
+}
+
+.invite-actions,
+.member-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.member-role-select {
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  color: var(--ink);
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 850;
+  min-width: 126px;
+  padding: 0.55rem 0.62rem;
 }
 
 .student-grid {
@@ -1493,7 +1515,11 @@ button.context-chip.active,
   }
 
   .invite-auth-actions,
-  .invite-row button {
+  .invite-actions,
+  .member-actions,
+  .invite-row button,
+  .member-actions button,
+  .member-role-select {
     justify-content: stretch;
     width: 100%;
   }

@@ -816,6 +816,92 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       assert pending_invitation.key?("token")
       assert pending_invitation.key?("invitation_url")
     end
+
+    student_invitation_id = invitations.find { |candidate| candidate.fetch("email") == "student@example.com" }.fetch("id")
+    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
+    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+
+    begin
+      post "/api/v1/organizations/#{organization.id}/invitations/#{student_invitation_id}/resend",
+        headers: owner_headers
+    ensure
+      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+    end
+
+    assert_response :success
+    assert_equal false, response.parsed_body.dig("invitation", "email_sent")
+    assert_match "#invite=", response.parsed_body.dig("invitation", "invitation_url")
+
+    revoked_token = response.parsed_body.dig("invitation", "token")
+    delete "/api/v1/organizations/#{organization.id}/invitations/#{student_invitation_id}",
+      headers: owner_headers
+
+    assert_response :no_content
+
+    get "/api/v1/invitations/#{revoked_token}", headers: owner_headers
+
+    assert_response :not_found
+  end
+
+  test "organization owners can manage members and protect the final owner" do
+    owner = User.create!(
+      clerk_id: "test_clerk_member_owner",
+      email: "member-owner@example.com",
+      first_name: "Member",
+      last_name: "Owner",
+      role: :mentor
+    )
+    instructor = User.create!(
+      clerk_id: "test_clerk_member_instructor",
+      email: "member-instructor@example.com",
+      first_name: "Member",
+      last_name: "Instructor"
+    )
+    student = User.create!(
+      clerk_id: "test_clerk_member_student",
+      email: "member-student@example.com",
+      first_name: "Member",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Member School", created_by: owner)
+    owner_membership = organization.organization_memberships.create!(user: owner, role: :owner)
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    student_membership = organization.organization_memberships.create!(user: student, role: :student)
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      params: { role: "instructor" }.to_json,
+      headers: instructor_headers
+
+    assert_response :forbidden
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      params: { role: "instructor" }.to_json,
+      headers: owner_headers
+
+    assert_response :success
+    assert_equal "instructor", student_membership.reload.role
+    assert_equal "instructor", response.parsed_body.dig("member", "organization_role")
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{owner_membership.id}",
+      params: { role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "Organization must keep at least one owner" ], response.parsed_body.fetch("errors")
+
+    delete "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      headers: owner_headers
+
+    assert_response :no_content
+    assert_nil OrganizationMembership.find_by(id: student_membership.id)
   end
 
   test "organization students cannot view another student's private organization project" do

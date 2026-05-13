@@ -219,6 +219,19 @@ export const api = {
     })
     return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
   },
+  resendOrgInvitation: async (organizationId: string, invitationId: number) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/organizations/${organizationId}/invitations/${invitationId}/resend`, { method: 'POST' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  deleteOrgInvitation: (organizationId: string, invitationId: number) => fetchApi<null>(`/api/v1/organizations/${organizationId}/invitations/${invitationId}`, { method: 'DELETE' }),
+  updateOrgMember: async (organizationId: string, membershipId: number, role: CloudOrgMember['organization_role']) => {
+    const res = await fetchApi<{ member: CloudOrgMember }>(`/api/v1/organizations/${organizationId}/members/${membershipId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.member ?? null, error: null }
+  },
+  deleteOrgMember: (organizationId: string, membershipId: number) => fetchApi<null>(`/api/v1/organizations/${organizationId}/members/${membershipId}`, { method: 'DELETE' }),
   getInvitation: async (token: string) => {
     const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/invitations/${encodeURIComponent(token)}`)
     return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }

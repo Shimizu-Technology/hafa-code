@@ -422,6 +422,17 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
     armExecutionTimeoutRef.current()
   }
 
+  const stopRun = () => {
+    stopWorker()
+    appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
+    setRunState((current) => ({
+      status: 'timeout',
+      stdout: current.stdout,
+      stderr: current.stderr || 'Execution stopped.',
+      durationMs: current.durationMs,
+    }))
+  }
+
   useEffect(() => {
     const handleRunRequest = () => runRef.current()
     window.addEventListener('hafa-code-run-active-project', handleRunRequest)
@@ -437,10 +448,7 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
           <p className="helper-text">Runs locally in a worker with a {RUNNER_TIMEOUT_MS / 1000}s guardrail.</p>
         </div>
         {runState.status === 'running' ? (
-          <button className="secondary" onClick={() => {
-            stopWorker()
-            setRunState((current) => ({ ...current, status: 'timeout', stderr: current.stderr || 'Execution stopped.' }))
-          }}>
+          <button className="secondary" onClick={stopRun}>
             <Square size={16} /> Stop
           </button>
         ) : (
@@ -760,6 +768,7 @@ export default function App() {
   const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? null
   const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canManageOrgMembers = activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
   const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
   const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
@@ -1064,7 +1073,8 @@ export default function App() {
       return
     }
 
-    const res = await api.createOrgInvitation(activeOrganizationId, email, inviteRoleDraft)
+    const role = canManageOrgMembers ? inviteRoleDraft : 'student'
+    const res = await api.createOrgInvitation(activeOrganizationId, email, role)
     if (res.error || !res.data) {
       setNotice(`Could not create invitation: ${res.error || 'unknown error'}`)
       return
@@ -1088,6 +1098,63 @@ export default function App() {
     const copied = await writeClipboardText(url)
     setLastInviteUrl(url)
     setNotice(copied ? 'Invitation link copied.' : 'Clipboard blocked. Select the invitation link to copy it.')
+  }
+
+  const resendInvitation = async (invitation: CloudOrgInvitation) => {
+    if (!activeOrganizationId || !invitation.id) return
+
+    const res = await api.resendOrgInvitation(activeOrganizationId, invitation.id)
+    if (res.error || !res.data) {
+      setNotice(`Could not resend invitation: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    const url = res.data.invitation_url || invitationUrl(res.data.token)
+    setOrgInvitations((current) => current.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate))
+    setLastInviteUrl(url)
+    setNotice(res.data.email_sent ? 'Invitation email resent.' : 'Invitation resent link is ready, but email is not configured yet.')
+  }
+
+  const revokeInvitation = async (invitation: CloudOrgInvitation) => {
+    if (!activeOrganizationId || !invitation.id) return
+    if (!window.confirm(`Revoke the invitation for ${invitation.email}? The current link will stop working.`)) return
+
+    const res = await api.deleteOrgInvitation(activeOrganizationId, invitation.id)
+    if (res.error) {
+      setNotice(`Could not revoke invitation: ${res.error}`)
+      return
+    }
+
+    setOrgInvitations((current) => current.filter((candidate) => candidate.id !== invitation.id))
+    if (lastInviteUrl.includes(invitation.token)) setLastInviteUrl('')
+    setNotice('Invitation revoked.')
+  }
+
+  const updateOrgMemberRole = async (member: CloudOrgMember, role: CloudOrgMember['organization_role']) => {
+    if (!activeOrganizationId || role === member.organization_role) return
+
+    const res = await api.updateOrgMember(activeOrganizationId, member.membership_id, role)
+    if (res.error || !res.data) {
+      setNotice(`Could not update member: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    setOrgMembers((current) => current.map((candidate) => candidate.membership_id === res.data!.membership_id ? res.data! : candidate))
+    setNotice(`${res.data.full_name} is now ${res.data.organization_role}.`)
+  }
+
+  const removeOrgMember = async (member: CloudOrgMember) => {
+    if (!activeOrganizationId) return
+    if (!window.confirm(`Remove ${member.full_name} from ${activeOrganization?.name || 'this organization'}? Their projects stay in the workspace, but they lose organization access.`)) return
+
+    const res = await api.deleteOrgMember(activeOrganizationId, member.membership_id)
+    if (res.error) {
+      setNotice(`Could not remove member: ${res.error}`)
+      return
+    }
+
+    setOrgMembers((current) => current.filter((candidate) => candidate.membership_id !== member.membership_id))
+    setNotice(`${member.full_name} removed from ${activeOrganization?.name || 'organization'}.`)
   }
 
   const requestArchiveProject = () => {
@@ -1654,9 +1721,9 @@ export default function App() {
                 </label>
                 <label className="file-path-field" htmlFor="invite-role">
                   <span>Role</span>
-                  <select id="invite-role" value={inviteRoleDraft} onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}>
+                  <select id="invite-role" value={canManageOrgMembers ? inviteRoleDraft : 'student'} onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}>
                     <option value="student">Student</option>
-                    <option value="instructor">Instructor</option>
+                    {canManageOrgMembers && <option value="instructor">Instructor</option>}
                   </select>
                 </label>
                 <button type="submit"><Send size={16} /> Send invite</button>
@@ -1683,31 +1750,56 @@ export default function App() {
                     <small>{invitation.role}{invitation.accepted_at ? ' · accepted' : ' · pending'}</small>
                   </div>
                   {!invitation.accepted_at && (
-                    <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation)}>
-                      <Copy size={14} /> Copy link
-                    </button>
+                    <div className="invite-actions">
+                      <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation)}>
+                        <Copy size={14} /> Copy link
+                      </button>
+                      <button className="secondary compact" type="button" onClick={() => resendInvitation(invitation)}>
+                        <Send size={14} /> Resend
+                      </button>
+                      <button className="danger compact" type="button" onClick={() => revokeInvitation(invitation)}>
+                        <Trash2 size={14} /> Revoke
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
             </div>
           )}
           <div className="student-grid">
-            {orgMembers.filter((member) => member.organization_role === 'student').length === 0 && (
-              <p className="empty-project-list">No students in this organization yet.</p>
+            {orgMembers.length === 0 && (
+              <p className="empty-project-list">No members in this organization yet.</p>
             )}
-            {orgMembers.filter((member) => member.organization_role === 'student').map((member) => {
-              const studentProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
+            {orgMembers.map((member) => {
+              const memberProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
               return (
                 <article key={member.id} className="student-card">
                   <div>
                     <strong>{member.full_name}</strong>
-                    <small>{member.email}</small>
+                    <small>{member.email} · {member.organization_role}</small>
                   </div>
-                  <span>{studentProjects.length} project{studentProjects.length === 1 ? '' : 's'}</span>
+                  <span>{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
+                  {canManageOrgMembers && (
+                    <div className="member-actions">
+                      <select
+                        aria-label={`Role for ${member.full_name}`}
+                        className="member-role-select"
+                        value={member.organization_role}
+                        onChange={(event) => updateOrgMemberRole(member, event.target.value as CloudOrgMember['organization_role'])}
+                      >
+                        <option value="student">Student</option>
+                        <option value="instructor">Instructor</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <button className="danger compact" type="button" onClick={() => removeOrgMember(member)}>
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    </div>
+                  )}
                   <div className="student-project-list">
-                    {studentProjects.slice(0, 4).map((studentProject) => (
-                      <button key={studentProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(studentProject.id)}>
-                        {studentProject.title}
+                    {memberProjects.slice(0, 4).map((memberProject) => (
+                      <button key={memberProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(memberProject.id)}>
+                        {memberProject.title}
                       </button>
                     ))}
                   </div>

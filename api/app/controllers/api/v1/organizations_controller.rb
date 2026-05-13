@@ -2,7 +2,20 @@ module Api
   module V1
     class OrganizationsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_organization, only: [ :show, :members, :projects, :student_projects, :invite, :invitations ]
+      before_action :set_organization, only: [
+        :show,
+        :members,
+        :projects,
+        :student_projects,
+        :invite,
+        :invitations,
+        :resend_invitation,
+        :destroy_invitation,
+        :update_member,
+        :destroy_member
+      ]
+      before_action :set_invitation, only: [ :resend_invitation, :destroy_invitation ]
+      before_action :set_membership, only: [ :update_member, :destroy_member ]
 
       def index
         organizations = organization_scope.includes(:organization_memberships).order(:name)
@@ -87,10 +100,59 @@ module Api
         render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation)) } }
       end
 
+      def resend_invitation
+        return render_forbidden unless can_invite_org_member?(current_user, @organization)
+        return render_forbidden("Only organization owners can resend instructor invitations.") unless can_manage_invitation_role?(@invitation.role)
+        return render json: { errors: [ "Invitation is no longer pending" ] }, status: :unprocessable_entity unless invitation_pending?(@invitation)
+
+        invitation_url = organization_invitation_url(@invitation)
+        email_sent = OrganizationInviteEmailService.send_invite(invitation: @invitation, invitation_url: invitation_url)
+        render json: { invitation: invitation_json(@invitation, invitation_url: invitation_url, email_sent: email_sent) }
+      end
+
+      def destroy_invitation
+        return render_forbidden unless can_invite_org_member?(current_user, @organization)
+        return render_forbidden("Only organization owners can revoke instructor invitations.") unless can_manage_invitation_role?(@invitation.role)
+
+        @invitation.destroy!
+        head :no_content
+      end
+
+      def update_member
+        return render_forbidden unless can_manage_org?(current_user, @organization)
+
+        role = membership_role_param
+        return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
+        if @membership.owner? && role != "owner" && last_owner_membership?(@membership)
+          return render json: { errors: [ "Organization must keep at least one owner" ] }, status: :unprocessable_entity
+        end
+
+        @membership.update!(role: role)
+        render json: { member: member_json(@membership.reload) }
+      end
+
+      def destroy_member
+        return render_forbidden unless can_manage_org?(current_user, @organization)
+        if @membership.owner? && last_owner_membership?(@membership)
+          return render json: { errors: [ "Organization must keep at least one owner" ] }, status: :unprocessable_entity
+        end
+
+        @membership.destroy!
+        head :no_content
+      end
+
       private
 
       def set_organization
         @organization = organization_scope.find(params[:id])
+      end
+
+      def set_invitation
+        @invitation = @organization.organization_invitations.find(params[:invitation_id])
+      end
+
+      def set_membership
+        @membership = @organization.organization_memberships.includes(:user).find(params[:membership_id])
       end
 
       def organization_scope
@@ -158,6 +220,25 @@ module Api
         return role if OrganizationInvitation.roles.key?(role)
 
         nil
+      end
+
+      def membership_role_param
+        role = params[:role].presence
+        return role if OrganizationMembership.roles.key?(role)
+
+        nil
+      end
+
+      def can_manage_invitation_role?(role)
+        role == "student" || can_manage_org?(current_user, @organization)
+      end
+
+      def invitation_pending?(invitation)
+        !invitation.accepted? && !invitation.expired?
+      end
+
+      def last_owner_membership?(membership)
+        membership.organization.organization_memberships.where(role: :owner).where.not(id: membership.id).none?
       end
 
       def organization_invitation_url(invitation)
