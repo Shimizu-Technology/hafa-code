@@ -76,6 +76,7 @@ module Api
         role = invitation_role_param
         return render json: { errors: [ "Role is not valid" ] }, status: :unprocessable_entity unless role
         return render_forbidden("Only organization owners can invite instructors.") if role == "instructor" && !can_manage_org?(current_user, @organization)
+        return render_invitation_url_configuration_error unless frontend_origin
 
         invitation = @organization.organization_invitations.new(
           invited_by: current_user,
@@ -104,6 +105,7 @@ module Api
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
         return render_forbidden("Only organization owners can resend instructor invitations.") unless can_manage_invitation_role?(@invitation.role)
         return render json: { errors: [ "Invitation is no longer pending" ] }, status: :unprocessable_entity unless invitation_pending?(@invitation)
+        return render_invitation_url_configuration_error unless frontend_origin
 
         invitation_url = organization_invitation_url(@invitation)
         email_sent = OrganizationInviteEmailService.send_invite(invitation: @invitation, invitation_url: invitation_url)
@@ -242,11 +244,23 @@ module Api
       end
 
       def organization_invitation_url(invitation)
-        "#{frontend_origin}#invite=#{ERB::Util.url_encode(invitation.token)}"
+        origin = frontend_origin
+        return nil unless origin
+
+        "#{origin}#invite=#{ERB::Util.url_encode(invitation.token)}"
       end
 
       def frontend_origin
-        ENV["FRONTEND_URL"].presence || ENV["APP_URL"].presence || "http://localhost:5173"
+        origin = ENV["FRONTEND_URL"].presence || ENV["APP_URL"].presence
+        return origin.delete_suffix("/") if origin
+        return "http://localhost:5173" unless Rails.env.production?
+
+        Rails.logger.error("[OrganizationsController] FRONTEND_URL or APP_URL must be set before sending organization invitation links")
+        nil
+      end
+
+      def render_invitation_url_configuration_error
+        render json: { errors: [ "Invitation links are not configured. Set FRONTEND_URL or APP_URL." ] }, status: :unprocessable_entity
       end
     end
   end

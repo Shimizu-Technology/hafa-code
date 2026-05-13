@@ -843,6 +843,19 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "production invitation origin does not silently fall back to localhost" do
+    old_frontend_url = ENV.delete("FRONTEND_URL")
+    old_app_url = ENV.delete("APP_URL")
+    old_rails_env = Rails.method(:env)
+    Rails.define_singleton_method(:env) { ActiveSupport::StringInquirer.new("production") }
+
+    assert_nil Api::V1::OrganizationsController.new.send(:frontend_origin)
+  ensure
+    Rails.define_singleton_method(:env, old_rails_env) if old_rails_env
+    ENV["FRONTEND_URL"] = old_frontend_url if old_frontend_url
+    ENV["APP_URL"] = old_app_url if old_app_url
+  end
+
   test "organization owners can manage members and protect the final owner" do
     owner = User.create!(
       clerk_id: "test_clerk_member_owner",
