@@ -829,16 +829,28 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       role: :student,
       expires_at: 1.day.ago
     )
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "teacher@example.com",
+      role: :instructor
+    )
 
     get "/api/v1/organizations/#{organization.id}/invitations", headers: owner_headers
 
     assert_response :success
     invitations = response.parsed_body.fetch("invitations")
-    assert_equal [ "new-student@example.com", "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
+    assert_equal [ "teacher@example.com", "new-student@example.com", "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
     invitations.each do |pending_invitation|
       assert pending_invitation.key?("token")
       assert pending_invitation.key?("invitation_url")
     end
+
+    get "/api/v1/organizations/#{organization.id}/invitations", headers: instructor_headers
+
+    assert_response :success
+    instructor_visible_invitations = response.parsed_body.fetch("invitations")
+    assert_equal [ "new-student@example.com", "student@example.com" ], instructor_visible_invitations.map { |candidate| candidate.fetch("email") }
+    assert_not_includes instructor_visible_invitations.map { |candidate| candidate.fetch("email") }, "teacher@example.com"
 
     student_invitation_id = invitations.find { |candidate| candidate.fetch("email") == "student@example.com" }.fetch("id")
     original_send_invite = OrganizationInviteEmailService.method(:send_invite)

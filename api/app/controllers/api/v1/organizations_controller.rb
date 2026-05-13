@@ -97,7 +97,7 @@ module Api
       def invitations
         return render_forbidden unless can_invite_org_member?(current_user, @organization)
 
-        invitations = @organization.organization_invitations.pending.order(created_at: :desc).limit(50)
+        invitations = manageable_invitations.pending.order(created_at: :desc).limit(50)
         render json: { invitations: invitations.map { |invitation| invitation_json(invitation, invitation_url: organization_invitation_url(invitation, require_configured_origin: false)) } }
       end
 
@@ -251,6 +251,13 @@ module Api
 
       def can_manage_invitation_role?(role)
         role == "student" || can_manage_org?(current_user, @organization)
+      end
+
+      def manageable_invitations
+        invitations = @organization.organization_invitations
+        return invitations if can_manage_org?(current_user, @organization)
+
+        invitations.where(role: :student)
       end
 
       def invitation_pending?(invitation)
