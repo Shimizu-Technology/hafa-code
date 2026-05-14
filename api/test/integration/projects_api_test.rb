@@ -82,6 +82,39 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body.fetch("errors"), "Project files must include at least one file"
   end
 
+  test "rejects organization visibility without an organization" do
+    post "/api/v1/projects",
+      params: {
+        title: "Orphan Organization Project",
+        kind: "ruby",
+        visibility: "organization",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'orphan'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Organization must be present for organization visibility"
+
+    project = @user.projects.create!(
+      title: "Personal Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'personal'") ]
+    )
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Personal Ruby",
+        kind: "ruby",
+        visibility: "organization"
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Organization must be present for organization visibility"
+    assert_equal "private", project.reload.visibility
+  end
+
   test "rejects unsafe file paths and entry paths" do
     post "/api/v1/projects",
       params: {
@@ -364,5 +397,686 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :too_many_requests
   ensure
     Rails.cache = original_cache
+  end
+
+  test "organization instructors can view student private organization projects but cannot edit them" do
+    instructor = User.create!(
+      clerk_id: "test_clerk_instructor",
+      email: "teacher@example.com",
+      first_name: "Test",
+      last_name: "Teacher"
+    )
+    organization = Organization.create!(name: "Code School", created_by: instructor)
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    organization.organization_memberships.create!(user: @user, role: :student)
+
+    student_project = @user.projects.create!(
+      organization: organization,
+      title: "Student Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'student'") ]
+    )
+
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/projects/#{student_project.id}", headers: instructor_headers
+    assert_response :success
+    assert_equal "Student Ruby", response.parsed_body.dig("project", "title")
+    owner = response.parsed_body.dig("project", "owner")
+    assert_equal @user.id, owner.fetch("id")
+    assert_equal @user.full_name, owner.fetch("full_name")
+    assert_not owner.key?("email")
+    assert_equal "teacher@example.com", instructor.email
+
+    patch "/api/v1/projects/#{student_project.id}",
+      params: {
+        title: "Edited by teacher",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'changed'" } ]
+      }.to_json,
+      headers: instructor_headers
+
+    assert_response :not_found
+    assert_equal "Student Ruby", student_project.reload.title
+
+    get "/api/v1/organizations/#{organization.id}/members", headers: instructor_headers
+    assert_response :success
+    assert_equal [ "teacher@example.com", "student@example.com" ].sort, response.parsed_body.fetch("members").map { |member| member.fetch("email") }.sort
+  end
+
+  test "platform admins can list and open private organization projects" do
+    admin = User.create!(
+      clerk_id: "test_clerk_admin",
+      email: "admin@example.com",
+      first_name: "Test",
+      last_name: "Admin",
+      role: :admin
+    )
+    organization = Organization.create!(name: "Admin School", created_by: admin)
+    organization.organization_memberships.create!(user: @user, role: :student)
+    private_project = @user.projects.create!(
+      organization: organization,
+      title: "Admin Visible Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'admin visible'") ]
+    )
+    admin_headers = {
+      "Authorization" => "Bearer test_token_#{admin.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/projects", headers: admin_headers
+
+    assert_response :success
+    assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects", params: { organization_id: organization.id }, headers: admin_headers
+
+    assert_response :success
+    assert_equal [ private_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/organizations/#{organization.id}/members", headers: admin_headers
+
+    assert_response :success
+    assert_equal [ "student@example.com" ], response.parsed_body.fetch("members").map { |member| member.fetch("email") }
+
+    get "/api/v1/projects/#{private_project.id}", headers: admin_headers
+
+    assert_response :success
+    assert_equal "Admin Visible Ruby", response.parsed_body.dig("project", "title")
+  end
+
+  test "bad organization ids return not found for project list and create" do
+    missing_id = SecureRandom.uuid
+
+    get "/api/v1/projects", params: { organization_id: missing_id }, headers: @headers
+
+    assert_response :not_found
+    assert_equal "Not found", response.parsed_body.fetch("error")
+
+    post "/api/v1/projects",
+      params: {
+        organization_id: missing_id,
+        title: "Missing Org Ruby",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'missing'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :not_found
+    assert_equal "Not found", response.parsed_body.fetch("error")
+  end
+
+  test "only platform mentors and admins can create organizations" do
+    post "/api/v1/organizations",
+      params: { name: "Student Org" }.to_json,
+      headers: @headers
+
+    assert_response :forbidden
+
+    mentor = User.create!(
+      clerk_id: "test_clerk_mentor",
+      email: "mentor@example.com",
+      first_name: "Test",
+      last_name: "Mentor",
+      role: :mentor
+    )
+    mentor_headers = {
+      "Authorization" => "Bearer test_token_#{mentor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations",
+      params: { name: "Mentor Org" }.to_json,
+      headers: mentor_headers
+
+    assert_response :created
+    organization = Organization.find(response.parsed_body.dig("organization", "id"))
+    assert_equal "Mentor Org", organization.name
+    assert organization.organization_memberships.find_by(user: mentor).owner?
+  end
+
+  test "accepting a stronger invitation updates an existing membership" do
+    instructor = User.create!(
+      clerk_id: "test_clerk_owner",
+      email: "owner@example.com",
+      first_name: "Org",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Code School", created_by: instructor)
+    organization.organization_memberships.create!(user: instructor, role: :owner)
+    membership = organization.organization_memberships.create!(user: @user, role: :student)
+    invitation = organization.organization_invitations.create!(
+      invited_by: instructor,
+      email: @user.email,
+      role: :instructor
+    )
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+
+    assert_response :success
+    assert_equal "instructor", membership.reload.role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
+  test "accepting an invitation with the wrong account does not expose invitee email" do
+    owner = User.create!(
+      clerk_id: "test_clerk_wrong_account_owner",
+      email: "wrong-account-owner@example.com",
+      first_name: "Wrong",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Wrong Account School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "private-invitee@example.com",
+      role: :student
+    )
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+
+    assert_response :forbidden
+    assert_equal "This invitation is for a different account.", response.parsed_body.fetch("error")
+    assert_no_match "private-invitee@example.com", response.body
+  end
+
+  test "accepting an invitation retries when membership is created concurrently" do
+    owner = User.create!(
+      clerk_id: "test_clerk_retry_owner",
+      email: "retry-owner@example.com",
+      first_name: "Retry",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Retry School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_lookup = OrganizationMembership.method(:find_or_initialize_by)
+    first_lookup = true
+
+    begin
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by) do |attributes|
+        unless first_lookup
+          next original_lookup.call(attributes)
+        end
+
+        first_lookup = false
+        membership = OrganizationMembership.new(attributes)
+        membership.define_singleton_method(:save!) do
+          OrganizationMembership.create!(
+            organization: attributes.fetch(:organization),
+            user: attributes.fetch(:user),
+            role: :student
+          )
+          raise ActiveRecord::RecordNotUnique, "membership already exists"
+        end
+        membership
+      end
+
+      post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+    ensure
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by, original_lookup)
+    end
+
+    assert_response :success
+    assert_equal "instructor", OrganizationMembership.find_by!(organization: organization, user: @user).role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
+  test "accepting an invitation succeeds when concurrent membership retries are exhausted" do
+    owner = User.create!(
+      clerk_id: "test_clerk_exhausted_owner",
+      email: "exhausted-owner@example.com",
+      first_name: "Exhausted",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Exhausted Retry School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_lookup = OrganizationMembership.method(:find_or_initialize_by)
+    attempts = 0
+
+    begin
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by) do |attributes|
+        if attempts < 2
+          attempts += 1
+          membership = OrganizationMembership.new(attributes)
+          membership.define_singleton_method(:save!) do
+            OrganizationMembership.find_or_create_by!(
+              organization: attributes.fetch(:organization),
+              user: attributes.fetch(:user)
+            ) { |existing| existing.role = :student }
+            raise ActiveRecord::RecordNotUnique, "membership already exists"
+          end
+          next membership
+        end
+
+        original_lookup.call(attributes)
+      end
+
+      post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+    ensure
+      OrganizationMembership.define_singleton_method(:find_or_initialize_by, original_lookup)
+    end
+
+    assert_response :success
+    assert_equal "instructor", OrganizationMembership.find_by!(organization: organization, user: @user).role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
+  test "accepting an invitation rolls back membership when marking accepted fails" do
+    owner = User.create!(
+      clerk_id: "test_clerk_atomic_owner",
+      email: "atomic-owner@example.com",
+      first_name: "Atomic",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Atomic School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: @user.email,
+      role: :instructor
+    )
+    original_update = OrganizationInvitation.instance_method(:update!)
+
+    begin
+      OrganizationInvitation.define_method(:update!) do |*args, **kwargs|
+        attributes = args.first || kwargs
+        if id == invitation.id && attributes.respond_to?(:key?) && attributes.key?(:accepted_at)
+          raise ActiveRecord::StatementInvalid, "transient accepted_at failure"
+        end
+
+        original_update.bind(self).call(*args, **kwargs)
+      end
+
+      assert_raises(ActiveRecord::StatementInvalid) do
+        post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
+      end
+    ensure
+      OrganizationInvitation.define_method(:update!, original_update)
+    end
+
+    assert_nil OrganizationMembership.find_by(organization: organization, user: @user)
+    assert_nil invitation.reload.accepted_at
+  end
+
+  test "accepting a weaker invitation does not downgrade an existing owner" do
+    owner = User.create!(
+      clerk_id: "test_clerk_direct_owner",
+      email: "owner-student@example.com",
+      first_name: "Direct",
+      last_name: "Owner"
+    )
+    organization = Organization.create!(name: "Code School", created_by: owner)
+    membership = organization.organization_memberships.create!(user: owner, role: :owner)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: owner.email,
+      role: :student
+    )
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: owner_headers
+
+    assert_response :success
+    assert_equal "owner", membership.reload.role
+    assert_not_nil invitation.reload.accepted_at
+  end
+
+  test "organization invitations reject invalid role and email cleanly" do
+    owner = User.create!(
+      clerk_id: "test_clerk_invite_owner",
+      email: "invite-owner@example.com",
+      first_name: "Invite",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Invite School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "student@example.com", role: "owner" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "Role is not valid" ], response.parsed_body.fetch("errors")
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "not-an-email", role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Email is invalid"
+
+    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
+    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+
+    begin
+      post "/api/v1/organizations/#{organization.id}/invite",
+        params: { email: "student@example.com", role: "student" }.to_json,
+        headers: owner_headers
+    ensure
+      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+    end
+
+    assert_response :created
+    invitation = response.parsed_body.fetch("invitation")
+    assert_equal "student@example.com", invitation.fetch("email")
+    assert_equal "student", invitation.fetch("role")
+    assert_equal false, invitation.fetch("email_sent")
+    assert_match "#invite=", invitation.fetch("invitation_url")
+
+    instructor = User.create!(
+      clerk_id: "test_clerk_invite_instructor",
+      email: "org-instructor@example.com",
+      first_name: "Org",
+      last_name: "Instructor"
+    )
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "peer-instructor@example.com", role: "instructor" }.to_json,
+      headers: instructor_headers
+
+    assert_response :forbidden
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "new-student@example.com", role: "student" }.to_json,
+      headers: instructor_headers
+
+    assert_response :created
+    assert_equal "student", response.parsed_body.dig("invitation", "role")
+
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "accepted@example.com",
+      role: :student,
+      accepted_at: Time.current
+    )
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "expired@example.com",
+      role: :student,
+      expires_at: 1.day.ago
+    )
+    organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "teacher@example.com",
+      role: :instructor
+    )
+
+    get "/api/v1/organizations/#{organization.id}/invitations", headers: owner_headers
+
+    assert_response :success
+    invitations = response.parsed_body.fetch("invitations")
+    assert_equal [ "teacher@example.com", "new-student@example.com", "student@example.com" ], invitations.map { |candidate| candidate.fetch("email") }
+    invitations.each do |pending_invitation|
+      assert pending_invitation.key?("token")
+      assert pending_invitation.key?("invitation_url")
+    end
+
+    get "/api/v1/organizations/#{organization.id}/invitations", headers: instructor_headers
+
+    assert_response :success
+    instructor_visible_invitations = response.parsed_body.fetch("invitations")
+    assert_equal [ "new-student@example.com", "student@example.com" ], instructor_visible_invitations.map { |candidate| candidate.fetch("email") }
+    assert_not_includes instructor_visible_invitations.map { |candidate| candidate.fetch("email") }, "teacher@example.com"
+
+    student_invitation_id = invitations.find { |candidate| candidate.fetch("email") == "student@example.com" }.fetch("id")
+    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
+    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+
+    begin
+      post "/api/v1/organizations/#{organization.id}/invitations/#{student_invitation_id}/resend",
+        headers: owner_headers
+    ensure
+      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+    end
+
+    assert_response :success
+    assert_equal false, response.parsed_body.dig("invitation", "email_sent")
+    assert_match "#invite=", response.parsed_body.dig("invitation", "invitation_url")
+
+    revoked_token = response.parsed_body.dig("invitation", "token")
+    delete "/api/v1/organizations/#{organization.id}/invitations/#{student_invitation_id}",
+      headers: owner_headers
+
+    assert_response :no_content
+
+    get "/api/v1/invitations/#{revoked_token}", headers: owner_headers
+
+    assert_response :not_found
+  end
+
+  test "production invitation origin does not silently fall back to localhost" do
+    old_frontend_url = ENV.delete("FRONTEND_URL")
+    old_app_url = ENV.delete("APP_URL")
+    old_rails_env = Rails.method(:env)
+    Rails.define_singleton_method(:env) { ActiveSupport::StringInquirer.new("production") }
+
+    assert_nil Api::V1::OrganizationsController.new.send(:frontend_origin)
+  ensure
+    Rails.define_singleton_method(:env, old_rails_env) if old_rails_env
+    ENV["FRONTEND_URL"] = old_frontend_url if old_frontend_url
+    ENV["APP_URL"] = old_app_url if old_app_url
+  end
+
+  test "organization owners can manage members and protect the final owner" do
+    owner = User.create!(
+      clerk_id: "test_clerk_member_owner",
+      email: "member-owner@example.com",
+      first_name: "Member",
+      last_name: "Owner",
+      role: :mentor
+    )
+    instructor = User.create!(
+      clerk_id: "test_clerk_member_instructor",
+      email: "member-instructor@example.com",
+      first_name: "Member",
+      last_name: "Instructor"
+    )
+    student = User.create!(
+      clerk_id: "test_clerk_member_student",
+      email: "member-student@example.com",
+      first_name: "Member",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Member School", created_by: owner)
+    owner_membership = organization.organization_memberships.create!(user: owner, role: :owner)
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    student_membership = organization.organization_memberships.create!(user: student, role: :student)
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      params: { role: "instructor" }.to_json,
+      headers: instructor_headers
+
+    assert_response :forbidden
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      params: { role: "instructor" }.to_json,
+      headers: owner_headers
+
+    assert_response :success
+    assert_equal "instructor", student_membership.reload.role
+    assert_equal "instructor", response.parsed_body.dig("member", "organization_role")
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{owner_membership.id}",
+      params: { role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "You cannot change your own organization role." ], response.parsed_body.fetch("errors")
+
+    delete "/api/v1/organizations/#{organization.id}/members/#{owner_membership.id}",
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "You cannot remove yourself from the organization." ], response.parsed_body.fetch("errors")
+
+    delete "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      headers: owner_headers
+
+    assert_response :no_content
+    assert_nil OrganizationMembership.find_by(id: student_membership.id)
+  end
+
+  test "organization students cannot view another student's private organization project" do
+    other_student = User.create!(
+      clerk_id: "test_clerk_2",
+      email: "other@example.com",
+      first_name: "Other",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Code School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    organization.organization_memberships.create!(user: other_student, role: :student)
+
+    private_project = @user.projects.create!(
+      organization: organization,
+      title: "Private Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'private'") ]
+    )
+
+    other_headers = {
+      "Authorization" => "Bearer test_token_#{other_student.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/projects/#{private_project.id}", headers: other_headers
+    assert_response :forbidden
+
+    private_project.update!(visibility: "organization")
+    get "/api/v1/projects/#{private_project.id}", headers: other_headers
+    assert_response :success
+  end
+
+  test "organization listings do not expose unlisted projects to student members" do
+    other_student = User.create!(
+      clerk_id: "test_clerk_unlisted_member",
+      email: "unlisted-member@example.com",
+      first_name: "Other",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Unlisted School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    organization.organization_memberships.create!(user: other_student, role: :student)
+    organization_project = @user.projects.create!(
+      organization: organization,
+      title: "Class Ruby",
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'class'") ]
+    )
+    unlisted_project = @user.projects.create!(
+      organization: organization,
+      title: "Link Only Ruby",
+      kind: "ruby",
+      visibility: "unlisted",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'link only'") ]
+    )
+    other_headers = {
+      "Authorization" => "Bearer test_token_#{other_student.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/projects", headers: other_headers
+    assert_response :success
+    assert_equal [ organization_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects", params: { organization_id: organization.id }, headers: other_headers
+    assert_response :success
+    assert_equal [ organization_project.id ], response.parsed_body.fetch("projects").map { |project| project.fetch("id") }
+
+    get "/api/v1/projects/#{unlisted_project.id}", headers: other_headers
+    assert_response :success
+  end
+
+  test "duplicating an unlisted org project outside the org creates a personal copy" do
+    outsider = User.create!(
+      clerk_id: "test_clerk_outsider",
+      email: "outsider@example.com",
+      first_name: "Outside",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Source School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    source_project = @user.projects.create!(
+      organization: organization,
+      title: "Shareable Ruby",
+      kind: "ruby",
+      visibility: "unlisted",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
+    )
+    outsider_headers = {
+      "Authorization" => "Bearer test_token_#{outsider.id}",
+      "Content-Type" => "application/json"
+    }
+
+    post "/api/v1/projects/#{source_project.id}/duplicate", headers: outsider_headers
+
+    assert_response :created
+    copy = Project.find(response.parsed_body.dig("project", "id"))
+    assert_equal outsider, copy.user
+    assert_nil copy.organization_id
+    assert_equal source_project, copy.forked_from
+  end
+
+  test "destroying an organization keeps formerly organization-visible projects valid" do
+    organization = Organization.create!(name: "Closing School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    project = @user.projects.create!(
+      organization: organization,
+      title: "Class Ruby",
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'bye'") ]
+    )
+
+    organization.destroy!
+
+    project.reload
+    assert_nil project.organization_id
+    assert_equal "private", project.visibility
+    assert_predicate project, :valid?
   end
 end

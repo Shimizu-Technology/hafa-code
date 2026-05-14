@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import MonacoEditor from '@monaco-editor/react'
-import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react'
 import {
   Archive,
   BookOpen,
@@ -27,10 +27,13 @@ import {
   RotateCcw,
   Rocket,
   Save,
+  Search,
+  Send,
   ShieldCheck,
   Square,
   Terminal,
   Trash2,
+  UserPlus,
   X,
   Zap,
 } from 'lucide-react'
@@ -43,6 +46,7 @@ import {
   type ProjectFile,
   type ProjectCheckpoint,
   type ProjectKind,
+  type ProjectVisibility,
   type RunnerLanguage,
   type SavedProject,
 } from './lib/codeRunner'
@@ -61,13 +65,22 @@ import {
   type ProjectLibrary,
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
-import { api } from './lib/api'
+import { api, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
 type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
 type FileDialogMode = 'create' | 'rename' | 'duplicate'
+type ThemePreference = 'system' | 'light' | 'dark'
+type ColorModePreference = 'default' | 'colorblind'
+type ClassroomTab = 'people' | 'invitations'
+type ShareDialogState = {
+  url: string
+  mode: 'server' | 'offline'
+  copied: boolean
+  error?: string | null
+} | null
 
 interface FileDialogState {
   mode: FileDialogMode
@@ -82,12 +95,55 @@ interface RunState {
   durationMs: number | null
 }
 
+type TerminalLine = {
+  id: string
+  kind: 'command' | 'stdout' | 'stderr' | 'input' | 'system'
+  text: string
+}
+
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 const PROJECT_FILE_LIMIT = 50
+const THEME_STORAGE_KEY = 'hafa-code-theme-v1'
+const COLOR_MODE_STORAGE_KEY = 'hafa-code-color-mode-v1'
 const kindLabels: Record<ProjectKind, string> = {
   ruby: 'Ruby',
   javascript: 'JavaScript',
   web: 'HTML/CSS/JS',
+}
+
+const visibilityLabels: Record<ProjectVisibility, string> = {
+  private: 'Private',
+  organization: 'Org',
+  unlisted: 'Unlisted',
+  public: 'Public',
+}
+
+const visibilityDescriptions: Record<ProjectVisibility, string> = {
+  private: 'Only you can edit or list it. In orgs, instructors and owners can view and run it.',
+  organization: 'Members of this org can find, view, and run it. Only you can edit it.',
+  unlisted: 'Anyone with the direct link can view and run it, but it is hidden from org lists.',
+  public: 'Anyone with access to Hafa Code can view and run it, and org members can find it in lists.',
+}
+
+function invitationUrl(token: string) {
+  return `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`
+}
+
+function readHashParam(name: string) {
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get(name)
+}
+
+function clearHashParam(name: string) {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  params.delete(name)
+  const nextHash = params.toString()
+  window.history.replaceState(null, '', `${window.location.pathname}${nextHash ? `#${nextHash}` : ''}`)
+}
+
+function projectOwnerLabel(project: SavedProject, currentUserId?: number) {
+  if (!project.owner) return ''
+  if (project.owner.id === currentUserId) return 'You'
+  return project.owner.fullName
 }
 
 function languageForFile(file: ProjectFile) {
@@ -177,6 +233,24 @@ function formatCheckpointTime(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
+function subscribeSystemTheme(callback: () => void) {
+  const query = window.matchMedia('(prefers-color-scheme: dark)')
+  query.addEventListener('change', callback)
+  return () => query.removeEventListener('change', callback)
+}
+
+function getSystemThemeSnapshot() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function getServerSystemThemeSnapshot() {
+  return false
+}
+
+function useSystemDarkMode() {
+  return useSyncExternalStore(subscribeSystemTheme, getSystemThemeSnapshot, getServerSystemThemeSnapshot)
+}
+
 function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notice: string } {
   const library = loadProjectLibrary()
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
@@ -197,20 +271,47 @@ function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notic
 
 function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const [runState, setRunState] = useState<RunState>(emptyRunState)
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
+  const [terminalInput, setTerminalInput] = useState('')
+  const [awaitingInput, setAwaitingInput] = useState(false)
   const workerRef = useRef<Worker | null>(null)
   const timeoutRef = useRef<number | null>(null)
   const runIdRef = useRef<string | null>(null)
   const runRef = useRef<() => void>(() => {})
+  const armExecutionTimeoutRef = useRef<() => void>(() => {})
+  const outputEmittedRef = useRef(false)
+  const terminalScrollRef = useRef<HTMLDivElement | null>(null)
+  const terminalInputRef = useRef<HTMLInputElement | null>(null)
 
-  const stopWorker = () => {
-    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-    timeoutRef.current = null
-    workerRef.current?.terminate()
-    workerRef.current = null
-    runIdRef.current = null
+  const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
+    setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
   }
 
-  useEffect(() => stopWorker, [])
+  const clearRunTimer = useCallback(() => {
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+    timeoutRef.current = null
+  }, [])
+
+  const stopWorker = useCallback(() => {
+    clearRunTimer()
+    const worker = workerRef.current
+    const runId = runIdRef.current
+    if (worker && runId) worker.postMessage({ id: runId, type: 'abort' })
+    window.setTimeout(() => worker?.terminate(), 0)
+    workerRef.current = null
+    runIdRef.current = null
+    setAwaitingInput(false)
+  }, [clearRunTimer])
+
+  useEffect(() => stopWorker, [stopWorker])
+
+  useEffect(() => {
+    terminalScrollRef.current?.scrollTo({ top: terminalScrollRef.current.scrollHeight })
+  }, [terminalLines, awaitingInput])
+
+  useEffect(() => {
+    if (awaitingInput) terminalInputRef.current?.focus()
+  }, [awaitingInput])
 
   const run = () => {
     if (project.kind === 'web') return
@@ -222,6 +323,16 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
     workerRef.current = worker
     runIdRef.current = runId
+    outputEmittedRef.current = false
+    setAwaitingInput(false)
+    setTerminalInput('')
+    setTerminalLines([
+      {
+        id: crypto.randomUUID(),
+        kind: 'command',
+        text: project.kind === 'ruby' ? `ruby ${entryFile.path}` : `node ${entryFile.path}`,
+      },
+    ])
     setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
 
     timeoutRef.current = window.setTimeout(() => {
@@ -229,23 +340,46 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
       setRunState({ status: 'timeout', stdout: '', stderr: 'Code runner did not start in time.', durationMs: Math.round(performance.now() - startedAt) })
     }, 30_000)
 
-    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'result'; stdout?: string; stderr?: string; durationMs?: number }>) => {
+    const armExecutionTimeout = () => {
+      clearRunTimer()
+      timeoutRef.current = window.setTimeout(() => {
+        stopWorker()
+        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
+        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
+      }, RUNNER_TIMEOUT_MS + 250)
+    }
+    armExecutionTimeoutRef.current = armExecutionTimeout
+
+    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'output' | 'input_request' | 'result'; stream?: 'stdout' | 'stderr'; text?: string; stdout?: string; stderr?: string; durationMs?: number }>) => {
       if (event.data.id !== runIdRef.current) return
 
       if (event.data.type === 'started') {
-        if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-        timeoutRef.current = window.setTimeout(() => {
-          stopWorker()
-          setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
-        }, RUNNER_TIMEOUT_MS + 250)
+        armExecutionTimeout()
         return
       }
 
-      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
+      if (event.data.type === 'output') {
+        outputEmittedRef.current = true
+        appendTerminalLine({ kind: event.data.stream === 'stderr' ? 'stderr' : 'stdout', text: event.data.text ?? '' })
+        return
+      }
+
+      if (event.data.type === 'input_request') {
+        clearRunTimer()
+        setAwaitingInput(true)
+        return
+      }
+
+      clearRunTimer()
       workerRef.current?.terminate()
       workerRef.current = null
       runIdRef.current = null
+      setAwaitingInput(false)
+
+      if (!outputEmittedRef.current) {
+        if (event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
+        if (event.data.stderr) appendTerminalLine({ kind: 'stderr', text: event.data.stderr })
+      }
 
       const stderr = event.data.stderr ?? ''
       setRunState({
@@ -258,6 +392,7 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
     worker.onerror = (event) => {
       stopWorker()
+      appendTerminalLine({ kind: 'stderr', text: event.message || 'Runner failed.' })
       setRunState({ status: 'error', stdout: '', stderr: event.message || 'Runner failed.', durationMs: Math.round(performance.now() - startedAt) })
     }
 
@@ -277,6 +412,29 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
 
   const outputIsEmpty = !runState.stdout && !runState.stderr
 
+  const submitTerminalInput = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!awaitingInput || !workerRef.current || !runIdRef.current) return
+
+    const value = terminalInput
+    appendTerminalLine({ kind: 'input', text: value })
+    setTerminalInput('')
+    setAwaitingInput(false)
+    workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value })
+    armExecutionTimeoutRef.current()
+  }
+
+  const stopRun = () => {
+    stopWorker()
+    appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
+    setRunState((current) => ({
+      status: 'timeout',
+      stdout: current.stdout,
+      stderr: current.stderr || 'Execution stopped.',
+      durationMs: current.durationMs,
+    }))
+  }
+
   useEffect(() => {
     const handleRunRequest = () => runRef.current()
     window.addEventListener('hafa-code-run-active-project', handleRunRequest)
@@ -292,10 +450,7 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
           <p className="helper-text">Runs locally in a worker with a {RUNNER_TIMEOUT_MS / 1000}s guardrail.</p>
         </div>
         {runState.status === 'running' ? (
-          <button className="secondary" onClick={() => {
-            stopWorker()
-            setRunState((current) => ({ ...current, status: 'timeout', stderr: current.stderr || 'Execution stopped.' }))
-          }}>
+          <button className="secondary" onClick={stopRun}>
             <Square size={16} /> Stop
           </button>
         ) : (
@@ -304,20 +459,36 @@ function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile:
           </button>
         )}
       </div>
-      <div className="terminal">
-        {runState.status === 'running' && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
-        {runState.status !== 'running' && outputIsEmpty && (
+      <div className="terminal" ref={terminalScrollRef}>
+        {runState.status === 'running' && terminalLines.length <= 1 && !awaitingInput && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
+        {runState.status !== 'running' && outputIsEmpty && terminalLines.length === 0 && (
           <div className="empty-output">
             <Zap size={28} />
-            <p>Press Run to see stdout and errors here.</p>
+            <p>Press Run to start a browser terminal session.</p>
           </div>
         )}
-        {runState.stdout && <pre>{runState.stdout}</pre>}
-        {runState.stderr && <pre className="error-text">{runState.stderr}</pre>}
+        {terminalLines.map((line) => (
+          <pre key={line.id} className={`terminal-line ${line.kind}`}>{line.text}</pre>
+        ))}
+        {awaitingInput && (
+          <form className="terminal-input-row" onSubmit={submitTerminalInput}>
+            <span aria-hidden="true">&gt;</span>
+            <input
+              ref={terminalInputRef}
+              value={terminalInput}
+              onChange={(event) => setTerminalInput(event.target.value)}
+              placeholder="Type input, then press Enter"
+              aria-label="Program input"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </form>
+        )}
       </div>
       <div className="terminal-footer">
-        <span>{runState.status === 'idle' ? 'Ready' : runState.status}</span>
-        <span>{runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
+        <span>{awaitingInput ? 'waiting for input' : runState.status === 'idle' ? 'Ready' : runState.status}</span>
+        <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
       </div>
     </section>
   )
@@ -441,7 +612,7 @@ function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: str
   )
 }
 
-function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
+function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
   const { isLoaded } = useAuth()
   const [loadTimedOut, setLoadTimedOut] = useState(false)
 
@@ -460,7 +631,7 @@ function AuthControls({ cloudEnabled }: { cloudEnabled: boolean }) {
     return <span className="cloud-pill muted"><Cloud size={15} /> Cloud sign-in unavailable</span>
   }
 
-  if (!isLoaded) {
+  if (!isLoaded || sessionLoading) {
     return <span className="cloud-pill muted"><Loader2 className="spin" size={15} /> Loading sign-in</span>
   }
 
@@ -496,14 +667,25 @@ async function writeClipboardText(text: string) {
   }
 }
 
-function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary): ProjectLibrary {
-  const localOnlyProjects = localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
+function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary, organizationId: string | null): ProjectLibrary {
+  const localOnlyProjects = organizationId ? [] : localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
   const projects = [...cloudProjects, ...localOnlyProjects]
-  const activeProjectId = projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
+  if (projects.length === 0) return localLibrary
+  const activeProjectId = organizationId && cloudProjects.length > 0
+    ? cloudProjects[0].id
+    : projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
     ? localLibrary.activeProjectId
     : projects[0].id
 
   return { activeProjectId, projects }
+}
+
+function projectContextMatches(project: SavedProject, organizationId: string | null) {
+  return organizationId ? project.organizationId === organizationId : !project.organizationId
+}
+
+function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
+  return organizationId ? ['private', 'organization', 'unlisted', 'public'] : ['private', 'unlisted', 'public']
 }
 
 function useResponsiveEditorFontSize() {
@@ -521,6 +703,15 @@ function useResponsiveEditorFontSize() {
   return fontSize
 }
 
+function loadThemePreference(): ThemePreference {
+  const value = localStorage.getItem(THEME_STORAGE_KEY)
+  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+}
+
+function loadColorModePreference(): ColorModePreference {
+  return localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'colorblind' ? 'colorblind' : 'default'
+}
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
@@ -535,6 +726,23 @@ export default function App() {
   const [pendingCheckpoint, setPendingCheckpoint] = useState<ProjectCheckpoint | null>(null)
   const [fileDialog, setFileDialog] = useState<FileDialogState | null>(null)
   const [fileDialogError, setFileDialogError] = useState('')
+  const [shareDialog, setShareDialog] = useState<ShareDialogState>(null)
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
+  const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
+  const [orgInvitations, setOrgInvitations] = useState<CloudOrgInvitation[]>([])
+  const [inviteEmailDraft, setInviteEmailDraft] = useState('')
+  const [inviteRoleDraft, setInviteRoleDraft] = useState<CloudOrgInvitation['role']>('student')
+  const [lastInviteUrl, setLastInviteUrl] = useState('')
+  const [classroomTab, setClassroomTab] = useState<ClassroomTab>('people')
+  const [memberSearchDraft, setMemberSearchDraft] = useState('')
+  const [pendingInvitationToken, setPendingInvitationToken] = useState(() => readHashParam('invite'))
+  const [pendingInvitation, setPendingInvitation] = useState<CloudOrgInvitation | null>(null)
+  const [invitationAccepting, setInvitationAccepting] = useState(false)
+  const [instructorPanelOpen, setInstructorPanelOpen] = useState(false)
+  const [orgCreateOpen, setOrgCreateOpen] = useState(false)
+  const [orgNameDraft, setOrgNameDraft] = useState('')
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadThemePreference())
+  const [colorModePreference, setColorModePreference] = useState<ColorModePreference>(() => loadColorModePreference())
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
@@ -544,19 +752,50 @@ export default function App() {
   const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
   const syncTimerRef = useRef<number | null>(null)
   const replacingCloudIdRef = useRef(false)
+  const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
-  const { isSignedIn, user } = useAuthContext()
+  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
+  const systemDark = useSystemDarkMode()
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
   const archivedProjects = library.projects.filter(isArchived)
-  const visibleProjects = showArchived ? archivedProjects : activeProjects
+  const activeContextProjects = activeProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+  const archivedContextProjects = archivedProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+  const visibleProjects = showArchived ? archivedContextProjects : activeContextProjects
   const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
+  const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
+    ? {
+        id: pendingInvitation.organization.id,
+        name: pendingInvitation.organization.name,
+        slug: pendingInvitation.organization.slug,
+        role: pendingInvitation.role,
+      }
+    : null
+  const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? optimisticInvitationOrganization
+  const workspaceIsSettling = cloudEnabled && authLoading
+  const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canManageOrgMembers = activeOrganization?.role === 'owner' || user?.role === 'admin'
+  const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
+  const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
+  const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
+  const pendingInvitations = orgInvitations.filter((invitation) => !invitation.accepted_at)
+  const memberSearch = memberSearchDraft.trim().toLowerCase()
+  const filteredOrgMembers = orgMembers.filter((member) => {
+    if (!memberSearch) return true
+    return [member.full_name, member.email, member.organization_role]
+      .some((value) => value.toLowerCase().includes(memberSearch))
+  })
+  const inviteRequiresAuth = Boolean(pendingInvitationToken && pendingInvitation && !isSignedIn)
+  const resolvedTheme = themePreference === 'system'
+    ? (systemDark ? 'dark' : 'light')
+    : themePreference
 
   const activateProject = (nextProject: SavedProject) => {
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
@@ -583,6 +822,14 @@ export default function App() {
   }, [library])
 
   useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+  }, [themePreference])
+
+  useEffect(() => {
+    localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+  }, [colorModePreference])
+
+  useEffect(() => {
     const requestId = checkpointRequestIdRef.current + 1
     checkpointRequestIdRef.current = requestId
     let cancelled = false
@@ -606,8 +853,7 @@ export default function App() {
   useEffect(() => {
     if (hasImportedServerShare) return
 
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    const shareToken = params.get('share')
+    const shareToken = readHashParam('share')
     if (!shareToken) return
 
     api.getShare(shareToken).then((res) => {
@@ -625,11 +871,59 @@ export default function App() {
   }, [hasImportedServerShare])
 
   useEffect(() => {
+    if (!pendingInvitationToken) return
+
+    api.getInvitation(pendingInvitationToken).then((res) => {
+      if (res.data) {
+        setPendingInvitation(res.data)
+      } else {
+        setNotice(`Could not load invitation: ${res.error || 'unknown error'}`)
+        setPendingInvitationToken(null)
+        clearHashParam('invite')
+      }
+    })
+  }, [pendingInvitationToken])
+
+  useEffect(() => {
+    if (!pendingInvitationToken || !isSignedIn || invitationAccepting) return
+    if (acceptingInvitationTokenRef.current === pendingInvitationToken) return
+
+    acceptingInvitationTokenRef.current = pendingInvitationToken
+    queueMicrotask(() => setInvitationAccepting(true))
+    api.acceptInvitation(pendingInvitationToken).then(async (res) => {
+      if (res.data) {
+        await syncSession()
+        setActiveOrganizationId(String(res.data.id))
+        setPendingInvitationToken(null)
+        setPendingInvitation(null)
+        clearHashParam('invite')
+        setNotice(`Joined ${res.data.name}.`)
+      } else {
+        setNotice(`Could not accept invitation: ${res.error || 'unknown error'}`)
+        setPendingInvitationToken(null)
+      }
+    }).finally(() => {
+      acceptingInvitationTokenRef.current = null
+      setInvitationAccepting(false)
+    })
+  }, [invitationAccepting, isSignedIn, pendingInvitationToken, syncSession])
+
+  useEffect(() => {
     if (!notice) return
 
     const timeout = window.setTimeout(() => setNotice(''), 4_500)
     return () => window.clearTimeout(timeout)
   }, [notice])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setHasLoadedCloudProjects(false)
+      setInstructorPanelOpen(false)
+      setOrgMembers([])
+      setOrgInvitations([])
+      setLastInviteUrl('')
+    })
+  }, [activeOrganizationId])
 
   useEffect(() => {
     if (!checkpointMenuOpen) return undefined
@@ -652,29 +946,65 @@ export default function App() {
   }, [checkpointMenuOpen])
 
   useEffect(() => {
+    if (!isSignedIn || !activeOrganizationId || !canUseInstructorPanel) return
+
+    api.getOrgMembers(activeOrganizationId).then((res) => {
+      if (res.data) setOrgMembers(res.data)
+      if (res.error) setNotice(`Could not load organization roster: ${res.error}`)
+    })
+  }, [activeOrganizationId, canUseInstructorPanel, isSignedIn])
+
+  useEffect(() => {
+    if (!isSignedIn || !activeOrganizationId || !canInviteOrgMembers) return
+
+    api.getOrgInvitations(activeOrganizationId).then((res) => {
+      if (res.data) setOrgInvitations(res.data)
+      if (res.error) setNotice(`Could not load invitations: ${res.error}`)
+    })
+  }, [activeOrganizationId, canInviteOrgMembers, isSignedIn])
+
+  useEffect(() => {
     if (!isSignedIn || hasLoadedCloudProjects) return
 
-    api.getProjects().then((res) => {
+    api.getProjects(activeOrganizationId).then((res) => {
       if (res.error) {
         setNotice(`Cloud sync unavailable: ${res.error}`)
+        setHasLoadedCloudProjects(true)
         return
       }
       if (res.data && res.data.length > 0) {
-        const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current)
+        const remainingContextProjects = libraryRef.current.projects.filter((candidate) => !projectContextMatches(candidate, activeOrganizationId))
+        const baseLibrary = { ...libraryRef.current, projects: remainingContextProjects }
+        const merged = mergeCloudAndLocalProjects(res.data, baseLibrary, activeOrganizationId)
         const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
-        setNotice(`Loaded ${res.data.length} cloud project${res.data.length === 1 ? '' : 's'} and kept local drafts.`)
+        setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
       } else {
-        setNotice('Signed in. Local projects will sync to your account as you edit.')
+        if (activeOrganizationId) {
+          const contextProjects = libraryRef.current.projects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
+          if (contextProjects.length === 0) {
+            const next = createProject('ruby', `${activeOrganization?.name || 'Org'} Ruby Playground`)
+            const orgProject = {
+              ...next,
+              organizationId: activeOrganizationId,
+              organization: activeOrganization,
+              visibility: 'private' as ProjectVisibility,
+            }
+            setLibrary((current) => ({ activeProjectId: orgProject.id, projects: [orgProject, ...current.projects] }))
+            setActivePath(orgProject.files[0].path)
+          }
+        } else {
+          setNotice('Signed in. Local projects will sync to your account as you edit.')
+        }
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, hasLoadedCloudProjects, isSignedIn])
 
   useEffect(() => {
-    if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current) return
+    if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
     if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
 
     syncTimerRef.current = window.setTimeout(async () => {
@@ -701,7 +1031,7 @@ export default function App() {
     return () => {
       if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
     }
-  }, [hasLoadedCloudProjects, isSignedIn, library, project])
+  }, [canEditProject, hasLoadedCloudProjects, isSignedIn, library, project])
 
   const setActiveProject = (projectId: string) => {
     const nextProject = library.projects.find((candidate) => candidate.id === projectId)
@@ -711,7 +1041,13 @@ export default function App() {
   }
 
   const addProject = (kind: ProjectKind) => {
-    const next = createProject(kind)
+    const starter = createProject(kind)
+    const next = {
+      ...starter,
+      organizationId: activeOrganizationId,
+      organization: activeOrganization,
+      visibility: 'private' as ProjectVisibility,
+    }
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
@@ -719,8 +1055,132 @@ export default function App() {
     setNotice(`${next.title} created.`)
   }
 
+  const updateProjectVisibility = (visibility: ProjectVisibility) => {
+    updateCurrentProject((currentProject) => ({
+      ...currentProject,
+      visibility,
+      updatedAt: new Date().toISOString(),
+    }))
+    setNotice(`Visibility set to ${visibilityLabels[visibility]}.`)
+  }
+
+  const createOrganization = async () => {
+    const name = orgNameDraft.trim()
+    if (!name) {
+      setNotice('Enter an organization name.')
+      return
+    }
+
+    const res = await api.createOrganization(name)
+    if (res.error || !res.data) {
+      setNotice(`Could not create organization: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    await syncSession()
+    setActiveOrganizationId(String(res.data.id))
+    setOrgNameDraft('')
+    setOrgCreateOpen(false)
+    setNotice(`${res.data.name} created.`)
+  }
+
+  const inviteOrgMember = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeOrganizationId) return
+
+    const email = inviteEmailDraft.trim().toLowerCase()
+    if (!email) {
+      setNotice('Enter an email address to invite.')
+      return
+    }
+
+    const role = canManageOrgMembers ? inviteRoleDraft : 'student'
+    const res = await api.createOrgInvitation(activeOrganizationId, email, role)
+    if (res.error || !res.data) {
+      setNotice(`Could not create invitation: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    const url = res.data.invitation_url || invitationUrl(res.data.token)
+    setOrgInvitations((current) => [res.data!, ...current.filter((candidate) => candidate.id !== res.data!.id)])
+    setInviteEmailDraft('')
+    setInviteRoleDraft('student')
+    setLastInviteUrl(url)
+    const copied = await writeClipboardText(url)
+    if (res.data.email_sent) {
+      setNotice(copied ? 'Invitation email sent. Backup link copied.' : 'Invitation email sent. Backup link is in the classroom panel.')
+    } else {
+      setNotice(copied ? 'Invitation created. Email is not configured yet, so the link was copied.' : 'Invitation created. Email is not configured yet, so copy the link from the classroom panel.')
+    }
+    setClassroomTab('invitations')
+  }
+
+  const copyInvitationLink = async (invitation: CloudOrgInvitation) => {
+    const url = invitation.invitation_url || invitationUrl(invitation.token)
+    const copied = await writeClipboardText(url)
+    setLastInviteUrl(url)
+    setNotice(copied ? 'Invitation link copied.' : 'Clipboard blocked. Select the invitation link to copy it.')
+  }
+
+  const resendInvitation = async (invitation: CloudOrgInvitation) => {
+    if (!activeOrganizationId || !invitation.id) return
+
+    const res = await api.resendOrgInvitation(activeOrganizationId, invitation.id)
+    if (res.error || !res.data) {
+      setNotice(`Could not resend invitation: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    const url = res.data.invitation_url || invitationUrl(res.data.token)
+    setOrgInvitations((current) => current.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate))
+    setLastInviteUrl(url)
+    setNotice(res.data.email_sent ? 'Invitation email resent.' : 'Invitation resent link is ready, but email is not configured yet.')
+  }
+
+  const revokeInvitation = async (invitation: CloudOrgInvitation) => {
+    if (!activeOrganizationId || !invitation.id) return
+    if (!window.confirm(`Revoke the invitation for ${invitation.email}? The current link will stop working.`)) return
+
+    const res = await api.deleteOrgInvitation(activeOrganizationId, invitation.id)
+    if (res.error) {
+      setNotice(`Could not revoke invitation: ${res.error}`)
+      return
+    }
+
+    setOrgInvitations((current) => current.filter((candidate) => candidate.id !== invitation.id))
+    if (lastInviteUrl.includes(invitation.token)) setLastInviteUrl('')
+    setNotice('Invitation revoked.')
+  }
+
+  const updateOrgMemberRole = async (member: CloudOrgMember, role: CloudOrgMember['organization_role']) => {
+    if (!activeOrganizationId || role === member.organization_role) return
+
+    const res = await api.updateOrgMember(activeOrganizationId, member.membership_id, role)
+    if (res.error || !res.data) {
+      setNotice(`Could not update member: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    setOrgMembers((current) => current.map((candidate) => candidate.membership_id === res.data!.membership_id ? res.data! : candidate))
+    setNotice(`${res.data.full_name} is now ${res.data.organization_role}.`)
+  }
+
+  const removeOrgMember = async (member: CloudOrgMember) => {
+    if (!activeOrganizationId) return
+    if (!window.confirm(`Remove ${member.full_name} from ${activeOrganization?.name || 'this organization'}? Their projects stay in the workspace, but they lose organization access.`)) return
+
+    const res = await api.deleteOrgMember(activeOrganizationId, member.membership_id)
+    if (res.error) {
+      setNotice(`Could not remove member: ${res.error}`)
+      return
+    }
+
+    setOrgMembers((current) => current.filter((candidate) => candidate.membership_id !== member.membership_id))
+    setNotice(`${member.full_name} removed from ${activeOrganization?.name || 'organization'}.`)
+  }
+
   const requestArchiveProject = () => {
-    if (activeProjects.length <= 1) {
+    if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
     }
@@ -779,7 +1239,7 @@ export default function App() {
   }
 
   const archiveProject = async () => {
-    if (activeProjects.length <= 1) {
+    if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
     }
@@ -859,6 +1319,7 @@ export default function App() {
   }
 
   const renameProject = (title: string) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id
@@ -868,6 +1329,7 @@ export default function App() {
   }
 
   const updateActiveFile = (content: string) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id
@@ -881,6 +1343,7 @@ export default function App() {
   }
 
   const updateCurrentProject = (updater: (currentProject: SavedProject) => SavedProject) => {
+    if (!canEditProject) return
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id ? updater(candidate) : candidate),
@@ -1093,15 +1556,18 @@ export default function App() {
       ? `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
       : `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
     const didCopy = await writeClipboardText(url)
-    if (!didCopy) {
-      window.prompt('Copy this share link:', url)
-    }
+    setShareDialog({
+      url,
+      mode: share.data ? 'server' : 'offline',
+      copied: didCopy,
+      error: share.error,
+    })
     if (share.data) {
-      setNotice(didCopy ? 'Share snapshot link copied.' : 'Clipboard was blocked, so I opened a copyable share link.')
+      setNotice(didCopy ? 'Share snapshot link copied.' : 'Share snapshot link is ready to copy.')
     } else {
       setNotice(didCopy
         ? `Offline share link copied.${share.error ? ` Server share failed: ${share.error}` : ''}`
-        : 'Clipboard was blocked, so I opened a copyable share link.')
+        : 'Offline share link is ready to copy.')
     }
   }
 
@@ -1121,7 +1587,11 @@ export default function App() {
   }
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} mobile-tab-${mobileTab}`}>
+    <main
+      className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} ${inviteRequiresAuth ? 'invite-auth-mode' : ''} mobile-tab-${mobileTab}`}
+      data-theme={resolvedTheme}
+      data-color-mode={colorModePreference}
+    >
       <header className="hero panel hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
@@ -1138,12 +1608,12 @@ export default function App() {
           <div className="orbit orbit-two" />
           <div className="hero-card-inner">
             <Layers3 size={26} />
-            <strong>{activeProjects.length}</strong>
+            <strong>{activeContextProjects.length}</strong>
             <span>{isSignedIn ? 'active cloud projects' : 'active local projects'}</span>
           </div>
         </div>
         <div className="hero-actions desktop-hero-actions">
-          <AuthControls cloudEnabled={cloudEnabled} />
+          <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
           <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
           <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
           <button onClick={copyShareLink}><Copy size={16} /> Share</button>
@@ -1155,7 +1625,7 @@ export default function App() {
             <strong>{isSignedIn ? 'Cloud on' : 'Local only'}</strong>
           </summary>
           <div className="mobile-actions-content">
-            <AuthControls cloudEnabled={cloudEnabled} />
+            <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
             <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
             <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
             <button onClick={copyShareLink}><Copy size={16} /> Share</button>
@@ -1170,6 +1640,260 @@ export default function App() {
         </div>
       )}
 
+      {pendingInvitationToken && pendingInvitation && (
+        <section className={`invite-accept-panel panel surface-grid${inviteRequiresAuth ? ' invite-accept-panel-focused' : ''}`} aria-label="Organization invitation">
+          <div>
+            <p className="eyebrow">Invitation</p>
+            <h2>{pendingInvitation.organization?.name || 'Organization'} invited you as {pendingInvitation.role === 'instructor' ? 'an instructor' : 'a student'}</h2>
+            <p className="helper-text">
+              {isSignedIn
+                ? invitationAccepting ? 'Accepting your invitation...' : `Signed in as ${user?.email || 'your account'}.`
+                : 'Sign in or create your account with the invited email, then this invitation will be accepted here.'}
+            </p>
+          </div>
+          {!isSignedIn && (
+            <div className="invite-auth-actions">
+              <SignInButton mode="modal">
+                <button className="secondary" type="button"><Cloud size={16} /> Sign in</button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button type="button"><UserPlus size={16} /> Create account</button>
+              </SignUpButton>
+            </div>
+          )}
+          {isSignedIn && invitationAccepting && <Loader2 className="spin" size={20} />}
+        </section>
+      )}
+
+      {!inviteRequiresAuth && (
+      <>
+      <section className="context-bar panel surface-grid" aria-label="Project context">
+        <div className="context-copy">
+          <p className="eyebrow">Workspace</p>
+          <h2>{activeOrganization ? activeOrganization.name : 'Personal projects'}</h2>
+          <p className="helper-text">
+            {activeOrganization
+              ? `${activeOrganization.role} workspace. Private projects are still visible to instructors.`
+              : 'Your own projects, separate from any classroom or organization.'}
+          </p>
+        </div>
+        <div className="context-actions">
+          <div className="workspace-toolbar" aria-label="Workspace actions">
+            <label className="workspace-select-label" htmlFor="workspace-select">
+              <span>Switch workspace</span>
+              <select
+                id="workspace-select"
+                className="workspace-select"
+                disabled={workspaceIsSettling}
+                value={activeOrganizationId ?? 'personal'}
+                onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
+              >
+                <option value="personal">Personal projects</option>
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isSignedIn && canCreateOrganization ? (
+              <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
+                <Plus size={14} /> Org
+              </button>
+            ) : (
+              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
+            )}
+            {activeOrganization && canUseInstructorPanel ? (
+              <button
+                className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
+                type="button"
+                onClick={() => setInstructorPanelOpen((current) => !current)}
+              >
+                <ShieldCheck size={14} /> Classroom
+              </button>
+            ) : (
+              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
+            )}
+          </div>
+        </div>
+        <div className="preference-actions" aria-label="Display preferences">
+          <button className={themePreference === 'system' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('system')}>System</button>
+          <button className={themePreference === 'light' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('light')}>Light</button>
+          <button className={themePreference === 'dark' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('dark')}>Dark</button>
+          <button
+            className={colorModePreference === 'colorblind' ? 'active' : 'secondary'}
+            type="button"
+            onClick={() => setColorModePreference((current) => current === 'colorblind' ? 'default' : 'colorblind')}
+          >
+            Color-safe
+          </button>
+        </div>
+      </section>
+
+      {instructorPanelOpen && activeOrganization && (
+        <section className="instructor-panel panel surface-grid">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Classroom</p>
+              <h2><ShieldCheck size={18} /> {activeOrganization.name}</h2>
+              <p className="helper-text">{orgMembers.length} member{orgMembers.length === 1 ? '' : 's'} · {pendingInvitations.length} pending invite{pendingInvitations.length === 1 ? '' : 's'}</p>
+            </div>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => setInstructorPanelOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="classroom-tabs" role="tablist" aria-label="Classroom tools">
+            <button
+              className={classroomTab === 'people' ? 'active' : 'secondary'}
+              type="button"
+              role="tab"
+              aria-selected={classroomTab === 'people'}
+              onClick={() => setClassroomTab('people')}
+            >
+              People
+            </button>
+            <button
+              className={classroomTab === 'invitations' ? 'active' : 'secondary'}
+              type="button"
+              role="tab"
+              aria-selected={classroomTab === 'invitations'}
+              onClick={() => setClassroomTab('invitations')}
+            >
+              Invitations
+            </button>
+          </div>
+          {classroomTab === 'invitations' && canInviteOrgMembers && (
+            <div className="invite-workflow">
+              <form className="invite-form" onSubmit={inviteOrgMember}>
+                <label className="file-path-field" htmlFor="invite-email">
+                  <span>Email</span>
+                  <input
+                    id="invite-email"
+                    value={inviteEmailDraft}
+                    onChange={(event) => setInviteEmailDraft(event.target.value)}
+                    placeholder="student@example.com"
+                    type="email"
+                  />
+                </label>
+                <label className="file-path-field" htmlFor="invite-role">
+                  <span>Role</span>
+                  <select id="invite-role" value={canManageOrgMembers ? inviteRoleDraft : 'student'} onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}>
+                    <option value="student">Student</option>
+                    {canManageOrgMembers && <option value="instructor">Instructor</option>}
+                  </select>
+                </label>
+                <button type="submit"><Send size={16} /> Send invite</button>
+              </form>
+              <p className="helper-text">Hafa Code emails the invitation when email is configured, and keeps the link here as a backup. New students create a personal account first, then join this workspace.</p>
+              {lastInviteUrl && (
+                <label className="file-path-field invite-link-field" htmlFor="last-invite-url">
+                  <span>Latest invite link</span>
+                  <input id="last-invite-url" readOnly value={lastInviteUrl} onFocus={(event) => event.currentTarget.select()} />
+                </label>
+              )}
+            </div>
+          )}
+          {classroomTab === 'invitations' && canInviteOrgMembers && orgInvitations.length > 0 && (
+            <div className="pending-invite-list" aria-label="Pending invitations">
+              <div className="section-row">
+                <strong>Invitations</strong>
+                <small>{pendingInvitations.length} pending</small>
+              </div>
+              {orgInvitations.slice(0, 6).map((invitation) => (
+                <div key={invitation.id ?? invitation.token} className="invite-row">
+                  <div>
+                    <strong>{invitation.email}</strong>
+                    <small>{invitation.role}{invitation.accepted_at ? ' · accepted' : ' · pending'}</small>
+                  </div>
+                  {!invitation.accepted_at && (
+                    <div className="invite-actions">
+                      <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation)}>
+                        <Copy size={14} /> Copy link
+                      </button>
+                      <button className="secondary compact" type="button" onClick={() => resendInvitation(invitation)}>
+                        <Send size={14} /> Resend
+                      </button>
+                      <button className="danger compact" type="button" onClick={() => revokeInvitation(invitation)}>
+                        <Trash2 size={14} /> Revoke
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {classroomTab === 'people' && (
+          <div className="people-panel">
+            <label className="classroom-search" htmlFor="member-search">
+              <Search size={16} />
+              <input
+                id="member-search"
+                value={memberSearchDraft}
+                onChange={(event) => setMemberSearchDraft(event.target.value)}
+                placeholder="Search people by name, email, or role"
+              />
+            </label>
+            <div className="member-list" aria-label="Organization members">
+            {filteredOrgMembers.length === 0 && (
+              <p className="empty-project-list">{orgMembers.length === 0 ? 'No members in this organization yet.' : 'No people match that search.'}</p>
+            )}
+            {filteredOrgMembers.map((member) => {
+              const memberProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
+              const isCurrentMember = member.id === user?.id
+              return (
+                <article key={member.id} className="member-row">
+                  <div className="member-main">
+                    <strong>{member.full_name}</strong>
+                    <small>{member.email}</small>
+                    <div className="member-badges">
+                      <span>{member.organization_role}</span>
+                      {isCurrentMember && <span>You</span>}
+                    </div>
+                  </div>
+                  <span className="member-count">{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
+                  {canManageOrgMembers && !isCurrentMember ? (
+                    <div className="member-actions">
+                      <select
+                        aria-label={`Role for ${member.full_name}`}
+                        className="member-role-select"
+                        value={member.organization_role}
+                        onChange={(event) => updateOrgMemberRole(member, event.target.value as CloudOrgMember['organization_role'])}
+                      >
+                        <option value="student">Student</option>
+                        <option value="instructor">Instructor</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <button className="danger compact" type="button" onClick={() => removeOrgMember(member)}>
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="member-actions member-actions-readonly">
+                      <span>{isCurrentMember ? 'Signed in as you' : 'Managed by owner'}</span>
+                    </div>
+                  )}
+                  <div className="member-project-list">
+                    {memberProjects.slice(0, 4).map((memberProject) => (
+                      <button key={memberProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(memberProject.id)}>
+                        {memberProject.title}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              )
+            })}
+            </div>
+          </div>
+          )}
+        </section>
+      )}
+      </>
+      )}
+
       <section className="mobile-home-panel panel surface-grid">
         <div>
           <p className="eyebrow">Welcome</p>
@@ -1179,8 +1903,8 @@ export default function App() {
           </p>
         </div>
         <div className="mobile-home-stats" aria-label="Project summary">
-          <span><strong>{activeProjects.length}</strong> active</span>
-          <span><strong>{archivedProjects.length}</strong> archived</span>
+          <span><strong>{activeContextProjects.length}</strong> active</span>
+          <span><strong>{archivedContextProjects.length}</strong> archived</span>
           <span><strong>{checkpoints.length}</strong> checkpoints</span>
         </div>
         <div className="mobile-home-create" aria-label="Create new project">
@@ -1205,7 +1929,7 @@ export default function App() {
           <div className="sidebar-header">
             <h2><Files size={18} /> Projects</h2>
             <div className="sidebar-tools">
-              <span>{showArchived ? archivedProjects.length : activeProjects.length}</span>
+              <span>{showArchived ? archivedContextProjects.length : activeContextProjects.length}</span>
               <button
                 className="ghost icon-button desktop-only"
                 type="button"
@@ -1227,15 +1951,15 @@ export default function App() {
           <details className="mobile-project-menu" open={mobileTab === 'projects' ? true : undefined}>
             <summary>
               <span>{project.title || 'Untitled Project'}</span>
-              <small>{showArchived ? `${archivedProjects.length} archived` : `${activeProjects.length} active`}</small>
+              <small>{showArchived ? `${archivedContextProjects.length} archived` : `${activeContextProjects.length} active`}</small>
             </summary>
             <div className="mobile-project-content">
               <div className="project-view-toggle" aria-label="Project view">
                 <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                  Active <span>{activeProjects.length}</span>
+                  Active <span>{activeContextProjects.length}</span>
                 </button>
                 <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                  Archived <span>{archivedProjects.length}</span>
+                  Archived <span>{archivedContextProjects.length}</span>
                 </button>
               </div>
               <div className="new-project-grid">
@@ -1256,7 +1980,10 @@ export default function App() {
                     onClick={() => setActiveProject(candidate.id)}
                   >
                     <span>{candidate.title || 'Untitled Project'}</span>
-                    <small>{kindLabels[candidate.kind]}</small>
+                    <small>
+                      {kindLabels[candidate.kind]}
+                      {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
+                    </small>
                   </button>
                 ))}
               </div>
@@ -1266,10 +1993,10 @@ export default function App() {
             <p className="sidebar-note">{isSignedIn ? `Signed in${user?.full_name ? ` as ${user.full_name}` : ''}. Projects sync to your account.` : 'Everything is private to this browser until you export, share, or sign in.'}</p>
             <div className="project-view-toggle" aria-label="Project view">
               <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                Active <span>{activeProjects.length}</span>
+                Active <span>{activeContextProjects.length}</span>
               </button>
               <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                Archived <span>{archivedProjects.length}</span>
+                Archived <span>{archivedContextProjects.length}</span>
               </button>
             </div>
           <div className="new-project-grid">
@@ -1290,7 +2017,10 @@ export default function App() {
                 onClick={() => setActiveProject(candidate.id)}
               >
                 <span>{candidate.title || 'Untitled Project'}</span>
-                <small>{kindLabels[candidate.kind]}</small>
+                <small>
+                  {kindLabels[candidate.kind]}
+                  {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
+                </small>
               </button>
             ))}
           </div>
@@ -1301,13 +2031,36 @@ export default function App() {
           <div className="project-toolbar panel surface-grid">
             <div className="title-field">
               <label htmlFor="project-title">Project name</label>
-              <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} />
+              <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} disabled={!canEditProject} />
               <small>
                 {isSignedIn ? 'Autosaved to cloud + local backup' : 'Autosaved locally'}
+                {activeOrganizationId && currentProjectOwnerLabel ? ` · by ${currentProjectOwnerLabel}` : ''}
                 {isArchived(project) ? ' · archived' : ''}
+                {!canEditProject ? ' · read-only instructor view' : ''}
                 {' · updated '}
                 {formatUpdatedAt(project.updatedAt)}
               </small>
+              <div className="visibility-section">
+                <div className="visibility-row">
+                  <span>Visibility</span>
+                  <div className="visibility-control" aria-label="Project visibility">
+                    {availableVisibilityOptions(activeOrganizationId).map((visibility) => (
+                      <button
+                        key={visibility}
+                        className={project.visibility === visibility ? 'active' : ''}
+                        type="button"
+                        title={visibilityDescriptions[visibility]}
+                        aria-label={`${visibilityLabels[visibility]}: ${visibilityDescriptions[visibility]}`}
+                        disabled={!canEditProject}
+                        onClick={() => updateProjectVisibility(visibility)}
+                      >
+                        {visibilityLabels[visibility]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <small className="visibility-help">{visibilityDescriptions[project.visibility]}</small>
+              </div>
             </div>
             <div className="toolbar-actions">
               <details
@@ -1326,7 +2079,7 @@ export default function App() {
                 <div className="checkpoint-popover">
                   <div className="checkpoint-popover-header">
                     <strong>Checkpoints</strong>
-                    <button className="secondary compact" type="button" onClick={saveCheckpoint}>
+                    <button className="secondary compact" type="button" onClick={saveCheckpoint} disabled={!canEditProject}>
                       <Save size={14} /> Save
                     </button>
                   </div>
@@ -1352,12 +2105,12 @@ export default function App() {
                 </div>
               </details>
               {isArchived(project) ? (
-                <button className="secondary" onClick={restoreProject}><RotateCcw size={16} /> Restore</button>
+                <button className="secondary" onClick={restoreProject} disabled={!canEditProject}><RotateCcw size={16} /> Restore</button>
               ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={activeProjects.length <= 1}><Archive size={16} /> Archive</button>
+                <button className="secondary" onClick={requestArchiveProject} disabled={!canEditProject || activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={requestDeleteProject}><Trash2 size={16} /> Delete</button>
+              <button className="danger" onClick={requestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
             </div>
           <button className="secondary mobile-project-actions-button" onClick={() => setProjectActionsOpen(true)}>
             <MoreHorizontal size={16} /> Actions
@@ -1381,6 +2134,7 @@ export default function App() {
                   aria-label="Create file"
                   title="Create file"
                   onClick={openCreateFileDialog}
+                  disabled={!canEditProject}
                 >
                   <FilePlus2 size={17} />
                 </button>
@@ -1400,7 +2154,7 @@ export default function App() {
                   <small>{project.files.length} files · entry {project.entryPath}</small>
                 </summary>
                 <div className="file-browser-actions">
-                  <button className="secondary compact" type="button" onClick={openCreateFileDialog}>
+                  <button className="secondary compact" type="button" onClick={openCreateFileDialog} disabled={!canEditProject}>
                     <FilePlus2 size={14} /> New file
                   </button>
                 </div>
@@ -1413,17 +2167,17 @@ export default function App() {
                       </button>
                       <div className="file-row-actions">
                         {file.path !== project.entryPath && (
-                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)}>
+                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)} disabled={!canEditProject}>
                             <Check size={15} />
                           </button>
                         )}
-                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)}>
+                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)} disabled={!canEditProject}>
                           <Pencil size={15} />
                         </button>
-                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)}>
+                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)} disabled={!canEditProject}>
                           <Copy size={15} />
                         </button>
-                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={project.files.length <= 1}>
+                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={!canEditProject || project.files.length <= 1}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -1445,6 +2199,7 @@ export default function App() {
                 loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
                 onChange={(value) => updateActiveFile(value ?? '')}
                 options={{
+                  readOnly: !canEditProject,
                   minimap: { enabled: false },
                   fontSize: editorFontSize,
                   tabSize: 2,
@@ -1538,6 +2293,76 @@ export default function App() {
         </div>
       )}
 
+      {shareDialog && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShareDialog(null)}>
+          <section className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Snapshot share</p>
+                <h2 id="share-dialog-title">Copy project link</h2>
+              </div>
+              <button className="ghost icon-button" aria-label="Close share dialog" onClick={() => setShareDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <p className="helper-text">
+              {shareDialog.mode === 'server'
+                ? 'This link imports a server snapshot of the project.'
+                : 'The server share could not be created, so this offline link carries a copy in the URL.'}
+            </p>
+            {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
+            <label className="file-path-field" htmlFor="share-url">
+              <span>Share URL</span>
+              <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
+            </label>
+            <div className="confirm-actions">
+              <button className="secondary" type="button" onClick={() => setShareDialog(null)}>Done</button>
+              <button type="button" onClick={async () => {
+                const copied = await writeClipboardText(shareDialog.url)
+                setShareDialog((current) => current ? { ...current, copied } : current)
+                setNotice(copied ? 'Share link copied.' : 'Clipboard blocked. Select the link to copy it.')
+              }}>
+                <Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {orgCreateOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setOrgCreateOpen(false)}>
+          <section className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="org-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Organization</p>
+                <h2 id="org-dialog-title">Create workspace</h2>
+              </div>
+              <button className="ghost icon-button" aria-label="Close organization dialog" onClick={() => setOrgCreateOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="file-path-field" htmlFor="org-name">
+              <span>Name</span>
+              <input
+                id="org-name"
+                value={orgNameDraft}
+                autoFocus
+                onChange={(event) => setOrgNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') createOrganization()
+                }}
+                placeholder="Code School of Guam"
+              />
+            </label>
+            <p className="helper-text">Platform admins and mentors create organization workspaces, then invite instructors and students.</p>
+            <div className="confirm-actions">
+              <button className="secondary" type="button" onClick={() => setOrgCreateOpen(false)}>Cancel</button>
+              <button type="button" onClick={createOrganization}>Create workspace</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {projectActionsOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setProjectActionsOpen(false)}>
           <section className="modal-sheet project-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="project-actions-title" onClick={(event) => event.stopPropagation()}>
@@ -1557,7 +2382,7 @@ export default function App() {
                   restoreProject()
                 }}><RotateCcw size={16} /> Restore</button>
               ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={activeProjects.length <= 1}><Archive size={16} /> Archive</button>
+                <button className="secondary" onClick={requestArchiveProject} disabled={activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
               <button className="danger" onClick={requestDeleteProject}><Trash2 size={16} /> Delete</button>

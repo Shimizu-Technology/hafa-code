@@ -1,12 +1,13 @@
 /* eslint-disable react-refresh/only-export-components, react-hooks/set-state-in-effect */
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useAuth, useUser } from '@clerk/clerk-react'
-import { api, setAuthTokenGetter, type CloudUser } from '../lib/api'
+import { api, setAuthTokenGetter, type CloudOrganization, type CloudUser } from '../lib/api'
 
 interface AuthContextType {
   isSignedIn: boolean
   isLoading: boolean
   user: CloudUser | null
+  organizations: CloudOrganization[]
   syncSession: () => Promise<void>
 }
 
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
   isSignedIn: false,
   isLoading: true,
   user: null,
+  organizations: [],
   syncSession: async () => {},
 })
 
@@ -25,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const { user: clerkUser } = useUser()
   const [user, setUser] = useState<CloudUser | null>(null)
+  const [organizations, setOrganizations] = useState<CloudOrganization[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSignedIn) return
     const res = await api.createSession()
     if (res.data?.user) setUser(res.data.user)
+    if (res.data?.organizations) setOrganizations(res.data.organizations)
     if (res.error) console.error('Session sync failed:', res.error)
   }, [isSignedIn])
 
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSignedIn) {
       queueMicrotask(() => {
         setUser(null)
+        setOrganizations([])
         setIsLoading(false)
       })
       return
@@ -58,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoaded, isSignedIn, clerkUser?.id, syncSession])
 
   return (
-    <AuthContext.Provider value={{ isSignedIn: isSignedIn ?? false, isLoading: !isLoaded || isLoading, user, syncSession }}>
+    <AuthContext.Provider value={{ isSignedIn: isSignedIn ?? false, isLoading: !isLoaded || isLoading, user, organizations, syncSession }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,9 +1,10 @@
 class Project < ApplicationRecord
   KINDS = %w[ruby javascript web].freeze
-  VISIBILITIES = %w[private unlisted public].freeze
+  VISIBILITIES = %w[private organization unlisted public].freeze
   MAX_FILES = 50
 
   belongs_to :user
+  belongs_to :organization, optional: true
   belongs_to :forked_from, class_name: "Project", optional: true
   has_many :project_files, -> { order(:position, :id) }, dependent: :destroy, inverse_of: :project
   has_many :project_checkpoints, -> { order(created_at: :desc) }, dependent: :destroy
@@ -16,6 +17,7 @@ class Project < ApplicationRecord
   validate :file_count_within_limit
   validate :has_at_least_one_file
   validate :entry_path_matches_file
+  validate :organization_visibility_requires_organization
 
   before_validation :set_default_entry_path
 
@@ -63,5 +65,12 @@ class Project < ApplicationRecord
     return if project_files.reject(&:marked_for_destruction?).any? { |file| file.path == entry_path }
 
     errors.add(:entry_path, "must match a project file")
+  end
+
+  def organization_visibility_requires_organization
+    return unless visibility == "organization"
+    return if organization_id.present?
+
+    errors.add(:organization, "must be present for organization visibility")
   end
 end

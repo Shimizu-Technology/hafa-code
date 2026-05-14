@@ -72,7 +72,7 @@ type Project = {
   description?: string
   kind: ProjectKind
   files: ProjectFile[]
-  visibility: 'private' | 'unlisted' | 'public'
+  visibility: 'private' | 'organization' | 'unlisted' | 'public'
   forkedFromId?: string
   createdAt: string
   updatedAt: string

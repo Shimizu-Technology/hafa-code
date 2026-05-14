@@ -1,4 +1,4 @@
-import type { ProjectCheckpoint, ProjectFile, ProjectKind, ProjectSnapshot, SavedProject } from './codeRunner'
+import type { ProjectCheckpoint, ProjectFile, ProjectKind, ProjectSnapshot, ProjectVisibility, SavedProject } from './codeRunner'
 import { normalizeProject } from './projectStorage'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
@@ -11,6 +11,36 @@ export interface CloudUser {
   last_name: string | null
   full_name: string
   role: string
+}
+
+export interface CloudOrganization {
+  id: number
+  name: string
+  slug: string
+  role: 'student' | 'instructor' | 'owner'
+}
+
+export interface CloudOrgMember extends CloudUser {
+  membership_id: number
+  organization_role: 'student' | 'instructor' | 'owner'
+  joined_at: string
+}
+
+export interface CloudOrgInvitation {
+  id?: number
+  token: string
+  email: string
+  role: 'student' | 'instructor'
+  invitation_url?: string
+  email_sent?: boolean
+  accepted_at?: string | null
+  expires_at: string
+  created_at?: string
+  organization?: {
+    id: number
+    name: string
+    slug: string
+  }
 }
 
 interface ApiProjectFile {
@@ -30,7 +60,10 @@ interface ApiProject {
   title: string
   kind: ProjectKind
   entry_path: string | null
-  visibility: 'private' | 'unlisted' | 'public'
+  visibility: ProjectVisibility
+  organization_id: number | null
+  owner?: { id: number; full_name: string } | null
+  organization?: { id: number; name: string; slug: string } | null
   archived_at: string | null
   created_at: string
   updated_at: string
@@ -97,6 +130,10 @@ function apiProjectToSavedProject(project: ApiProject): SavedProject {
     id: String(project.id),
     title: project.title,
     kind: project.kind,
+    visibility: project.visibility,
+    organizationId: project.organization_id ? String(project.organization_id) : null,
+    owner: project.owner ? { id: project.owner.id, fullName: project.owner.full_name } : null,
+    organization: project.organization ?? null,
     entryPath: project.entry_path ?? undefined,
     files,
     createdAt: project.created_at,
@@ -113,7 +150,8 @@ function savedProjectPayload(project: SavedProject) {
     title: project.title,
     kind: project.kind,
     entry_path: project.entryPath,
-    visibility: 'private',
+    visibility: project.visibility,
+    organization_id: project.organizationId,
     files: project.files.map((file, index) => ({ ...file, position: index })),
   }
 }
@@ -140,6 +178,8 @@ function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
     id: crypto.randomUUID(),
     title: share.snapshot.title || share.title,
     kind: share.snapshot.kind || share.kind,
+    visibility: 'private',
+    organizationId: null,
     entryPath: share.snapshot.entryPath ?? share.snapshot.entry_path ?? undefined,
     files: share.snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })),
     createdAt: now,
@@ -152,9 +192,57 @@ function shareSnapshotToSavedProject(share: ApiShare): SavedProject {
 }
 
 export const api = {
-  createSession: () => fetchApi<{ user: CloudUser }>('/api/v1/sessions', { method: 'POST' }),
-  getProjects: async () => {
-    const res = await fetchApi<{ projects: ApiProject[] }>('/api/v1/projects')
+  createSession: () => fetchApi<{ user: CloudUser; organizations: CloudOrganization[] }>('/api/v1/sessions', { method: 'POST' }),
+  getOrganizations: async () => {
+    const res = await fetchApi<{ organizations: CloudOrganization[] }>('/api/v1/organizations')
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organizations ?? [], error: null }
+  },
+  createOrganization: async (name: string) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>('/api/v1/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
+  },
+  getOrgMembers: async (organizationId: string) => {
+    const res = await fetchApi<{ members: CloudOrgMember[] }>(`/api/v1/organizations/${organizationId}/members`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.members ?? [], error: null }
+  },
+  getOrgInvitations: async (organizationId: string) => {
+    const res = await fetchApi<{ invitations: CloudOrgInvitation[] }>(`/api/v1/organizations/${organizationId}/invitations`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitations ?? [], error: null }
+  },
+  createOrgInvitation: async (organizationId: string, email: string, role: CloudOrgInvitation['role']) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/organizations/${organizationId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  resendOrgInvitation: async (organizationId: string, invitationId: number) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/organizations/${organizationId}/invitations/${invitationId}/resend`, { method: 'POST' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  deleteOrgInvitation: (organizationId: string, invitationId: number) => fetchApi<null>(`/api/v1/organizations/${organizationId}/invitations/${invitationId}`, { method: 'DELETE' }),
+  updateOrgMember: async (organizationId: string, membershipId: number, role: CloudOrgMember['organization_role']) => {
+    const res = await fetchApi<{ member: CloudOrgMember }>(`/api/v1/organizations/${organizationId}/members/${membershipId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.member ?? null, error: null }
+  },
+  deleteOrgMember: (organizationId: string, membershipId: number) => fetchApi<null>(`/api/v1/organizations/${organizationId}/members/${membershipId}`, { method: 'DELETE' }),
+  getInvitation: async (token: string) => {
+    const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/invitations/${encodeURIComponent(token)}`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  acceptInvitation: async (token: string) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
+  },
+  getProjects: async (organizationId?: string | null) => {
+    const endpoint = organizationId ? `/api/v1/projects?organization_id=${encodeURIComponent(organizationId)}` : '/api/v1/projects'
+    const res = await fetchApi<{ projects: ApiProject[] }>(endpoint)
     return res.error ? { data: null, error: res.error } : { data: res.data?.projects.map(apiProjectToSavedProject) ?? [], error: null }
   },
   createProject: async (project: SavedProject) => {

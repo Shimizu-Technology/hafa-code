@@ -7,25 +7,43 @@ import type { ProjectFile, RunnerLanguage } from '../lib/codeRunner'
 
 interface RunRequest {
   id: string
+  type?: 'run'
   code: string
   entryPath?: string
   files?: ProjectFile[]
+  stdin?: string
   language: RunnerLanguage
   timeoutMs: number
 }
 
+interface StdinRequest {
+  id: string
+  type: 'stdin'
+  value: string
+}
+
+interface AbortRequest {
+  id: string
+  type: 'abort'
+}
+
 interface RunResponse {
   id: string
-  type: 'started' | 'result'
+  type: 'started' | 'output' | 'input_request' | 'result'
+  stream?: 'stdout' | 'stderr'
+  text?: string
   stdout?: string
   stderr?: string
   durationMs?: number
 }
 
+type WorkerRequest = RunRequest | StdinRequest | AbortRequest
+
 const quickJsModulePromise = newQuickJSWASMModule(
   newVariant(RELEASE_SYNC, { wasmLocation: quickJsWasmUrl }),
 )
 let rubyModulePromise: Promise<WebAssembly.Module> | null = null
+const pendingInputResolvers = new Map<string, { resolve: (value: string) => void; reject: (reason: Error) => void }>()
 
 function getRubyModule() {
   rubyModulePromise ??= fetch(rubyWasmUrl)
@@ -227,7 +245,9 @@ async function runJavaScript(id: string, code: string, timeoutMs: number, files:
 
   const writeConsole = (stream: 'stdout' | 'stderr', values: QuickJSHandle[]) => {
     const line = values.map((value) => stringifyQuickJsValue(vm.dump(value))).join(' ')
-    ;(stream === 'stderr' ? stderr : stdout).push(`${line}\n`)
+    const text = `${line}\n`
+    ;(stream === 'stderr' ? stderr : stdout).push(text)
+    self.postMessage({ id, type: 'output', stream, text } satisfies RunResponse)
   }
 
   try {
@@ -262,7 +282,9 @@ async function runJavaScript(id: string, code: string, timeoutMs: number, files:
     const bundledCode = bundleJavaScriptProject(files, entryPath, code)
     const result = vm.evalCode(bundledCode, entryPath)
     if (result.error) {
-      stderr.push(`${stringifyQuickJsValue(vm.dump(result.error))}\n`)
+      const text = `${stringifyQuickJsValue(vm.dump(result.error))}\n`
+      stderr.push(text)
+      self.postMessage({ id, type: 'output', stream: 'stderr', text } satisfies RunResponse)
       result.error.dispose()
     } else {
       result.value.dispose()
@@ -275,19 +297,43 @@ async function runJavaScript(id: string, code: string, timeoutMs: number, files:
   return { stdout: stdout.join(''), stderr: stderr.join('') }
 }
 
-function captureRubyOutput(args: unknown[], stream: string[]) {
+function captureRubyOutput(id: string, args: unknown[], streamName: 'stdout' | 'stderr', stream: string[]) {
   const text = args.map(String).join(' ')
-  stream.push(text.endsWith('\n') ? text : `${text}\n`)
+  const output = text.endsWith('\n') ? text : `${text}\n`
+  stream.push(output)
+  self.postMessage({ id, type: 'output', stream: streamName, text: output } satisfies RunResponse)
 }
 
-async function runRuby(id: string, code: string, files: ProjectFile[] = [], entryPath = 'main.rb') {
+async function runRuby(id: string, code: string, files: ProjectFile[] = [], entryPath = 'main.rb', stdin = '') {
   const stdout: string[] = []
   const stderr: string[] = []
+  const stdinQueue = (stdin.match(/[^\n]*\n|[^\n]+/g) ?? [])[Symbol.iterator]()
   const originalLog = console.log
   const originalWarn = console.warn
+  const previousGets = (globalThis as { __hafa_gets?: () => Promise<string> }).__hafa_gets
 
-  console.log = (...args: unknown[]) => captureRubyOutput(args, stdout)
-  console.warn = (...args: unknown[]) => captureRubyOutput(args, stderr)
+  const readLine = () => {
+    const queuedLine = stdinQueue.next()
+    if (!queuedLine.done) return Promise.resolve(queuedLine.value)
+
+    self.postMessage({ id, type: 'input_request' } satisfies RunResponse)
+    return new Promise<string>((resolve, reject) => {
+      pendingInputResolvers.set(id, {
+        resolve: (value) => {
+          pendingInputResolvers.delete(id)
+          resolve(value.endsWith('\n') ? value : `${value}\n`)
+        },
+        reject: (reason) => {
+          pendingInputResolvers.delete(id)
+          reject(reason)
+        },
+      })
+    })
+  }
+
+  ;(globalThis as { __hafa_gets?: () => Promise<string> }).__hafa_gets = readLine
+  console.log = (...args: unknown[]) => captureRubyOutput(id, args, 'stdout', stdout)
+  console.warn = (...args: unknown[]) => captureRubyOutput(id, args, 'stderr', stderr)
 
   try {
     const module = await getRubyModule()
@@ -301,11 +347,16 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
       const rubyHash = Object.entries(fileMap)
         .map(([path, content]) => `${rubyStringLiteral(path)} => ${rubyStringLiteral(content)}`)
         .join(', ')
-      vm.eval(`
+      await vm.evalAsync(`
+        require 'js'
         $hafa_code_files = { ${rubyHash} }
         $hafa_code_loaded = {}
 
         module Kernel
+          def gets(*)
+            JS.global.__hafa_gets.await.to_s
+          end
+
           def require_relative(path)
             caller_path = caller_locations(1, 1)&.first&.path.to_s
             base = caller_path.include?("/") ? caller_path.split("/")[0...-1].join("/") : ""
@@ -321,24 +372,42 @@ async function runRuby(id: string, code: string, files: ProjectFile[] = [], entr
           end
         end
 
+        class << STDIN
+          def gets(*)
+            JS.global.__hafa_gets.await.to_s
+          end
+        end
+
         TOPLEVEL_BINDING.eval($hafa_code_files.fetch(${rubyStringLiteral(entryPath)}), ${rubyStringLiteral(entryPath)})
       `)
     } catch (error) {
-      captureRubyOutput([error instanceof Error ? error.message : String(error)], stderr)
+      captureRubyOutput(id, [error instanceof Error ? error.message : String(error)], 'stderr', stderr)
     }
   } finally {
     console.log = originalLog
     console.warn = originalWarn
+    ;(globalThis as { __hafa_gets?: () => Promise<string> }).__hafa_gets = previousGets
+    pendingInputResolvers.delete(id)
   }
 
   return { stdout: stdout.join(''), stderr: stderr.join('') }
 }
 
-self.onmessage = (event: MessageEvent<RunRequest>) => {
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  if (event.data.type === 'stdin') {
+    pendingInputResolvers.get(event.data.id)?.resolve(event.data.value)
+    return
+  }
+
+  if (event.data.type === 'abort') {
+    pendingInputResolvers.get(event.data.id)?.reject(new Error('Execution stopped.'))
+    return
+  }
+
   const startedAt = performance.now()
-  const { id, code, entryPath, files, language, timeoutMs } = event.data
+  const { id, code, entryPath, files, stdin, language, timeoutMs } = event.data
   const run = language === 'ruby'
-    ? runRuby(id, code, files, entryPath)
+    ? runRuby(id, code, files, entryPath, stdin)
     : runJavaScript(id, code, timeoutMs, files, entryPath)
 
   run

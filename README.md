@@ -22,6 +22,14 @@ hafa-code/
   web/    React + Vite playground frontend
 ```
 
+## Planning Docs
+
+- [Product spec](docs/PRODUCT_SPEC.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Security model](docs/SECURITY.md)
+- [Multi-file workspace plan](docs/MULTI_FILE_WORKSPACE.md)
+- [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)
+
 ## Security Model
 
 Run untrusted code in the browser, not on Rails.
