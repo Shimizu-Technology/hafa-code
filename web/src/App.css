@@ -1520,6 +1520,11 @@ button.context-chip.active,
   color: #ffb089;
 }
 
+.app-shell[data-theme="dark"] .oss-footer a:hover,
+.app-shell[data-theme="dark"] .oss-footer a:focus-visible {
+  color: #ffd0ba;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

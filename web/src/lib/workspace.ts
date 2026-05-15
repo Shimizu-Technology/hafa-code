@@ -1,5 +1,5 @@
 import { inferFileLanguage, type ProjectFile, type ProjectKind, type ProjectVisibility, type SavedProject } from './codeRunner'
-import { createProject, decodeSharedProject, loadProjectLibrary, saveProjectLibrary, type ProjectLibrary } from './projectStorage'
+import { decodeSharedProject, loadProjectLibrary, type ProjectLibrary } from './projectStorage'
 
 export type FileDialogMode = 'create' | 'rename' | 'duplicate'
 
@@ -197,13 +197,4 @@ export function projectContextMatches(project: SavedProject, organizationId: str
 
 export function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
   return organizationId ? ['private', 'organization', 'unlisted', 'public'] : ['private', 'unlisted', 'public']
-}
-
-export function activateFallbackLibrary(projects: SavedProject[], archivedView: boolean) {
-  const preferred = projects.find((candidate) => (archivedView ? isArchived(candidate) : !isArchived(candidate))) ?? projects[0]
-  if (preferred) return { library: { activeProjectId: preferred.id, projects }, activePath: preferred.files[0].path }
-
-  const fallback = createProject('ruby')
-  saveProjectLibrary({ activeProjectId: fallback.id, projects: [fallback] })
-  return { library: { activeProjectId: fallback.id, projects: [fallback] }, activePath: fallback.files[0].path }
 }
