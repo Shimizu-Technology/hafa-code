@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react'
+import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
   Archive,
   BookOpen,
@@ -23,42 +23,34 @@ import {
   Pencil,
   Play,
   Plus,
-  RefreshCw,
   RotateCcw,
   Rocket,
   Save,
   Search,
   Send,
   ShieldCheck,
-  Square,
   Terminal,
   Trash2,
   UserPlus,
   X,
-  Zap,
 } from 'lucide-react'
 import './App.css'
 import {
-  RUNNER_TIMEOUT_MS,
-  buildHtmlPreview,
   defaultEntryPath,
   inferFileLanguage,
   type ProjectFile,
   type ProjectCheckpoint,
   type ProjectKind,
   type ProjectVisibility,
-  type RunnerLanguage,
   type SavedProject,
 } from './lib/codeRunner'
 import {
   createLocalCheckpoint,
   createProject,
-  decodeSharedProject,
   duplicateProject,
   encodeProjectForShare,
   exportProject,
   loadLocalCheckpoints,
-  loadProjectLibrary,
   parseImportedProject,
   saveProjectLibrary,
   snapshotToProject,
@@ -67,650 +59,57 @@ import {
 import { useAuthContext } from './contexts/AuthContext'
 import { api, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
+import { AuthControls } from './components/AuthControls'
+import { RunnerPanel } from './components/RunnerPanel'
+import { WebPreview } from './components/WebPreview'
+import {
+  COLOR_MODE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  loadColorModePreference,
+  loadThemePreference,
+  useResponsiveEditorFontSize,
+  useSystemDarkMode,
+  type ColorModePreference,
+  type ThemePreference,
+} from './hooks/usePreferences'
+import {
+  PROJECT_FILE_LIMIT,
+  availableVisibilityOptions,
+  canAddWorkspaceFile,
+  clearHashParam,
+  formatCheckpointTime,
+  formatFileLanguage,
+  formatUpdatedAt,
+  invitationUrl,
+  isArchived,
+  isCloudProjectId,
+  kindLabels,
+  languageForFile,
+  loadInitialLibraryWithSharedProject,
+  mergeCloudAndLocalProjects,
+  nextAvailableCopyPath,
+  normalizeWorkspacePath,
+  projectContextMatches,
+  projectOwnerLabel,
+  readHashParam,
+  starterContentForPath,
+  starterPathForProject,
+  validateWorkspacePath,
+  visibilityDescriptions,
+  visibilityLabels,
+  writeClipboardText,
+  type ClassroomTab,
+  type ConfirmAction,
+  type FileDialogState,
+  type MobileTab,
+} from './lib/workspace'
 
-type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
-type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
-type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
-type FileDialogMode = 'create' | 'rename' | 'duplicate'
-type ThemePreference = 'system' | 'light' | 'dark'
-type ColorModePreference = 'default' | 'colorblind'
-type ClassroomTab = 'people' | 'invitations'
 type ShareDialogState = {
   url: string
   mode: 'server' | 'offline'
   copied: boolean
   error?: string | null
 } | null
-
-interface FileDialogState {
-  mode: FileDialogMode
-  path: string
-  sourcePath?: string
-}
-
-interface RunState {
-  status: RunStatus
-  stdout: string
-  stderr: string
-  durationMs: number | null
-}
-
-type TerminalLine = {
-  id: string
-  kind: 'command' | 'stdout' | 'stderr' | 'input' | 'system'
-  text: string
-}
-
-const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
-const PROJECT_FILE_LIMIT = 50
-const THEME_STORAGE_KEY = 'hafa-code-theme-v1'
-const COLOR_MODE_STORAGE_KEY = 'hafa-code-color-mode-v1'
-const kindLabels: Record<ProjectKind, string> = {
-  ruby: 'Ruby',
-  javascript: 'JavaScript',
-  web: 'HTML/CSS/JS',
-}
-
-const visibilityLabels: Record<ProjectVisibility, string> = {
-  private: 'Private',
-  organization: 'Org',
-  unlisted: 'Unlisted',
-  public: 'Public',
-}
-
-const visibilityDescriptions: Record<ProjectVisibility, string> = {
-  private: 'Only you can edit or list it. In orgs, instructors and owners can view and run it.',
-  organization: 'Members of this org can find, view, and run it. Only you can edit it.',
-  unlisted: 'Anyone with the direct link can view and run it, but it is hidden from org lists.',
-  public: 'Anyone with access to Hafa Code can view and run it, and org members can find it in lists.',
-}
-
-function invitationUrl(token: string) {
-  return `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`
-}
-
-function readHashParam(name: string) {
-  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get(name)
-}
-
-function clearHashParam(name: string) {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  params.delete(name)
-  const nextHash = params.toString()
-  window.history.replaceState(null, '', `${window.location.pathname}${nextHash ? `#${nextHash}` : ''}`)
-}
-
-function projectOwnerLabel(project: SavedProject, currentUserId?: number) {
-  if (!project.owner) return ''
-  if (project.owner.id === currentUserId) return 'You'
-  return project.owner.fullName
-}
-
-function languageForFile(file: ProjectFile) {
-  if (file.language === 'ruby') return 'ruby'
-  if (file.language === 'html') return 'html'
-  if (file.language === 'css') return 'css'
-  if (file.language === 'json') return 'json'
-  return 'javascript'
-}
-
-function formatFileLanguage(file: ProjectFile) {
-  if (file.language === 'javascript') return 'JS'
-  if (file.language === 'plain') return 'Text'
-  return file.language.toUpperCase()
-}
-
-function normalizeWorkspacePath(path: string) {
-  return path.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
-}
-
-function validateWorkspacePath(path: string, project: SavedProject, currentPath?: string) {
-  const normalized = normalizeWorkspacePath(path)
-  if (!normalized) return 'Enter a file path.'
-  if (normalized.length > 160) return 'File paths must be 160 characters or fewer.'
-  if (normalized.endsWith('/')) return 'File paths cannot end with a slash.'
-  const segments = normalized.split('/')
-  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-    return 'File paths cannot include empty, current, or parent directory segments.'
-  }
-  if (segments.some((segment) => segment.startsWith('.'))) {
-    return 'Hidden files and folders are not supported yet.'
-  }
-  if (project.files.some((file) => file.path === normalized && file.path !== currentPath)) {
-    return 'A file already exists at that path.'
-  }
-  return ''
-}
-
-function canAddWorkspaceFile(project: SavedProject) {
-  return project.files.length < PROJECT_FILE_LIMIT
-}
-
-function nextAvailableCopyPath(path: string, project: SavedProject) {
-  const dotIndex = path.lastIndexOf('.')
-  const slashIndex = path.lastIndexOf('/')
-  const hasExtension = dotIndex > slashIndex
-  const base = hasExtension ? path.slice(0, dotIndex) : path
-  const extension = hasExtension ? path.slice(dotIndex) : ''
-
-  for (let index = 1; index < 100; index += 1) {
-    const candidate = `${base}${index === 1 ? ' copy' : ` copy ${index}`}${extension}`
-    if (!project.files.some((file) => file.path === candidate)) return candidate
-  }
-
-  return `${base} copy ${crypto.randomUUID().slice(0, 8)}${extension}`
-}
-
-function starterContentForPath(path: string, kind: ProjectKind) {
-  const language = inferFileLanguage(path, kind)
-  if (language === 'ruby') return '# Write Ruby here\n'
-  if (language === 'javascript') return '// Write JavaScript here\n'
-  if (language === 'html') return '<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>New Page</title>\n  </head>\n  <body>\n    <h1>New page</h1>\n  </body>\n</html>\n'
-  if (language === 'css') return '/* Write CSS here */\n'
-  if (language === 'json') return '{\n  "message": "Hafa adai"\n}\n'
-  return ''
-}
-
-function starterPathForProject(kind: ProjectKind, files: ProjectFile[]) {
-  const candidates = kind === 'ruby'
-    ? ['helper.rb', 'greeting.rb', 'practice.rb']
-    : kind === 'javascript'
-      ? ['helper.js', 'utils.js', 'practice.js']
-      : ['about.html', 'styles.css', 'app.js']
-
-  return candidates.find((path) => !files.some((file) => file.path === path)) ?? `new-file-${files.length + 1}.${kind === 'ruby' ? 'rb' : kind === 'web' ? 'html' : 'js'}`
-}
-
-function formatUpdatedAt(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'just now'
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-}
-
-function formatCheckpointTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'just now'
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
-}
-
-function subscribeSystemTheme(callback: () => void) {
-  const query = window.matchMedia('(prefers-color-scheme: dark)')
-  query.addEventListener('change', callback)
-  return () => query.removeEventListener('change', callback)
-}
-
-function getSystemThemeSnapshot() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
-
-function getServerSystemThemeSnapshot() {
-  return false
-}
-
-function useSystemDarkMode() {
-  return useSyncExternalStore(subscribeSystemTheme, getSystemThemeSnapshot, getServerSystemThemeSnapshot)
-}
-
-function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notice: string } {
-  const library = loadProjectLibrary()
-  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  const sharedProject = params.get('project')
-  if (!sharedProject) return { library, notice: '' }
-
-  try {
-    const imported = decodeSharedProject(sharedProject)
-    window.history.replaceState(null, '', window.location.pathname)
-    return {
-      library: { activeProjectId: imported.id, projects: [imported, ...library.projects] },
-      notice: 'Shared project imported locally.',
-    }
-  } catch {
-    return { library, notice: 'Could not import the shared project link.' }
-  }
-}
-
-function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
-  const [runState, setRunState] = useState<RunState>(emptyRunState)
-  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
-  const [terminalInput, setTerminalInput] = useState('')
-  const [awaitingInput, setAwaitingInput] = useState(false)
-  const workerRef = useRef<Worker | null>(null)
-  const timeoutRef = useRef<number | null>(null)
-  const runIdRef = useRef<string | null>(null)
-  const runRef = useRef<() => void>(() => {})
-  const armExecutionTimeoutRef = useRef<() => void>(() => {})
-  const outputEmittedRef = useRef(false)
-  const terminalScrollRef = useRef<HTMLDivElement | null>(null)
-  const terminalInputRef = useRef<HTMLInputElement | null>(null)
-
-  const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
-    setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
-  }
-
-  const clearRunTimer = useCallback(() => {
-    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-    timeoutRef.current = null
-  }, [])
-
-  const stopWorker = useCallback(() => {
-    clearRunTimer()
-    const worker = workerRef.current
-    const runId = runIdRef.current
-    if (worker && runId) worker.postMessage({ id: runId, type: 'abort' })
-    window.setTimeout(() => worker?.terminate(), 0)
-    workerRef.current = null
-    runIdRef.current = null
-    setAwaitingInput(false)
-  }, [clearRunTimer])
-
-  useEffect(() => stopWorker, [stopWorker])
-
-  useEffect(() => {
-    terminalScrollRef.current?.scrollTo({ top: terminalScrollRef.current.scrollHeight })
-  }, [terminalLines, awaitingInput])
-
-  useEffect(() => {
-    if (awaitingInput) terminalInputRef.current?.focus()
-  }, [awaitingInput])
-
-  const run = () => {
-    if (project.kind === 'web') return
-    if (runState.status === 'running') stopWorker()
-
-    const runId = crypto.randomUUID()
-    const startedAt = performance.now()
-    const worker = new Worker(new URL('./workers/codeRunner.worker.ts', import.meta.url), { type: 'module' })
-
-    workerRef.current = worker
-    runIdRef.current = runId
-    outputEmittedRef.current = false
-    setAwaitingInput(false)
-    setTerminalInput('')
-    setTerminalLines([
-      {
-        id: crypto.randomUUID(),
-        kind: 'command',
-        text: project.kind === 'ruby' ? `ruby ${entryFile.path}` : `node ${entryFile.path}`,
-      },
-    ])
-    setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
-
-    timeoutRef.current = window.setTimeout(() => {
-      stopWorker()
-      setRunState({ status: 'timeout', stdout: '', stderr: 'Code runner did not start in time.', durationMs: Math.round(performance.now() - startedAt) })
-    }, 30_000)
-
-    const armExecutionTimeout = () => {
-      clearRunTimer()
-      timeoutRef.current = window.setTimeout(() => {
-        stopWorker()
-        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
-        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
-      }, RUNNER_TIMEOUT_MS + 250)
-    }
-    armExecutionTimeoutRef.current = armExecutionTimeout
-
-    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'output' | 'input_request' | 'result'; stream?: 'stdout' | 'stderr'; text?: string; stdout?: string; stderr?: string; durationMs?: number }>) => {
-      if (event.data.id !== runIdRef.current) return
-
-      if (event.data.type === 'started') {
-        armExecutionTimeout()
-        return
-      }
-
-      if (event.data.type === 'output') {
-        outputEmittedRef.current = true
-        appendTerminalLine({ kind: event.data.stream === 'stderr' ? 'stderr' : 'stdout', text: event.data.text ?? '' })
-        return
-      }
-
-      if (event.data.type === 'input_request') {
-        clearRunTimer()
-        setAwaitingInput(true)
-        return
-      }
-
-      clearRunTimer()
-      workerRef.current?.terminate()
-      workerRef.current = null
-      runIdRef.current = null
-      setAwaitingInput(false)
-
-      if (!outputEmittedRef.current) {
-        if (event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
-        if (event.data.stderr) appendTerminalLine({ kind: 'stderr', text: event.data.stderr })
-      }
-
-      const stderr = event.data.stderr ?? ''
-      setRunState({
-        status: stderr.trim() ? 'error' : 'success',
-        stdout: event.data.stdout ?? '',
-        stderr,
-        durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
-      })
-    }
-
-    worker.onerror = (event) => {
-      stopWorker()
-      appendTerminalLine({ kind: 'stderr', text: event.message || 'Runner failed.' })
-      setRunState({ status: 'error', stdout: '', stderr: event.message || 'Runner failed.', durationMs: Math.round(performance.now() - startedAt) })
-    }
-
-    worker.postMessage({
-      id: runId,
-      entryPath: entryFile.path,
-      files: project.files,
-      code: entryFile.content,
-      language: project.kind as RunnerLanguage,
-      timeoutMs: RUNNER_TIMEOUT_MS,
-    })
-  }
-
-  useEffect(() => {
-    runRef.current = run
-  })
-
-  const outputIsEmpty = !runState.stdout && !runState.stderr
-
-  const submitTerminalInput = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!awaitingInput || !workerRef.current || !runIdRef.current) return
-
-    const value = terminalInput
-    appendTerminalLine({ kind: 'input', text: value })
-    setTerminalInput('')
-    setAwaitingInput(false)
-    workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value })
-    armExecutionTimeoutRef.current()
-  }
-
-  const stopRun = () => {
-    stopWorker()
-    appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
-    setRunState((current) => ({
-      status: 'timeout',
-      stdout: current.stdout,
-      stderr: current.stderr || 'Execution stopped.',
-      durationMs: current.durationMs,
-    }))
-  }
-
-  useEffect(() => {
-    const handleRunRequest = () => runRef.current()
-    window.addEventListener('hafa-code-run-active-project', handleRunRequest)
-    return () => window.removeEventListener('hafa-code-run-active-project', handleRunRequest)
-  }, [])
-
-  return (
-    <section className="panel output-panel surface-grid">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Output</p>
-          <h2><Terminal size={18} /> Browser runner</h2>
-          <p className="helper-text">Runs locally in a worker with a {RUNNER_TIMEOUT_MS / 1000}s guardrail.</p>
-        </div>
-        {runState.status === 'running' ? (
-          <button className="secondary" onClick={stopRun}>
-            <Square size={16} /> Stop
-          </button>
-        ) : (
-          <button onClick={run} disabled={!entryFile.content.trim()}>
-            <Play size={16} /> Run {project.kind === 'ruby' ? 'Ruby' : 'JS'}
-          </button>
-        )}
-      </div>
-      <div className="terminal" ref={terminalScrollRef}>
-        {runState.status === 'running' && terminalLines.length <= 1 && !awaitingInput && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
-        {runState.status !== 'running' && outputIsEmpty && terminalLines.length === 0 && (
-          <div className="empty-output">
-            <Zap size={28} />
-            <p>Press Run to start a browser terminal session.</p>
-          </div>
-        )}
-        {terminalLines.map((line) => (
-          <pre key={line.id} className={`terminal-line ${line.kind}`}>{line.text}</pre>
-        ))}
-        {awaitingInput && (
-          <form className="terminal-input-row" onSubmit={submitTerminalInput}>
-            <span aria-hidden="true">&gt;</span>
-            <input
-              ref={terminalInputRef}
-              value={terminalInput}
-              onChange={(event) => setTerminalInput(event.target.value)}
-              placeholder="Type input, then press Enter"
-              aria-label="Program input"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
-          </form>
-        )}
-      </div>
-      <div className="terminal-footer">
-        <span>{awaitingInput ? 'waiting for input' : runState.status === 'idle' ? 'Ready' : runState.status}</span>
-        <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
-      </div>
-    </section>
-  )
-}
-
-interface PreviewConsoleMessage {
-  source: 'hafa-code-preview-console'
-  level: 'log' | 'warn' | 'error'
-  message: string
-}
-
-function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['level'] {
-  return level === 'log' || level === 'warn' || level === 'error'
-}
-
-function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: string }) {
-  const draftPreview = useMemo(() => buildHtmlPreview(files, entryPath), [entryPath, files])
-  const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const previewPortRef = useRef<MessagePort | null>(null)
-  const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
-  const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
-  const previewIsStale = draftPreview !== renderedPreview
-
-  const sendPreviewToFrame = useCallback((html: string) => {
-    previewPortRef.current?.postMessage({
-      source: 'hafa-code-preview-update',
-      html,
-    })
-  }, [])
-
-  const refreshPreview = useCallback(() => {
-    setRenderedPreview(draftPreview)
-    setConsoleMessages([])
-    sendPreviewToFrame(draftPreview)
-  }, [draftPreview, sendPreviewToFrame])
-
-  const connectPreviewPort = useCallback((port: MessagePort) => {
-    previewPortRef.current?.close()
-    previewPortRef.current = port
-
-    port.onmessage = (event) => {
-      const message = event.data as Partial<PreviewConsoleMessage>
-      if (message.source !== 'hafa-code-preview-console' || !message.level || !message.message) return
-      const level = message.level
-      if (!isPreviewConsoleLevel(level)) return
-
-      const nextMessage: PreviewConsoleMessage = {
-        source: 'hafa-code-preview-console',
-        level,
-        message: String(message.message),
-      }
-      setConsoleMessages((current) => [
-        ...current,
-        nextMessage,
-      ].slice(-20))
-    }
-    port.start()
-
-    port.postMessage({
-      source: 'hafa-code-preview-update',
-      html: renderedPreview,
-    })
-  }, [renderedPreview])
-
-  useEffect(() => {
-    const handlePreviewConnect = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) return
-
-      const message = event.data as { source?: string }
-      const port = event.ports[0]
-      if (message.source !== 'hafa-code-preview-connect' || !port) return
-
-      connectPreviewPort(port)
-    }
-
-    window.addEventListener('message', handlePreviewConnect)
-    return () => window.removeEventListener('message', handlePreviewConnect)
-  }, [connectPreviewPort])
-
-  useEffect(() => () => {
-    previewPortRef.current?.close()
-    previewPortRef.current = null
-  }, [])
-
-  return (
-    <section className="panel preview-panel surface-grid">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Preview</p>
-          <h2><Globe size={18} /> Web page</h2>
-          <p className="helper-text">{previewIsStale ? 'Preview has unsaved changes.' : 'Sandboxed iframe, no same-origin access.'}</p>
-        </div>
-        <button className={previewIsStale ? '' : 'secondary'} type="button" onClick={refreshPreview}>
-          <RefreshCw size={16} /> Refresh
-        </button>
-      </div>
-      <iframe
-        ref={iframeRef}
-        title="Web preview"
-        sandbox="allow-scripts allow-modals"
-        referrerPolicy="no-referrer"
-        src={previewFrameUrl}
-      />
-      <div className="preview-console" aria-live="polite">
-        <div className="preview-console-header">
-          <span>Browser console</span>
-          {consoleMessages.length > 0 && (
-            <button className="ghost compact" type="button" onClick={() => setConsoleMessages([])}>Clear</button>
-          )}
-        </div>
-        {consoleMessages.length === 0 ? (
-          <p>No console messages yet.</p>
-        ) : (
-          consoleMessages.map((message, index) => (
-            <pre key={`${message.level}-${index}`} className={`preview-console-line ${message.level}`}>{message.message}</pre>
-          ))
-        )}
-      </div>
-    </section>
-  )
-}
-
-function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
-  const { isLoaded } = useAuth()
-  const [loadTimedOut, setLoadTimedOut] = useState(false)
-
-  useEffect(() => {
-    if (!cloudEnabled || isLoaded) return
-
-    const timeout = window.setTimeout(() => setLoadTimedOut(true), 8_000)
-    return () => window.clearTimeout(timeout)
-  }, [cloudEnabled, isLoaded])
-
-  if (!cloudEnabled) {
-    return <span className="cloud-pill muted"><Cloud size={15} /> Add a valid Clerk key for cloud save</span>
-  }
-
-  if (!isLoaded && loadTimedOut) {
-    return <span className="cloud-pill muted"><Cloud size={15} /> Cloud sign-in unavailable</span>
-  }
-
-  if (!isLoaded || sessionLoading) {
-    return <span className="cloud-pill muted"><Loader2 className="spin" size={15} /> Loading sign-in</span>
-  }
-
-  return (
-    <div className="auth-actions">
-      <SignedOut>
-        <SignInButton mode="modal">
-          <button className="secondary"><Cloud size={16} /> Sign in to sync</button>
-        </SignInButton>
-      </SignedOut>
-      <SignedIn>
-        <span className="cloud-pill"><Cloud size={15} /> Cloud sync on</span>
-        <UserButton afterSignOutUrl="/" />
-      </SignedIn>
-    </div>
-  )
-}
-
-function isCloudProjectId(id: string) {
-  return /^\d+$/.test(id)
-}
-
-function isArchived(project: SavedProject) {
-  return Boolean(project.archivedAt)
-}
-
-async function writeClipboardText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary, organizationId: string | null): ProjectLibrary {
-  const localOnlyProjects = organizationId ? [] : localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
-  const projects = [...cloudProjects, ...localOnlyProjects]
-  if (projects.length === 0) return localLibrary
-  const activeProjectId = organizationId && cloudProjects.length > 0
-    ? cloudProjects[0].id
-    : projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
-    ? localLibrary.activeProjectId
-    : projects[0].id
-
-  return { activeProjectId, projects }
-}
-
-function projectContextMatches(project: SavedProject, organizationId: string | null) {
-  return organizationId ? project.organizationId === organizationId : !project.organizationId
-}
-
-function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
-  return organizationId ? ['private', 'organization', 'unlisted', 'public'] : ['private', 'unlisted', 'public']
-}
-
-function useResponsiveEditorFontSize() {
-  const [fontSize, setFontSize] = useState(() => window.matchMedia('(max-width: 640px)').matches ? 16 : 14)
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 640px)')
-    const updateFontSize = () => setFontSize(query.matches ? 16 : 14)
-
-    updateFontSize()
-    query.addEventListener('change', updateFontSize)
-    return () => query.removeEventListener('change', updateFontSize)
-  }, [])
-
-  return fontSize
-}
-
-function loadThemePreference(): ThemePreference {
-  const value = localStorage.getItem(THEME_STORAGE_KEY)
-  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
-}
-
-function loadColorModePreference(): ColorModePreference {
-  return localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'colorblind' ? 'colorblind' : 'default'
-}
 
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
@@ -2431,6 +1830,13 @@ export default function App() {
           </section>
         </div>
       )}
+
+      <footer className="oss-footer" aria-label="Open source project">
+        <span>Hafa Code is open source.</span>
+        <a href="https://github.com/Shimizu-Technology/hafa-code" target="_blank" rel="noreferrer">
+          View the code on GitHub
+        </a>
+      </footer>
     </main>
   )
 }

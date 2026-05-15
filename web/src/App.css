@@ -1489,6 +1489,42 @@ button.context-chip.active,
   display: none;
 }
 
+.oss-footer {
+  align-items: center;
+  color: #6a5a49;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  gap: 0.55rem;
+  justify-content: center;
+  padding: 1.4rem 0 0.25rem;
+}
+
+.oss-footer a {
+  color: #a83220;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.oss-footer a:hover,
+.oss-footer a:focus-visible {
+  color: #842716;
+  text-decoration: underline;
+}
+
+.app-shell[data-theme="dark"] .oss-footer {
+  color: #d8cbbb;
+}
+
+.app-shell[data-theme="dark"] .oss-footer a {
+  color: #ffb089;
+}
+
+.app-shell[data-theme="dark"] .oss-footer a:hover,
+.app-shell[data-theme="dark"] .oss-footer a:focus-visible {
+  color: #ffd0ba;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
