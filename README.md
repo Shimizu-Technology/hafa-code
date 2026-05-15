@@ -26,6 +26,7 @@ hafa-code/
 
 - [Product spec](docs/PRODUCT_SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Frontend structure](docs/FRONTEND_STRUCTURE.md)
 - [Security model](docs/SECURITY.md)
 - [Multi-file workspace plan](docs/MULTI_FILE_WORKSPACE.md)
 - [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)

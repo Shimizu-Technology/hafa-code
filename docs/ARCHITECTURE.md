@@ -11,6 +11,7 @@ Rails API + React SPA
   │   └─ ProjectFiles
   └─ web/ React + Vite frontend
       ├─ Monaco editors
+      ├─ Componentized workspace shell
       ├─ Runner worker
       │   ├─ Ruby WASM
       │   └─ QuickJS WASM
@@ -19,6 +20,8 @@ Rails API + React SPA
           ├─ localStorage anonymous fallback
           └─ Rails cloud sync when signed in
 ```
+
+See [Frontend structure](FRONTEND_STRUCTURE.md) for the current React file layout and cleanup rules.
 
 ## Why Browser-Side Execution
 
