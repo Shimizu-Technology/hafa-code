@@ -461,6 +461,12 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     old_external_sharing = ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"]
     ENV.delete("ALLOW_ORGANIZATION_EXTERNAL_SHARING")
 
+    post "/api/v1/shares",
+      params: payload.merge(organization_id: -1).to_json,
+      headers: { "Content-Type" => "application/json" }
+    assert_response :unprocessable_entity
+    assert_equal [ "External snapshot sharing is disabled for classroom projects" ], response.parsed_body.fetch("errors")
+
     post "/api/v1/shares", params: payload.to_json, headers: @headers
 
     assert_response :unprocessable_entity

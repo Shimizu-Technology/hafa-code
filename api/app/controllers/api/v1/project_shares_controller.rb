@@ -57,18 +57,17 @@ module Api
       def classroom_share_organization
         return nil if params[:organization_id].blank?
 
-        authenticate_user!
-        return nil if performed?
-
-        organization = current_user.admin? ?
-          Organization.find(params[:organization_id]) :
-          current_user.organizations.find(params[:organization_id])
         unless ActiveModel::Type::Boolean.new.cast(ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"])
           render json: { errors: [ "External snapshot sharing is disabled for classroom projects" ] }, status: :unprocessable_entity
           return nil
         end
 
-        organization
+        authenticate_user!
+        return nil if performed?
+
+        current_user.admin? ?
+          Organization.find(params[:organization_id]) :
+          current_user.organizations.find(params[:organization_id])
       end
 
       def share_rate_limited?

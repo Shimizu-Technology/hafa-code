@@ -18,6 +18,7 @@ class ProjectComment < ApplicationRecord
   private
 
   def file_path_belongs_to_project
+    return unless will_save_change_to_file_path?
     return if file_path.blank? || !project
     return if project.project_files.any? { |file| file.path == file_path }
 

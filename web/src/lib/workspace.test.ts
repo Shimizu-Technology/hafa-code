@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import type { SavedProject } from './codeRunner'
 import { markProjectPendingCloudSync } from './cloudSyncStorage'
 import { createConflictCopy, duplicateProject, type ProjectLibrary } from './projectStorage'
-import { mergeCloudAndLocalProjects } from './workspace'
+import { canViewProjectFeedback, mergeCloudAndLocalProjects } from './workspace'
 
 function project(id: string, updatedAt: string, organizationId: string | null = '10'): SavedProject {
   return {
@@ -98,5 +98,18 @@ describe('save conflict recovery', () => {
     expect(copy.organizationId).toBe(source.organizationId)
     expect(copy.lockVersion).toBeUndefined()
     expect(copy.files[0].content).toBe(source.files[0].content)
+  })
+})
+
+describe('archived classroom feedback access', () => {
+  test('keeps feedback visible to the project owner independently of editability', () => {
+    const archived = {
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      archivedAt: '2026-07-25T03:00:00.000Z',
+    }
+
+    expect(canViewProjectFeedback(archived, true, archived.owner?.id, false)).toBe(true)
+    expect(canViewProjectFeedback(archived, true, 999, false)).toBe(false)
+    expect(canViewProjectFeedback(archived, true, 999, true)).toBe(true)
   })
 })

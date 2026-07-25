@@ -90,6 +90,29 @@ class ClassroomFeedbackApiTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body.fetch("errors"), "Line number requires a file path"
   end
 
+  test "feedback can be resolved after its referenced file is removed" do
+    @project.project_files.create!(
+      path: "other.rb",
+      language: "ruby",
+      content: "puts 'other'",
+      position: 1
+    )
+    comment = @project.project_comments.create!(
+      user: @teacher,
+      body: "This file can be removed later.",
+      file_path: "main.rb",
+      line_number: 1
+    )
+    @project.project_files.find_by!(path: "main.rb").destroy!
+
+    patch "/api/v1/projects/#{@project.id}/comments/#{comment.id}/resolve",
+      params: { resolved: true }.to_json,
+      headers: headers_for(@student)
+
+    assert_response :success
+    assert_not_nil comment.reload.resolved_at
+  end
+
   private
 
   def create_user(key, email)

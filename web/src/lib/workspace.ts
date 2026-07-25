@@ -203,6 +203,18 @@ export function projectContextMatches(project: SavedProject, organizationId: str
   return organizationId ? project.organizationId === organizationId : !project.organizationId
 }
 
+export function canViewProjectFeedback(
+  project: SavedProject,
+  isSignedIn: boolean,
+  currentUserId: number | undefined,
+  canUseInstructorPanel: boolean,
+) {
+  if (!isSignedIn || !isCloudProjectId(project.id)) return false
+
+  const ownsProject = !project.owner || project.owner.id === currentUserId
+  return ownsProject || Boolean(project.organizationId && canUseInstructorPanel)
+}
+
 export function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
   return organizationId ? ['private', 'organization'] : ['private', 'unlisted', 'public']
 }

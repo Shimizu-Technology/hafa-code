@@ -84,6 +84,7 @@ import { useModalFocus } from './hooks/useModalFocus'
 import {
   PROJECT_FILE_LIMIT,
   availableVisibilityOptions,
+  canViewProjectFeedback,
   canAddWorkspaceFile,
   clearHashParam,
   formatCheckpointTime,
@@ -216,7 +217,8 @@ export default function App() {
   const canManageOrgMembers = activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
   const workspaceArchived = Boolean(activeOrganization?.archived_at)
-  const canEditProject = (!isSignedIn || !project.owner || project.owner.id === user?.id) && !workspaceArchived
+  const ownsProject = !project.owner || project.owner.id === user?.id
+  const canEditProject = (!isSignedIn || ownsProject) && !workspaceArchived
   const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
   const pendingInvitations = orgInvitations.filter((invitation) => !invitation.accepted_at)
   const memberSearch = memberSearchDraft.trim().toLowerCase()
@@ -238,9 +240,7 @@ export default function App() {
         : currentCloudSaveStatus === 'conflict'
           ? 'Save conflict · local copy safe'
           : 'Saved to cloud + local backup'
-  const canAccessProjectFeedback = isSignedIn && isCloudProjectId(project.id) && (
-    canEditProject || Boolean(project.organizationId && canUseInstructorPanel)
-  )
+  const canAccessProjectFeedback = canViewProjectFeedback(project, isSignedIn, user?.id, canUseInstructorPanel)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
     : themePreference
