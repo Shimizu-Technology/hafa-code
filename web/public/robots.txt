@@ -1,5 +1,5 @@
 # Hafa Code
-# https://hafacode.com
+# https://hafa-code.netlify.app
 
 User-agent: *
 Allow: /
@@ -7,4 +7,4 @@ Disallow: /api/
 Disallow: /admin/
 Disallow: /rails/
 
-Sitemap: https://hafacode.com/sitemap.xml
+Sitemap: https://hafa-code.netlify.app/sitemap.xml

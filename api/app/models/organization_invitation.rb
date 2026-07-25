@@ -10,6 +10,12 @@ class OrganizationInvitation < ApplicationRecord
     format: { with: URI::MailTo::EMAIL_REGEXP, message: "is invalid" }
   validates :role, presence: true
   validates :token, presence: true, uniqueness: true
+  validates :email, uniqueness: {
+    scope: :organization_id,
+    conditions: -> { where(accepted_at: nil) },
+    message: "already has a pending invitation for this organization"
+  }
+  validates :delivery_status, inclusion: { in: %w[pending queued sent failed] }
 
   before_validation :normalize_email
   before_validation :ensure_token
@@ -23,6 +29,21 @@ class OrganizationInvitation < ApplicationRecord
 
   def expired?
     expires_at.present? && expires_at <= Time.current
+  end
+
+  def renew!(invited_by:, role:)
+    assign_attributes(
+      invited_by: invited_by,
+      role: role,
+      token: nil,
+      expires_at: 14.days.from_now,
+      delivery_status: "pending",
+      delivery_error: nil,
+      provider_message_id: nil,
+      last_sent_at: nil,
+      send_attempts: 0
+    )
+    save!
   end
 
   private

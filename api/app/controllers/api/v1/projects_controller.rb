@@ -6,8 +6,20 @@ module Api
       before_action :set_owned_project, only: [ :update, :destroy, :archive, :unarchive ]
 
       def index
-        projects = scoped_projects.includes(:project_files, :user, :organization).order(updated_at: :desc)
-        render json: { projects: projects.map { |project| project_json(project) } }
+        scope = scoped_projects.order(updated_at: :desc, id: :desc)
+        page = positive_integer_param(:page, 1)
+        per_page = [ positive_integer_param(:per_page, 50), 100 ].min
+        total_count = scope.count
+        projects = scope.includes(:project_files, :user, :organization).offset((page - 1) * per_page).limit(per_page)
+        render json: {
+          projects: projects.map { |project| project_json(project) },
+          pagination: {
+            page: page,
+            per_page: per_page,
+            total_count: total_count,
+            total_pages: (total_count.to_f / per_page).ceil
+          }
+        }
       end
 
       def show
@@ -17,9 +29,11 @@ module Api
       def create
         project = current_user.projects.new(project_attrs)
         project.organization = project_organization
+        return render_archived_organization_error if project.organization&.archived?
         assign_files(project)
 
         if project.save
+          audit_event!("project.created", organization: project.organization, target: project, metadata: { visibility: project.visibility })
           render json: { project: project_json(project) }, status: :created
         else
           render json: { errors: validation_errors(project) }, status: :unprocessable_entity
@@ -27,36 +41,66 @@ module Api
       end
 
       def update
+        return render_archived_organization_error if @project.organization&.archived?
+
+        previous_visibility = @project.visibility
         Project.transaction do
           @project.assign_attributes(project_attrs)
           if params.key?(:files)
             @project.project_files.destroy_all
             assign_files(@project)
+            @project.updated_at = Time.current
           end
           @project.save!
+          if @project.visibility != previous_visibility
+            audit_event!(
+              "project.visibility_changed",
+              organization: @project.organization,
+              target: @project,
+              metadata: { from: previous_visibility, to: @project.visibility }
+            )
+          end
         end
 
         render json: { project: project_json(@project.reload) }
       rescue ActiveRecord::RecordInvalid => e
         render json: { errors: validation_errors(e.record) }, status: :unprocessable_entity
+      rescue ActiveRecord::StaleObjectError
+        current = Project.includes(:project_files, :user, :organization).find(@project.id)
+        render json: {
+          error: "This project changed in another tab. Reload the latest version before saving again.",
+          code: "project_conflict",
+          project: project_json(current)
+        }, status: :conflict
       end
 
       def destroy
-        @project.destroy
+        return render_archived_organization_error if @project.organization&.archived?
+
+        Project.transaction do
+          audit_event!("project.deleted", organization: @project.organization, target: @project, metadata: { visibility: @project.visibility })
+          @project.destroy!
+        end
         head :no_content
       end
 
       def archive
+        return render_archived_organization_error if @project.organization&.archived?
+
         @project.update!(archived_at: Time.current)
         render json: { project: project_json(@project.reload) }
       end
 
       def unarchive
+        return render_archived_organization_error if @project.organization&.archived?
+
         @project.update!(archived_at: nil)
         render json: { project: project_json(@project.reload) }
       end
 
       def duplicate
+        return render_archived_organization_error if @project.organization&.archived?
+
         copy = current_user.projects.new(
           title: "#{@project.title} Copy",
           kind: @project.kind,
@@ -75,6 +119,12 @@ module Api
         end
 
         if copy.save
+          audit_event!(
+            "project.duplicated",
+            organization: copy.organization,
+            target: copy,
+            metadata: { source_project_id: @project.id }
+          )
           render json: { project: project_json(copy) }, status: :created
         else
           render json: { errors: copy.errors.full_messages }, status: :unprocessable_entity
@@ -103,6 +153,9 @@ module Api
       def set_accessible_project
         @project = Project.includes(:project_files, :user, :organization).find(params[:id])
         render_forbidden unless can_view_project?(current_user, @project)
+        if current_user.admin? && @project.user_id != current_user.id && @project.visibility == "private"
+          audit_event!("project.private_viewed_by_admin", organization: @project.organization, target: @project)
+        end
       end
 
       def set_owned_project
@@ -110,7 +163,7 @@ module Api
       end
 
       def project_attrs
-        params.permit(:title, :kind, :visibility, :entry_path)
+        params.permit(:title, :kind, :visibility, :entry_path, :lock_version)
       end
 
       def project_organization
@@ -155,6 +208,15 @@ module Api
         end
 
         (project.errors.full_messages + file_errors).uniq
+      end
+
+      def render_archived_organization_error
+        render json: { errors: [ "This classroom is archived and read-only" ] }, status: :unprocessable_entity
+      end
+
+      def positive_integer_param(name, default)
+        value = Integer(params[name], exception: false)
+        value&.positive? ? value : default
       end
     end
   end

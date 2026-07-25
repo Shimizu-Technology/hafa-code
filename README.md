@@ -30,6 +30,7 @@ hafa-code/
 - [Security model](docs/SECURITY.md)
 - [Multi-file workspace plan](docs/MULTI_FILE_WORKSPACE.md)
 - [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)
+- [FDMS classroom launch readiness and action plan](docs/FDMS_CLASSROOM_LAUNCH_PLAN.md)
 
 ## Security Model
 

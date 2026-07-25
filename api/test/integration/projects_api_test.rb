@@ -115,6 +115,35 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal "private", project.reload.visibility
   end
 
+  test "class projects cannot be published outside the class unless policy enables it" do
+    organization = Organization.create!(name: "Private Classroom", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :student)
+
+    post "/api/v1/projects",
+      params: {
+        title: "Class Project",
+        kind: "ruby",
+        visibility: "public",
+        organization_id: organization.id,
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'classroom'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body.fetch("errors"), "Visibility must stay teacher-only or class-visible for this organization"
+
+    post "/api/v1/projects",
+      params: {
+        title: "Personal Public Project",
+        kind: "ruby",
+        visibility: "public",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'personal'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+  end
+
   test "rejects unsafe file paths and entry paths" do
     post "/api/v1/projects",
       params: {
@@ -171,6 +200,65 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal "Ruby Playground", project.reload.title
     assert_equal [ "main.rb" ], project.project_files.pluck(:path)
+  end
+
+  test "rejects stale project updates instead of silently overwriting newer work" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'original'") ]
+    )
+    original_lock_version = project.lock_version
+
+    project.update!(title: "Changed in another tab")
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Stale title",
+        kind: "ruby",
+        lock_version: original_lock_version,
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'stale'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :conflict
+    assert_equal "project_conflict", response.parsed_body.fetch("code")
+    assert_equal "Changed in another tab", response.parsed_body.dig("project", "title")
+    assert_equal "puts 'original'", project.reload.project_files.first.content
+  end
+
+  test "file-only saves increment the lock and reject a stale second tab" do
+    project = @user.projects.create!(
+      title: "Ruby Playground",
+      kind: "ruby",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'original'") ]
+    )
+    original_lock_version = project.lock_version
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: project.title,
+        kind: project.kind,
+        lock_version: original_lock_version,
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'first tab'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :success
+    assert_equal original_lock_version + 1, response.parsed_body.dig("project", "lock_version")
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: project.title,
+        kind: project.kind,
+        lock_version: original_lock_version,
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'stale tab'" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :conflict
+    assert_equal "project_conflict", response.parsed_body.fetch("code")
+    assert_equal "puts 'first tab'", project.reload.project_files.first.content
   end
 
   test "archives and restores projects" do
@@ -359,6 +447,41 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "web", response.parsed_body.dig("share", "kind")
     assert_equal 3, response.parsed_body.dig("share", "snapshot", "files").length
+  end
+
+  test "classroom snapshot sharing is disabled by default and audited when explicitly enabled" do
+    organization = Organization.create!(name: "Sharing School", created_by: @user)
+    organization.organization_memberships.create!(user: @user, role: :owner)
+    payload = {
+      title: "Classroom Ruby",
+      kind: "ruby",
+      organization_id: organization.id,
+      files: [ { path: "main.rb", language: "ruby", content: "puts 'classroom'" } ]
+    }
+    old_external_sharing = ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"]
+    ENV.delete("ALLOW_ORGANIZATION_EXTERNAL_SHARING")
+
+    post "/api/v1/shares", params: payload.to_json, headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "External snapshot sharing is disabled for classroom projects" ], response.parsed_body.fetch("errors")
+    assert_equal 0, ProjectShare.count
+
+    ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = "true"
+    post "/api/v1/shares", params: payload.to_json, headers: @headers
+
+    assert_response :created
+    event = AuditEvent.order(:id).last
+    assert_equal "project.share_created", event.action
+    assert_equal organization, event.organization
+    assert_equal @user, event.actor
+    assert_not event.metadata.key?("files")
+  ensure
+    if old_external_sharing
+      ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = old_external_sharing
+    else
+      ENV.delete("ALLOW_ORGANIZATION_EXTERNAL_SHARING")
+    end
   end
 
   test "does not serve expired share snapshots" do
@@ -581,6 +704,11 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       role: :student
     )
 
+    get "/api/v1/invitations/#{invitation.token}"
+
+    assert_response :success
+    assert_no_match "private-invitee@example.com", response.body
+
     post "/api/v1/invitations/#{invitation.token}/accept", headers: @headers
 
     assert_response :forbidden
@@ -774,23 +902,41 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_includes response.parsed_body.fetch("errors"), "Email is invalid"
 
-    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
-    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+    original_configured = OrganizationInviteEmailService.method(:configured?)
+    OrganizationInviteEmailService.define_singleton_method(:configured?) { false }
 
     begin
       post "/api/v1/organizations/#{organization.id}/invite",
         params: { email: "student@example.com", role: "student" }.to_json,
         headers: owner_headers
     ensure
-      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+      OrganizationInviteEmailService.define_singleton_method(:configured?, original_configured)
     end
 
     assert_response :created
     invitation = response.parsed_body.fetch("invitation")
     assert_equal "student@example.com", invitation.fetch("email")
     assert_equal "student", invitation.fetch("role")
-    assert_equal false, invitation.fetch("email_sent")
+    assert_equal false, invitation.fetch("email_queued")
+    assert_equal "pending", invitation.fetch("delivery_status")
     assert_match "#invite=", invitation.fetch("invitation_url")
+
+    original_token = invitation.fetch("token")
+    original_configured = OrganizationInviteEmailService.method(:configured?)
+    OrganizationInviteEmailService.define_singleton_method(:configured?) { false }
+
+    begin
+      post "/api/v1/organizations/#{organization.id}/invite",
+        params: { email: " STUDENT@example.com ", role: "student" }.to_json,
+        headers: owner_headers
+    ensure
+      OrganizationInviteEmailService.define_singleton_method(:configured?, original_configured)
+    end
+
+    assert_response :created
+    renewed_invitation = response.parsed_body.fetch("invitation")
+    assert_equal 1, organization.organization_invitations.where(email: "student@example.com", accepted_at: nil).count
+    assert_not_equal original_token, renewed_invitation.fetch("token")
 
     instructor = User.create!(
       clerk_id: "test_clerk_invite_instructor",
@@ -853,18 +999,19 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_not_includes instructor_visible_invitations.map { |candidate| candidate.fetch("email") }, "teacher@example.com"
 
     student_invitation_id = invitations.find { |candidate| candidate.fetch("email") == "student@example.com" }.fetch("id")
-    original_send_invite = OrganizationInviteEmailService.method(:send_invite)
-    OrganizationInviteEmailService.define_singleton_method(:send_invite) { |**| false }
+    original_configured = OrganizationInviteEmailService.method(:configured?)
+    OrganizationInviteEmailService.define_singleton_method(:configured?) { false }
 
     begin
       post "/api/v1/organizations/#{organization.id}/invitations/#{student_invitation_id}/resend",
         headers: owner_headers
     ensure
-      OrganizationInviteEmailService.define_singleton_method(:send_invite, original_send_invite)
+      OrganizationInviteEmailService.define_singleton_method(:configured?, original_configured)
     end
 
     assert_response :success
-    assert_equal false, response.parsed_body.dig("invitation", "email_sent")
+    assert_equal false, response.parsed_body.dig("invitation", "email_queued")
+    assert_equal "pending", response.parsed_body.dig("invitation", "delivery_status")
     assert_match "#invite=", response.parsed_body.dig("invitation", "invitation_url")
 
     revoked_token = response.parsed_body.dig("invitation", "token")
@@ -878,17 +1025,188 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
-  test "production invitation origin does not silently fall back to localhost" do
+  test "production invitation origin uses the declared Netlify app instead of localhost" do
     old_frontend_url = ENV.delete("FRONTEND_URL")
     old_app_url = ENV.delete("APP_URL")
     old_rails_env = Rails.method(:env)
+    old_public_app_origin = Rails.application.config.x.public_app_origin
     Rails.define_singleton_method(:env) { ActiveSupport::StringInquirer.new("production") }
+    load Rails.root.join("config/initializers/app_origin.rb")
 
-    assert_nil Api::V1::OrganizationsController.new.send(:frontend_origin)
+    assert_equal "https://hafa-code.netlify.app", Api::V1::OrganizationsController.new.send(:frontend_origin)
   ensure
     Rails.define_singleton_method(:env, old_rails_env) if old_rails_env
+    Rails.application.config.x.public_app_origin = old_public_app_origin
     ENV["FRONTEND_URL"] = old_frontend_url if old_frontend_url
     ENV["APP_URL"] = old_app_url if old_app_url
+  end
+
+  test "organization owners can paste a roster and enforce allowed email domains" do
+    owner = User.create!(
+      clerk_id: "test_clerk_bulk_invite_owner",
+      email: "bulk-owner@fdms.org",
+      first_name: "Bulk",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Bulk Invite School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+    old_allowed_domains = ENV["ALLOWED_MEMBER_EMAIL_DOMAINS"]
+    ENV["ALLOWED_MEMBER_EMAIL_DOMAINS"] = "fdms.org"
+    original_configured = OrganizationInviteEmailService.method(:configured?)
+    OrganizationInviteEmailService.define_singleton_method(:configured?) { false }
+
+    post "/api/v1/organizations/#{organization.id}/bulk_invite",
+      params: {
+        emails: [ "student1@fdms.org", "STUDENT2@FDMS.ORG", "outsider@example.com", "student1@fdms.org" ],
+        role: "student"
+      }.to_json,
+      headers: owner_headers
+
+    assert_response :multi_status
+    assert_equal [ "student1@fdms.org", "student2@fdms.org" ], response.parsed_body.fetch("invitations").pluck("email")
+    assert_equal [ "outsider@example.com" ], response.parsed_body.fetch("errors").pluck("email")
+    assert_equal 2, organization.organization_invitations.count
+
+    post "/api/v1/organizations/#{organization.id}/invite",
+      params: { email: "outsider@example.com", role: "student" }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal [ "Email domain is not allowed for this workspace" ], response.parsed_body.fetch("errors")
+  ensure
+    OrganizationInviteEmailService.define_singleton_method(:configured?, original_configured) if original_configured
+    if old_allowed_domains
+      ENV["ALLOWED_MEMBER_EMAIL_DOMAINS"] = old_allowed_domains
+    else
+      ENV.delete("ALLOWED_MEMBER_EMAIL_DOMAINS")
+    end
+  end
+
+  test "organization owners can set the school year and archive a classroom read-only" do
+    owner = User.create!(
+      clerk_id: "test_clerk_lifecycle_owner",
+      email: "lifecycle-owner@example.com",
+      first_name: "Lifecycle",
+      last_name: "Owner",
+      role: :mentor
+    )
+    organization = Organization.create!(name: "Lifecycle School", created_by: owner)
+    organization.organization_memberships.create!(user: owner, role: :owner)
+    student = User.create!(
+      clerk_id: "test_clerk_lifecycle_student",
+      email: "lifecycle-student@example.com",
+      first_name: "Lifecycle",
+      last_name: "Student"
+    )
+    student_membership = organization.organization_memberships.create!(user: student, role: :student)
+    invitation = organization.organization_invitations.create!(
+      invited_by: owner,
+      email: "pending-lifecycle-student@example.com",
+      role: :student
+    )
+    project = owner.projects.create!(
+      organization: organization,
+      title: "Class Project",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'before'") ]
+    )
+    owner_headers = {
+      "Authorization" => "Bearer test_token_#{owner.id}",
+      "Content-Type" => "application/json"
+    }
+
+    patch "/api/v1/organizations/#{organization.id}",
+      params: { school_year: "2026–2027" }.to_json,
+      headers: owner_headers
+
+    assert_response :success
+    assert_equal "2026–2027", response.parsed_body.dig("organization", "school_year")
+
+    patch "/api/v1/organizations/#{organization.id}/archive", headers: owner_headers
+
+    assert_response :success
+    assert_not_nil response.parsed_body.dig("organization", "archived_at")
+
+    patch "/api/v1/projects/#{project.id}",
+      params: {
+        title: "Changed",
+        kind: "ruby",
+        files: [ { path: "main.rb", language: "ruby", content: "puts 'after'" } ]
+      }.to_json,
+      headers: owner_headers
+
+    assert_response :unprocessable_entity
+    assert_equal "puts 'before'", project.reload.project_files.first.content
+
+    patch "/api/v1/organizations/#{organization.id}",
+      params: { name: "Changed While Archived" }.to_json,
+      headers: owner_headers
+    assert_response :unprocessable_entity
+    assert_equal "Lifecycle School", organization.reload.name
+
+    patch "/api/v1/projects/#{project.id}/archive", headers: owner_headers
+    assert_response :unprocessable_entity
+    assert_nil project.reload.archived_at
+
+    post "/api/v1/projects/#{project.id}/checkpoints",
+      params: { title: "Archived checkpoint" }.to_json,
+      headers: owner_headers
+    assert_response :unprocessable_entity
+    assert_equal 0, project.project_checkpoints.count
+
+    delete "/api/v1/projects/#{project.id}", headers: owner_headers
+    assert_response :unprocessable_entity
+    assert Project.exists?(project.id)
+
+    post "/api/v1/organizations/#{organization.id}/invitations/#{invitation.id}/resend",
+      headers: owner_headers
+    assert_response :unprocessable_entity
+
+    delete "/api/v1/organizations/#{organization.id}/invitations/#{invitation.id}",
+      headers: owner_headers
+    assert_response :unprocessable_entity
+    assert OrganizationInvitation.exists?(invitation.id)
+
+    invited_student = User.create!(
+      clerk_id: "test_clerk_archived_invitation_student",
+      email: invitation.email,
+      first_name: "Invited",
+      last_name: "Student"
+    )
+    invited_student_headers = {
+      "Authorization" => "Bearer test_token_#{invited_student.id}",
+      "Content-Type" => "application/json"
+    }
+    post "/api/v1/invitations/#{invitation.token}/accept", headers: invited_student_headers
+    assert_response :unprocessable_entity
+    assert_nil invitation.reload.accepted_at
+    assert_not organization.organization_memberships.exists?(user: invited_student)
+
+    patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      params: { role: "instructor" }.to_json,
+      headers: owner_headers
+    assert_response :unprocessable_entity
+    assert_equal "student", student_membership.reload.role
+
+    delete "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
+      headers: owner_headers
+    assert_response :unprocessable_entity
+    assert OrganizationMembership.exists?(student_membership.id)
+
+    patch "/api/v1/organizations/#{organization.id}/unarchive", headers: owner_headers
+    assert_response :success
+    assert_nil response.parsed_body.dig("organization", "archived_at")
+
+    get "/api/v1/organizations/#{organization.id}/audit_events", headers: owner_headers
+    assert_response :success
+    assert_includes response.parsed_body.fetch("audit_events").pluck("action"), "organization.archived"
+    assert_includes response.parsed_body.fetch("audit_events").pluck("action"), "organization.restored"
   end
 
   test "organization owners can manage members and protect the final owner" do
@@ -915,6 +1233,13 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     owner_membership = organization.organization_memberships.create!(user: owner, role: :owner)
     organization.organization_memberships.create!(user: instructor, role: :instructor)
     student_membership = organization.organization_memberships.create!(user: student, role: :student)
+    student_project = student.projects.create!(
+      organization: organization,
+      title: "Student Class Project",
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'student'") ]
+    )
     owner_headers = {
       "Authorization" => "Bearer test_token_#{owner.id}",
       "Content-Type" => "application/json"
@@ -923,6 +1248,19 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       "Authorization" => "Bearer test_token_#{instructor.id}",
       "Content-Type" => "application/json"
     }
+    student_headers = {
+      "Authorization" => "Bearer test_token_#{student.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/export", headers: student_headers
+    assert_response :success
+    assert_equal [ student.id ], response.parsed_body.dig("export", "members").pluck("id")
+    assert_equal [ student_project.id ], response.parsed_body.dig("export", "projects").pluck("id")
+
+    get "/api/v1/organizations/#{organization.id}/export", headers: instructor_headers
+    assert_response :success
+    assert_equal 3, response.parsed_body.dig("export", "members").length
 
     patch "/api/v1/organizations/#{organization.id}/members/#{student_membership.id}",
       params: { role: "instructor" }.to_json,
@@ -956,6 +1294,8 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
 
     assert_response :no_content
     assert_nil OrganizationMembership.find_by(id: student_membership.id)
+    assert_nil student_project.reload.organization_id
+    assert_equal "private", student_project.visibility
   end
 
   test "organization students cannot view another student's private organization project" do
@@ -1007,13 +1347,19 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
       visibility: "organization",
       project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'class'") ]
     )
-    unlisted_project = @user.projects.create!(
-      organization: organization,
-      title: "Link Only Ruby",
-      kind: "ruby",
-      visibility: "unlisted",
-      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'link only'") ]
-    )
+    old_external_sharing = ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"]
+    ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = "true"
+    begin
+      unlisted_project = @user.projects.create!(
+        organization: organization,
+        title: "Link Only Ruby",
+        kind: "ruby",
+        visibility: "unlisted",
+        project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'link only'") ]
+      )
+    ensure
+      ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = old_external_sharing
+    end
     other_headers = {
       "Authorization" => "Bearer test_token_#{other_student.id}",
       "Content-Type" => "application/json"
@@ -1040,13 +1386,19 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     )
     organization = Organization.create!(name: "Source School", created_by: @user)
     organization.organization_memberships.create!(user: @user, role: :owner)
-    source_project = @user.projects.create!(
-      organization: organization,
-      title: "Shareable Ruby",
-      kind: "ruby",
-      visibility: "unlisted",
-      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
-    )
+    old_external_sharing = ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"]
+    ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = "true"
+    begin
+      source_project = @user.projects.create!(
+        organization: organization,
+        title: "Shareable Ruby",
+        kind: "ruby",
+        visibility: "unlisted",
+        project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
+      )
+    ensure
+      ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"] = old_external_sharing
+    end
     outsider_headers = {
       "Authorization" => "Bearer test_token_#{outsider.id}",
       "Content-Type" => "application/json"

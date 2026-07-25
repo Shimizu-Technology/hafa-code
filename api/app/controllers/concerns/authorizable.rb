@@ -37,6 +37,14 @@ module Authorizable
     project.user_id == user&.id
   end
 
+  def can_access_project_feedback?(user, project)
+    return true if user&.admin?
+    return true if project.user_id == user&.id
+    return false unless project.organization
+
+    organization_instructor?(user, project.organization)
+  end
+
   def can_manage_org?(user, organization)
     user&.admin? || organization_membership_for(user, organization)&.owner?
   end

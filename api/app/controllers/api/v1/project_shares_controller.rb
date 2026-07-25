@@ -3,9 +3,12 @@ module Api
     class ProjectSharesController < ApplicationController
       MAX_FILES = Project::MAX_FILES
       MAX_FILE_BYTES = 500_000
+      MAX_TOTAL_BYTES = Project::MAX_TOTAL_CONTENT_BYTES
       SHARE_TTL = 30.days
 
       def create
+        organization = classroom_share_organization
+        return if performed?
         return render_rate_limited if share_rate_limited?
 
         snapshot = normalized_snapshot
@@ -20,6 +23,12 @@ module Api
           )
 
           if share.save
+            audit_event!(
+              "project.share_created",
+              organization: organization,
+              target: share,
+              metadata: { kind: share.kind }
+            ) if organization
             render json: { share: share_json(share) }, status: :created
           else
             render json: { errors: share.errors.full_messages }, status: :unprocessable_entity
@@ -45,12 +54,25 @@ module Api
 
       private
 
-      def share_rate_limited?
-        key = "share-create:#{request.remote_ip}"
-        Rails.cache.write(key, 0, expires_in: 1.hour, unless_exist: true, raw: true)
-        count = Rails.cache.increment(key).to_i
+      def classroom_share_organization
+        return nil if params[:organization_id].blank?
 
-        count > 60
+        authenticate_user!
+        return nil if performed?
+
+        organization = current_user.admin? ?
+          Organization.find(params[:organization_id]) :
+          current_user.organizations.find(params[:organization_id])
+        unless ActiveModel::Type::Boolean.new.cast(ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"])
+          render json: { errors: [ "External snapshot sharing is disabled for classroom projects" ] }, status: :unprocessable_entity
+          return nil
+        end
+
+        organization
+      end
+
+      def share_rate_limited?
+        ApiRateLimit.exceeded?("share-create:#{request.remote_ip}", limit: 60, period: 1.hour)
       end
 
       def render_rate_limited
@@ -92,6 +114,7 @@ module Api
         end
 
         raise ArgumentError, "At least one valid file is required" if normalized_files.empty?
+        raise ArgumentError, "Project source is too large" if normalized_files.sum { |file| file.fetch(:content).bytesize } > MAX_TOTAL_BYTES
         raise ArgumentError, "File paths must be unique" if normalized_files.map { |file| file.fetch(:path) }.uniq.length != normalized_files.length
         entry_path = normalized_files.first.fetch(:path) if entry_path.blank?
         raise ArgumentError, "Entry path must match a project file" unless normalized_files.any? { |file| file.fetch(:path) == entry_path }

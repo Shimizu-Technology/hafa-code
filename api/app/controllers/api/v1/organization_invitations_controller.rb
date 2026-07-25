@@ -12,6 +12,9 @@ module Api
 
       def accept
         invitation = OrganizationInvitation.pending.find_by!(token: params[:token])
+        if invitation.organization.archived?
+          return render json: { errors: [ "This classroom is archived and read-only" ] }, status: :unprocessable_entity
+        end
         if invitation.email != current_user.email.downcase
           return render_forbidden("This invitation is for a different account.")
         end
@@ -29,6 +32,12 @@ module Api
         ApplicationRecord.transaction do
           accept_membership!(invitation)
           invitation.update!(accepted_at: Time.current)
+          audit_event!(
+            "organization.invitation.accepted",
+            organization: invitation.organization,
+            target: invitation,
+            metadata: { role: invitation.role }
+          )
         end
       end
 
@@ -70,7 +79,6 @@ module Api
       def invitation_json(invitation)
         {
           token: invitation.token,
-          email: invitation.email,
           role: invitation.role,
           organization: {
             id: invitation.organization.id,

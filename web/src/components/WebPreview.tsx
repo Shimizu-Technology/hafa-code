@@ -97,7 +97,7 @@ export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPa
       <iframe
         ref={iframeRef}
         title="Web preview"
-        sandbox="allow-scripts allow-modals"
+        sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         src={previewFrameUrl}
       />

@@ -9,6 +9,7 @@ class ProjectFile < ApplicationRecord
   validates :content, length: { maximum: 500_000 }
   validates :position, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :path_is_safe_relative_path
+  validate :content_bytes_within_limit
 
   private
 
@@ -34,5 +35,11 @@ class ProjectFile < ApplicationRecord
     if segments.any? { |segment| segment.start_with?(".") }
       errors.add(:path, "cannot include hidden files or folders yet")
     end
+  end
+
+  def content_bytes_within_limit
+    return if content.to_s.bytesize <= 500_000
+
+    errors.add(:content, "is too large (maximum is 500 KB)")
   end
 end

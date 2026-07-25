@@ -1,5 +1,6 @@
 import { inferFileLanguage, type ProjectFile, type ProjectKind, type ProjectVisibility, type SavedProject } from './codeRunner'
 import { decodeSharedProject, loadProjectLibrary, type ProjectLibrary } from './projectStorage'
+import { pendingCloudProjectIds } from './cloudSyncStorage'
 
 export type FileDialogMode = 'create' | 'rename' | 'duplicate'
 
@@ -11,7 +12,7 @@ export interface FileDialogState {
 
 export type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
 export type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
-export type ClassroomTab = 'people' | 'invitations'
+export type ClassroomTab = 'people' | 'invitations' | 'settings'
 
 export const PROJECT_FILE_LIMIT = 50
 
@@ -23,14 +24,14 @@ export const kindLabels: Record<ProjectKind, string> = {
 
 export const visibilityLabels: Record<ProjectVisibility, string> = {
   private: 'Private',
-  organization: 'Org',
+  organization: 'Class',
   unlisted: 'Unlisted',
   public: 'Public',
 }
 
 export const visibilityDescriptions: Record<ProjectVisibility, string> = {
-  private: 'Only you can edit or list it. In orgs, instructors and owners can view and run it.',
-  organization: 'Members of this org can find, view, and run it. Only you can edit it.',
+  private: 'Only you can edit it. In a class, instructors and owners can also view it and give feedback.',
+  organization: 'Everyone in this class can find, view, and run it. Only you can edit it.',
   unlisted: 'Anyone with the direct link can view and run it, but it is hidden from org lists.',
   public: 'Anyone with access to Hafa Code can view and run it, and org members can find it in lists.',
 }
@@ -179,14 +180,21 @@ export async function writeClipboardText(text: string) {
 }
 
 export function mergeCloudAndLocalProjects(cloudProjects: SavedProject[], localLibrary: ProjectLibrary, organizationId: string | null): ProjectLibrary {
-  const localOnlyProjects = organizationId ? [] : localLibrary.projects.filter((candidate) => !isCloudProjectId(candidate.id))
-  const projects = [...cloudProjects, ...localOnlyProjects]
+  const pendingIds = pendingCloudProjectIds()
+  const localContextProjects = localLibrary.projects.filter((candidate) => projectContextMatches(candidate, organizationId))
+  const localById = new Map(localContextProjects.map((candidate) => [candidate.id, candidate]))
+  const mergedCloudProjects = cloudProjects.map((cloudProject) => {
+    const localProject = localById.get(cloudProject.id)
+    return localProject && pendingIds.has(localProject.id) ? localProject : cloudProject
+  })
+  const cloudIds = new Set(cloudProjects.map((candidate) => candidate.id))
+  const unsyncedContextProjects = localContextProjects.filter((candidate) => !cloudIds.has(candidate.id) && (!isCloudProjectId(candidate.id) || pendingIds.has(candidate.id)))
+  const otherContextProjects = localLibrary.projects.filter((candidate) => !projectContextMatches(candidate, organizationId))
+  const projects = [...mergedCloudProjects, ...unsyncedContextProjects, ...otherContextProjects]
   if (projects.length === 0) return localLibrary
-  const activeProjectId = organizationId && cloudProjects.length > 0
-    ? cloudProjects[0].id
-    : projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
-      ? localLibrary.activeProjectId
-      : projects[0].id
+  const activeProjectId = projects.some((candidate) => candidate.id === localLibrary.activeProjectId)
+    ? localLibrary.activeProjectId
+    : (mergedCloudProjects[0] ?? unsyncedContextProjects[0] ?? projects[0]).id
 
   return { activeProjectId, projects }
 }
@@ -196,5 +204,5 @@ export function projectContextMatches(project: SavedProject, organizationId: str
 }
 
 export function availableVisibilityOptions(organizationId: string | null): ProjectVisibility[] {
-  return organizationId ? ['private', 'organization', 'unlisted', 'public'] : ['private', 'unlisted', 'public']
+  return organizationId ? ['private', 'organization'] : ['private', 'unlisted', 'public']
 }

@@ -8,13 +8,19 @@ class Organization < ApplicationRecord
   has_many :members, through: :organization_memberships, source: :user
   has_many :organization_invitations, dependent: :destroy
   has_many :projects, dependent: :nullify
+  has_many :audit_events, dependent: :nullify
 
   before_destroy :privatize_organization_visible_projects, prepend: true
   validates :name, presence: true, length: { maximum: 120 }
+  validates :school_year, length: { maximum: 40 }, allow_blank: true
   validates :slug, presence: true, uniqueness: true, length: { maximum: 80 },
     format: { with: /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/ }
 
   before_validation :set_slug
+
+  def archived?
+    archived_at.present?
+  end
 
   private
 

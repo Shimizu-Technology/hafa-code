@@ -2,12 +2,15 @@ class Project < ApplicationRecord
   KINDS = %w[ruby javascript web].freeze
   VISIBILITIES = %w[private organization unlisted public].freeze
   MAX_FILES = 50
+  MAX_TOTAL_CONTENT_BYTES = 2_000_000
 
   belongs_to :user
   belongs_to :organization, optional: true
   belongs_to :forked_from, class_name: "Project", optional: true
   has_many :project_files, -> { order(:position, :id) }, dependent: :destroy, inverse_of: :project
   has_many :project_checkpoints, -> { order(created_at: :desc) }, dependent: :destroy
+  has_many :project_comments, dependent: :destroy
+  has_many :project_comment_reads, dependent: :destroy
 
   validates :title, presence: true, length: { maximum: 120 }
   validates :kind, inclusion: { in: KINDS }
@@ -16,8 +19,10 @@ class Project < ApplicationRecord
   validates_associated :project_files
   validate :file_count_within_limit
   validate :has_at_least_one_file
+  validate :total_content_within_limit
   validate :entry_path_matches_file
   validate :organization_visibility_requires_organization
+  validate :organization_external_sharing_requires_policy
 
   before_validation :set_default_entry_path
 
@@ -60,6 +65,13 @@ class Project < ApplicationRecord
     errors.add(:project_files, "must include at least one file")
   end
 
+  def total_content_within_limit
+    total_bytes = project_files.reject(&:marked_for_destruction?).sum { |file| file.content.to_s.bytesize }
+    return if total_bytes <= MAX_TOTAL_CONTENT_BYTES
+
+    errors.add(:project_files, "cannot contain more than #{MAX_TOTAL_CONTENT_BYTES / 1_000_000} MB of source code")
+  end
+
   def entry_path_matches_file
     return if entry_path.blank?
     return if project_files.reject(&:marked_for_destruction?).any? { |file| file.path == entry_path }
@@ -72,5 +84,13 @@ class Project < ApplicationRecord
     return if organization_id.present?
 
     errors.add(:organization, "must be present for organization visibility")
+  end
+
+  def organization_external_sharing_requires_policy
+    return unless organization_id.present? && visibility.in?(%w[unlisted public])
+    return unless new_record? || will_save_change_to_visibility?
+    return if ActiveModel::Type::Boolean.new.cast(ENV["ALLOW_ORGANIZATION_EXTERNAL_SHARING"])
+
+    errors.add(:visibility, "must stay teacher-only or class-visible for this organization")
   end
 end

@@ -143,6 +143,7 @@ button.icon-button {
 .app-shell[data-theme="dark"] .invite-row,
 .app-shell[data-theme="dark"] .title-field input,
 .app-shell[data-theme="dark"] .file-path-field input,
+.app-shell[data-theme="dark"] .file-path-field textarea,
 .app-shell[data-theme="dark"] .file-path-field select,
 .app-shell[data-theme="dark"] .member-role-select,
 .app-shell[data-theme="dark"] .workspace-select,
@@ -533,6 +534,46 @@ button.context-chip.active,
   display: grid;
   gap: 0.6rem;
   padding: 1rem;
+}
+
+.classroom-settings {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.classroom-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.audit-event-list {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.85rem;
+}
+
+.audit-event-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.6rem 0.7rem;
+}
+
+.audit-event-row span {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.audit-event-row small {
+  color: var(--muted);
 }
 
 .invite-form {
@@ -1586,13 +1627,20 @@ button.context-chip.active,
   font-weight: 900;
 }
 
-.file-path-field input {
+.file-path-field input,
+.file-path-field textarea {
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
   border-radius: 0.9rem;
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   padding: 0.75rem 0.85rem;
   width: 100%;
+}
+
+.file-path-field textarea {
+  min-height: 6.5rem;
+  resize: vertical;
 }
 
 .form-error {
@@ -2279,5 +2327,147 @@ button.context-chip.active,
 
   .project-list {
     max-height: 220px;
+  }
+}
+
+.project-feedback {
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.feedback-header {
+  align-items: flex-start;
+}
+
+.feedback-count {
+  align-items: center;
+  background: color-mix(in srgb, var(--lagoon) 12%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--lagoon) 30%, var(--line));
+  border-radius: 999px;
+  color: var(--lagoon);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 800;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  white-space: nowrap;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  max-height: 24rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.feedback-comment {
+  background: color-mix(in srgb, var(--paper) 90%, var(--lagoon) 10%);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--lagoon);
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding: 0.85rem;
+}
+
+.feedback-comment.resolved {
+  border-left-color: var(--muted);
+  opacity: 0.72;
+}
+
+.feedback-comment > p {
+  line-height: 1.6;
+  margin: 0.65rem 0;
+  white-space: pre-wrap;
+}
+
+.feedback-comment-meta {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.feedback-comment-meta > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.feedback-comment-meta span,
+.feedback-comment-meta time,
+.feedback-location {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.feedback-comment-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  text-transform: capitalize;
+}
+
+.feedback-location {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+.feedback-form {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.feedback-form label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.feedback-form label > span {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 0.35rem;
+}
+
+.feedback-form textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
+.feedback-reference-row {
+  align-items: end;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(12rem, 1fr) minmax(6rem, 8rem) auto;
+}
+
+.feedback-error {
+  color: #982517;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .feedback-reference-row {
+    grid-template-columns: 1fr 7rem;
+  }
+
+  .feedback-reference-row button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .feedback-comment-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.4rem;
   }
 }

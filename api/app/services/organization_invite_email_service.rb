@@ -2,10 +2,19 @@ require "cgi"
 
 class OrganizationInviteEmailService
   BRAND_NAME = "Hafa Code"
+  class ConfigurationError < StandardError; end
 
   class << self
     def send_invite(invitation:, invitation_url:)
-      return false unless configured?
+      send_invite!(invitation: invitation, invitation_url: invitation_url)
+      true
+    rescue StandardError => e
+      Rails.logger.error("[OrgInviteEmail] failed for #{invitation.email}: #{e.class} #{e.message}")
+      false
+    end
+
+    def send_invite!(invitation:, invitation_url:)
+      raise ConfigurationError, "Invitation email is not configured" unless configured?
 
       response = Resend::Emails.send(
         {
@@ -18,10 +27,7 @@ class OrganizationInviteEmailService
       )
 
       Rails.logger.info("[OrgInviteEmail] sent invite to #{invitation.email} response=#{response.inspect}")
-      true
-    rescue StandardError => e
-      Rails.logger.error("[OrgInviteEmail] failed for #{invitation.email}: #{e.class} #{e.message}")
-      false
+      response
     end
 
     def configured?
