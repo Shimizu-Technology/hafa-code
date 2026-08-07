@@ -1,8 +1,11 @@
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 interface BundleEntry {
   fileName: string
@@ -23,6 +26,24 @@ const STATIC_APP_SHELL = [
   '/icons/maskable-icon-512.png',
   '/icons/apple-touch-icon.png',
 ]
+
+const PYODIDE_RUNTIME_FILES = [
+  'pyodide.asm.mjs',
+  'pyodide.asm.wasm',
+  'pyodide-lock.json',
+  'python_stdlib.zip',
+]
+
+function copyPyodideRuntime() {
+  const pyodideDirectory = dirname(createRequire(import.meta.url).resolve('pyodide'))
+  return viteStaticCopy({
+    targets: PYODIDE_RUNTIME_FILES.map((fileName) => ({
+      src: join(pyodideDirectory, fileName).replace(/\\/g, '/'),
+      dest: 'assets/pyodide',
+      rename: { stripBase: true },
+    })),
+  })
+}
 
 function buildServiceWorker(): Plugin {
   return {
@@ -61,7 +82,7 @@ function buildServiceWorker(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), buildServiceWorker()],
+  plugins: [react(), copyPyodideRuntime(), buildServiceWorker()],
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
@@ -71,6 +92,7 @@ export default defineConfig({
       '@jitl/quickjs-wasmfile-release-sync',
       '@ruby/3.3-wasm-wasi',
       '@ruby/wasm-wasi',
+      'pyodide',
       'quickjs-emscripten',
     ],
   },

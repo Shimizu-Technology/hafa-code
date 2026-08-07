@@ -1279,7 +1279,7 @@ export default function App() {
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
           <h1>Hafa Code</h1>
-          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, and HTML/CSS/JS in the browser.</p>
+          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, Python, and HTML/CSS/JS in the browser.</p>
           <div className="trust-row" aria-label="Platform guardrails">
             <span><ShieldCheck size={15} /> Browser-sandboxed</span>
             <span><Rocket size={15} /> No setup</span>

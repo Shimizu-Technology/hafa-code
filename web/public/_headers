@@ -11,6 +11,9 @@
 /assets/javascriptRunner.worker-*.js
   Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'none'; connect-src 'self';
 
+/assets/pythonRunner.worker-*.js
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'none'; connect-src 'self';
+
 /preview-frame.html
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

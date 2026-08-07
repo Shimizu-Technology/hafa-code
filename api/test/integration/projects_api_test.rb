@@ -69,6 +69,24 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body.fetch("errors"), "Project files must include at least one file"
   end
 
+  test "creates Python projects and chooses main.py as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "Python Playground",
+        kind: "python",
+        files: [
+          { path: "helper.py", language: "python", content: "MESSAGE = 'Hafa adai'" },
+          { path: "main.py", language: "python", content: "from helper import MESSAGE\nprint(MESSAGE)" }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "python", response.parsed_body.dig("project", "kind")
+    assert_equal "main.py", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[helper.py main.py], response.parsed_body.dig("project", "files").pluck("path")
+  end
+
   test "rejects malformed file entries without crashing" do
     post "/api/v1/projects",
       params: {

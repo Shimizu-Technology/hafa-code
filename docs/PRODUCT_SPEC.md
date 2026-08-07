@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a small, open-source coding playground for students and alumni to practice Ruby, JavaScript, HTML, and CSS without installing a local dev environment.
+Create a small, open-source coding playground for students and alumni to practice Ruby, JavaScript, Python, HTML, and CSS without installing a local dev environment.
 
 ## Primary Users
 
@@ -16,7 +16,7 @@ Create a small, open-source coding playground for students and alumni to practic
 
 ### Student
 
-- I can open a browser and immediately write Ruby or JavaScript.
+- I can open a browser and immediately write Ruby, JavaScript, or Python.
 - I can press Run and see output/errors.
 - I can create an HTML/CSS/JS page and see it update live.
 - I can save my work and come back later.
@@ -48,7 +48,13 @@ Create a small, open-source coding playground for students and alumni to practic
    - console.log/warn/error capture
    - 3s timeout
 
-3. Web page
+3. Python project
+   - Multi-file Python editor
+   - Standard-library-only Pyodide runtime
+   - stdout/stderr panel with interactive `input()` on JSPI-capable browsers
+   - 3s execution timeout after runtime startup
+
+4. Web page
    - HTML editor
    - CSS editor
    - JS editor
@@ -90,6 +96,7 @@ These can come later, but only after the simple learning loop is excellent.
 - Monaco editor
 - Ruby WASM for Ruby
 - QuickJS WASM for JavaScript
+- Pyodide WASM for Python
 - Sandboxed iframe for HTML/CSS/JS
 - PostgreSQL for users, projects, files, forks, and share metadata
 
@@ -106,4 +113,3 @@ Suggested repo topics:
 - html-css
 - guam
 - beginner-friendly
-

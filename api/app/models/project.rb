@@ -1,5 +1,5 @@
 class Project < ApplicationRecord
-  KINDS = %w[ruby javascript web].freeze
+  KINDS = %w[ruby javascript python web].freeze
   VISIBILITIES = %w[private organization unlisted public].freeze
   MAX_FILES = 50
   MAX_TOTAL_CONTENT_BYTES = 2_000_000
@@ -41,6 +41,7 @@ class Project < ApplicationRecord
       case kind
       when "web" then %w[index.html main.html]
       when "ruby" then %w[main.rb]
+      when "python" then %w[main.py app.py]
       else %w[main.js index.js]
       end
 
