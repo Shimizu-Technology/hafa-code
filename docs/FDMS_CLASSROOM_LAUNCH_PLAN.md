@@ -63,6 +63,7 @@ These checks were performed against the production URLs on July 25, 2026, before
 | Netlify homepage | `200 OK` | The current production frontend is online. |
 | Rails `/health` | `200 OK` with `{"status":"ok"}` | The API process is reachable. |
 | Netlify security headers | Present | CSP, HSTS, no-sniff, referrer, permissions, and frame protections are configured. |
+| Ruby runner under Netlify CSP | Failed in the August 7 follow-up | The baseline policy permitted WASM compilation but blocked ruby.wasm's JavaScript bridge. The branch now isolates `'unsafe-eval'` to the code-runner worker; the deploy preview must prove the default Ruby program succeeds before merge. |
 | Netlify-origin API preflight | Missing `Access-Control-Allow-Origin` | Baseline production cannot use the API from the current origin. The branch fixes the application default; redeployment and a production preflight remain required. |
 | Localhost API preflight | Allowed | Current Render CORS configuration appears to allow localhost instead of production. |
 | Production page rendering | Successful | The signed-out editor, runner controls, project library, visibility UI, and responsive structure load. |
@@ -578,7 +579,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 - Rails routes, models, authorization concerns, controllers, services, migrations, environment configuration, and integration tests
 - React application state, storage merge, API client, authentication context, runner, preview sandbox, service worker, headers, manifest, and build configuration
 
-### Checks run on July 25, 2026
+### Checks run on July 25 and re-run on August 7, 2026
 
 | Check | Result |
 | --- | --- |
@@ -589,9 +590,9 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
-| `bundle exec bundler-audit check` | Pass: no vulnerabilities |
+| `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
-| Local visible browser smoke test | Pass: editor loads, Ruby runs, and no unexpected console errors |
+| Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
 | Baseline Netlify production page and headers | Reachable; security headers present |
 | Baseline Render health endpoint | Healthy |
 | Baseline Netlify-origin Render CORS preflight | Fail before deployment; hardening branch adds the production origin by default |

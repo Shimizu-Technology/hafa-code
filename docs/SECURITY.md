@@ -50,6 +50,26 @@ Intentional restrictions:
 - `Cross-Origin-Opener-Policy: same-origin`
 - Content Security Policy tuned for WASM, workers, local assets, and Bunny fonts
 
+The application document deliberately permits WebAssembly compilation with
+`'wasm-unsafe-eval'` but does not permit JavaScript string evaluation. The Ruby
+runner is a narrower exception: ruby.wasm's `js` bridge evaluates a small amount
+of bridge code while loading, so only the generated `codeRunner.worker-*.js`
+asset receives a worker-specific policy containing `'unsafe-eval'`. That worker
+policy permits same-origin WASM fetches, blocks nested workers, and does not
+inherit Clerk or other third-party script origins.
+
+`npm run build` verifies that the generated runner filename is covered by the
+worker header rule and that the page-level policy remains free of
+`'unsafe-eval'`. A deploy-preview smoke test must still run Ruby in a real
+browser because Vite's local server does not apply Netlify's `_headers` rules.
+
+## Dependency Audits
+
+The web and Rails dependency audits are launch gates. The Rails bundle is
+locked to the 8.1.3.1 security patch, which fixes CVE-2026-66066 in Active
+Storage variant processing. `npm audit --omit=dev --audit-level=high` and
+`bundle exec bundler-audit check` must both pass before deployment.
+
 ## Known Limitations
 
 - Browser-side execution is appropriate for learning snippets and simple web pages, not production backend apps.
