@@ -67,7 +67,7 @@ browser because Vite's local server does not apply Netlify's `_headers` rules.
 
 The web and Rails dependency audits are launch gates. The Rails bundle is
 locked to the 8.1.3.1 security patch, which fixes CVE-2026-66066 in Active
-Storage variant processing. `npm audit --omit=dev --audit-level=high` and
+Storage variant processing. `npm audit --audit-level=high` and
 `bundle exec bundler-audit check` must both pass before deployment.
 
 ## Known Limitations
