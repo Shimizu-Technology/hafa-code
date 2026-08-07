@@ -20,7 +20,7 @@ if [ -d api ]; then
   (cd api && bundle exec rails test)
 fi
 
-echo "-- audit production deps"
-npm --prefix web audit --omit=dev --audit-level=high
+echo "-- audit all web deps"
+npm --prefix web audit --audit-level=high
 
 echo "Gate passed."

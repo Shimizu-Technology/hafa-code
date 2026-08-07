@@ -17,7 +17,9 @@ export interface CloudOrganization {
   id: number
   name: string
   slug: string
-  role: 'student' | 'instructor' | 'owner'
+  role: 'student' | 'instructor' | 'owner' | 'admin'
+  school_year?: string | null
+  archived_at?: string | null
 }
 
 export interface CloudOrgMember extends CloudUser {
@@ -29,10 +31,15 @@ export interface CloudOrgMember extends CloudUser {
 export interface CloudOrgInvitation {
   id?: number
   token: string
-  email: string
+  email?: string
   role: 'student' | 'instructor'
   invitation_url?: string
   email_sent?: boolean
+  email_queued?: boolean
+  delivery_status?: 'pending' | 'queued' | 'sent' | 'failed'
+  delivery_error?: string
+  last_sent_at?: string
+  send_attempts?: number
   accepted_at?: string | null
   expires_at: string
   created_at?: string
@@ -41,6 +48,36 @@ export interface CloudOrgInvitation {
     name: string
     slug: string
   }
+}
+
+export interface CloudProjectComment {
+  id: number
+  body: string
+  file_path: string | null
+  line_number: number | null
+  resolved_at: string | null
+  edited_at: string | null
+  created_at: string
+  updated_at: string
+  author: {
+    id: number
+    full_name: string
+    role: 'student' | 'instructor' | 'owner' | 'admin'
+  }
+  resolved_by: {
+    id: number
+    full_name: string
+  } | null
+}
+
+export interface CloudAuditEvent {
+  id: number
+  action: string
+  actor: { id: number; full_name: string } | null
+  target_type: string | null
+  target_id: number | null
+  metadata: Record<string, unknown>
+  created_at: string
 }
 
 interface ApiProjectFile {
@@ -67,12 +104,16 @@ interface ApiProject {
   archived_at: string | null
   created_at: string
   updated_at: string
+  lock_version: number
   files: ApiProjectFile[]
 }
 
 interface ApiResponse<T> {
   data: T | null
   error: string | null
+  status: number
+  code?: string | null
+  errorData?: Record<string, unknown> | null
 }
 
 interface ApiCheckpoint {
@@ -112,12 +153,15 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       return {
         data: null,
         error: errorBody.error || (Array.isArray(errorBody.errors) ? errorBody.errors.join(', ') : null) || `Request failed with status ${response.status}`,
+        status: response.status,
+        code: typeof errorBody.code === 'string' ? errorBody.code : null,
+        errorData: errorBody,
       }
     }
-    if (response.status === 204) return { data: null, error: null }
-    return { data: await response.json() as T, error: null }
+    if (response.status === 204) return { data: null, error: null, status: response.status }
+    return { data: await response.json() as T, error: null, status: response.status }
   } catch (error) {
-    return { data: null, error: error instanceof Error ? error.message : 'Network error' }
+    return { data: null, error: error instanceof Error ? error.message : 'Network error', status: 0 }
   }
 }
 
@@ -139,6 +183,7 @@ function apiProjectToSavedProject(project: ApiProject): SavedProject {
     createdAt: project.created_at,
     updatedAt: project.updated_at,
     archivedAt: project.archived_at,
+    lockVersion: project.lock_version,
   })
 
   if (!normalized) throw new Error('Cloud project was not valid.')
@@ -152,6 +197,7 @@ function savedProjectPayload(project: SavedProject) {
     entry_path: project.entryPath,
     visibility: project.visibility,
     organization_id: project.organizationId,
+    lock_version: project.lockVersion,
     files: project.files.map((file, index) => ({ ...file, position: index })),
   }
 }
@@ -204,6 +250,29 @@ export const api = {
     })
     return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
   },
+  updateOrganization: async (organizationId: string, input: { name?: string; school_year?: string }) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/organizations/${organizationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
+  },
+  archiveOrganization: async (organizationId: string) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/organizations/${organizationId}/archive`, { method: 'PATCH' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
+  },
+  unarchiveOrganization: async (organizationId: string) => {
+    const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/organizations/${organizationId}/unarchive`, { method: 'PATCH' })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
+  },
+  exportOrganization: async (organizationId: string) => {
+    const res = await fetchApi<{ export: Record<string, unknown> }>(`/api/v1/organizations/${organizationId}/export`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.export ?? null, error: null }
+  },
+  getOrganizationAuditEvents: async (organizationId: string) => {
+    const res = await fetchApi<{ audit_events: CloudAuditEvent[] }>(`/api/v1/organizations/${organizationId}/audit_events`)
+    return res.error ? { data: null, error: res.error } : { data: res.data?.audit_events ?? [], error: null }
+  },
   getOrgMembers: async (organizationId: string) => {
     const res = await fetchApi<{ members: CloudOrgMember[] }>(`/api/v1/organizations/${organizationId}/members`)
     return res.error ? { data: null, error: res.error } : { data: res.data?.members ?? [], error: null }
@@ -218,6 +287,27 @@ export const api = {
       body: JSON.stringify({ email, role }),
     })
     return res.error ? { data: null, error: res.error } : { data: res.data?.invitation ?? null, error: null }
+  },
+  createOrgInvitations: async (organizationId: string, emails: string[], role: CloudOrgInvitation['role']) => {
+    const res = await fetchApi<{ invitations: CloudOrgInvitation[]; errors: Array<{ email: string; errors: string[] }> }>(
+      `/api/v1/organizations/${organizationId}/bulk_invite`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ emails, role }),
+      },
+    )
+    if (res.status === 207 && res.errorData) {
+      return {
+        data: {
+          invitations: Array.isArray(res.errorData.invitations) ? res.errorData.invitations as CloudOrgInvitation[] : [],
+          errors: Array.isArray(res.errorData.errors) ? res.errorData.errors as Array<{ email: string; errors: string[] }> : [],
+        },
+        error: null,
+      }
+    }
+    return res.error
+      ? { data: null, error: res.error }
+      : { data: res.data ?? { invitations: [], errors: [] }, error: null }
   },
   resendOrgInvitation: async (organizationId: string, invitationId: number) => {
     const res = await fetchApi<{ invitation: CloudOrgInvitation }>(`/api/v1/organizations/${organizationId}/invitations/${invitationId}/resend`, { method: 'POST' })
@@ -241,24 +331,66 @@ export const api = {
     return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
   },
   getProjects: async (organizationId?: string | null) => {
-    const endpoint = organizationId ? `/api/v1/projects?organization_id=${encodeURIComponent(organizationId)}` : '/api/v1/projects'
-    const res = await fetchApi<{ projects: ApiProject[] }>(endpoint)
-    return res.error ? { data: null, error: res.error } : { data: res.data?.projects.map(apiProjectToSavedProject) ?? [], error: null }
+    const projects: SavedProject[] = []
+    let page = 1
+    while (true) {
+      const query = new URLSearchParams({ page: String(page), per_page: '100' })
+      if (organizationId) query.set('organization_id', organizationId)
+      const res = await fetchApi<{
+        projects: ApiProject[]
+        pagination: { page: number; total_pages: number }
+      }>(`/api/v1/projects?${query}`)
+      if (res.error) return { data: null, error: res.error }
+      projects.push(...(res.data?.projects.map(apiProjectToSavedProject) ?? []))
+      const totalPages = res.data?.pagination.total_pages ?? 1
+      if (page >= totalPages) break
+      page += 1
+    }
+
+    return { data: projects, error: null }
   },
   createProject: async (project: SavedProject) => {
     const res = await fetchApi<{ project: ApiProject }>('/api/v1/projects', {
       method: 'POST',
       body: JSON.stringify(savedProjectPayload(project)),
     })
-    return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+    return res.error
+      ? { data: null, error: res.error, status: res.status, code: res.code, conflictProject: null }
+      : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null, status: res.status, code: null, conflictProject: null }
   },
   updateProject: async (project: SavedProject) => {
     const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${project.id}`, {
       method: 'PATCH',
       body: JSON.stringify(savedProjectPayload(project)),
     })
-    return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+    const conflictProject = res.code === 'project_conflict' && res.errorData?.project
+      ? apiProjectToSavedProject(res.errorData.project as ApiProject)
+      : null
+    return res.error
+      ? { data: null, error: res.error, status: res.status, code: res.code, conflictProject }
+      : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null, status: res.status, code: null, conflictProject: null }
   },
+  getProjectComments: async (projectId: string) => {
+    const res = await fetchApi<{ comments: CloudProjectComment[]; unread_count: number }>(`/api/v1/projects/${projectId}/comments`)
+    return res.error
+      ? { data: null, error: res.error }
+      : { data: res.data ?? { comments: [], unread_count: 0 }, error: null }
+  },
+  createProjectComment: async (projectId: string, input: { body: string; file_path?: string; line_number?: number }) => {
+    const res = await fetchApi<{ comment: CloudProjectComment }>(`/api/v1/projects/${projectId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.comment ?? null, error: null }
+  },
+  resolveProjectComment: async (projectId: string, commentId: number, resolved: boolean) => {
+    const res = await fetchApi<{ comment: CloudProjectComment }>(`/api/v1/projects/${projectId}/comments/${commentId}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resolved }),
+    })
+    return res.error ? { data: null, error: res.error } : { data: res.data?.comment ?? null, error: null }
+  },
+  markProjectCommentsRead: (projectId: string) => fetchApi<null>(`/api/v1/projects/${projectId}/comments/mark_read`, { method: 'POST' }),
   archiveProject: async (id: string) => {
     const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${id}/archive`, { method: 'PATCH' })
     return res.error ? { data: null, error: res.error } : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }

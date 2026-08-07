@@ -66,7 +66,8 @@ module ClerkAuthenticatable
       end
     end
 
-    return nil if Rails.env.production? && !allow_open_signup?
+    invited_to_organization = email.present? && OrganizationInvitation.pending.exists?(email: email.downcase)
+    return nil if Rails.env.production? && !allow_open_signup? && !invited_to_organization
 
     User.create(
       clerk_id: clerk_id,

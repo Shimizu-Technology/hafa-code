@@ -6,6 +6,15 @@ Rails.application.routes.draw do
     namespace :v1 do
       post "sessions", to: "sessions#create"
       resources :projects do
+        resources :comments, controller: "project_comments", only: [ :index, :create ] do
+          collection do
+            post :mark_read
+          end
+          member do
+            patch :resolve
+          end
+        end
+
         resources :checkpoints, controller: "project_checkpoints", only: [ :index, :create ] do
           member do
             post :restore
@@ -19,13 +28,18 @@ Rails.application.routes.draw do
         end
       end
       resources :shares, controller: "project_shares", param: :token, only: [ :create, :show ]
-      resources :organizations, only: [ :index, :show, :create ] do
+      resources :organizations, only: [ :index, :show, :create, :update ] do
         member do
+          patch :archive
+          patch :unarchive
           get :members
           get :projects
+          get :export, to: "organizations#export"
+          get :audit_events
           get "students/:student_id/projects", to: "organizations#student_projects"
           get :invitations
           post :invite
+          post :bulk_invite
           post "invitations/:invitation_id/resend", to: "organizations#resend_invitation"
           delete "invitations/:invitation_id", to: "organizations#destroy_invitation"
           patch "members/:membership_id", to: "organizations#update_member"

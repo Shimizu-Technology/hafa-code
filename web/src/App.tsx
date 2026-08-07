@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
 import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
@@ -46,6 +46,7 @@ import {
 } from './lib/codeRunner'
 import {
   createLocalCheckpoint,
+  createConflictCopy,
   createProject,
   duplicateProject,
   encodeProjectForShare,
@@ -57,11 +58,18 @@ import {
   type ProjectLibrary,
 } from './lib/projectStorage'
 import { useAuthContext } from './contexts/AuthContext'
-import { api, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
+import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
 import { RunnerPanel } from './components/RunnerPanel'
 import { WebPreview } from './components/WebPreview'
+import { ProjectFeedback } from './components/ProjectFeedback'
+import {
+  clearProjectPendingCloudSync,
+  markProjectPendingCloudSync,
+  pendingCloudProjectIds,
+  replacePendingCloudProjectId,
+} from './lib/cloudSyncStorage'
 import {
   COLOR_MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -72,9 +80,11 @@ import {
   type ColorModePreference,
   type ThemePreference,
 } from './hooks/usePreferences'
+import { useModalFocus } from './hooks/useModalFocus'
 import {
   PROJECT_FILE_LIMIT,
   availableVisibilityOptions,
+  canViewProjectFeedback,
   canAddWorkspaceFile,
   clearHashParam,
   formatCheckpointTime,
@@ -111,6 +121,10 @@ type ShareDialogState = {
   error?: string | null
 } | null
 
+type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | 'conflict'
+
+const CLOUD_SAVE_RETRY_DELAYS = [1_500, 3_000, 6_000]
+
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
   const [library, setLibrary] = useState<ProjectLibrary>(initial.library)
@@ -129,8 +143,10 @@ export default function App() {
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
   const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
   const [orgInvitations, setOrgInvitations] = useState<CloudOrgInvitation[]>([])
+  const [auditEvents, setAuditEvents] = useState<CloudAuditEvent[]>([])
   const [inviteEmailDraft, setInviteEmailDraft] = useState('')
   const [inviteRoleDraft, setInviteRoleDraft] = useState<CloudOrgInvitation['role']>('student')
+  const [schoolYearDraft, setSchoolYearDraft] = useState('')
   const [lastInviteUrl, setLastInviteUrl] = useState('')
   const [classroomTab, setClassroomTab] = useState<ClassroomTab>('people')
   const [memberSearchDraft, setMemberSearchDraft] = useState('')
@@ -147,9 +163,14 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
+  const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
-  const syncTimerRef = useRef<number | null>(null)
+  const syncTimersRef = useRef<Map<string, number>>(new Map())
+  const syncingProjectIdsRef = useRef<Set<string>>(new Set())
+  const syncRetryCountsRef = useRef<Map<string, number>>(new Map())
+  const syncedProjectVersionsRef = useRef<Map<string, string>>(new Map())
+  const syncCloudProjectRef = useRef<(projectId: string) => Promise<void>>(async () => {})
   const replacingCloudIdRef = useRef(false)
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
@@ -158,6 +179,17 @@ export default function App() {
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
+    setFileDialog(null)
+    setFileDialogError('')
+  })
+  const shareDialogRef = useModalFocus<HTMLElement>(Boolean(shareDialog), () => setShareDialog(null))
+  const orgDialogRef = useModalFocus<HTMLElement>(orgCreateOpen, () => setOrgCreateOpen(false))
+  const projectActionsDialogRef = useModalFocus<HTMLElement>(projectActionsOpen, () => setProjectActionsOpen(false))
+  const confirmDialogRef = useModalFocus<HTMLElement>(Boolean(confirmAction), () => {
+    setConfirmAction(null)
+    setPendingCheckpoint(null)
+  })
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
@@ -174,6 +206,8 @@ export default function App() {
         name: pendingInvitation.organization.name,
         slug: pendingInvitation.organization.slug,
         role: pendingInvitation.role,
+        school_year: null,
+        archived_at: null,
       }
     : null
   const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? optimisticInvitationOrganization
@@ -182,7 +216,9 @@ export default function App() {
   const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canManageOrgMembers = activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canCreateOrganization = user?.role === 'admin' || user?.role === 'mentor'
-  const canEditProject = !isSignedIn || !project.owner || project.owner.id === user?.id
+  const workspaceArchived = Boolean(activeOrganization?.archived_at)
+  const ownsProject = !project.owner || project.owner.id === user?.id
+  const canEditProject = (!isSignedIn || ownsProject) && !workspaceArchived
   const currentProjectOwnerLabel = projectOwnerLabel(project, user?.id)
   const pendingInvitations = orgInvitations.filter((invitation) => !invitation.accepted_at)
   const memberSearch = memberSearchDraft.trim().toLowerCase()
@@ -192,9 +228,160 @@ export default function App() {
       .some((value) => value.toLowerCase().includes(memberSearch))
   })
   const inviteRequiresAuth = Boolean(pendingInvitationToken && pendingInvitation && !isSignedIn)
+  const currentCloudSaveStatus = cloudSaveStatuses[project.id]
+  const cloudSaveLabel = currentCloudSaveStatus === 'saving'
+    ? 'Saving to cloud'
+    : currentCloudSaveStatus === 'pending'
+      ? 'Waiting to save'
+      : currentCloudSaveStatus === 'offline'
+        ? 'Offline · local copy safe'
+      : currentCloudSaveStatus === 'failed'
+        ? 'Cloud save failed · local copy safe'
+        : currentCloudSaveStatus === 'conflict'
+          ? 'Save conflict · local copy safe'
+          : 'Saved to cloud + local backup'
+  const canAccessProjectFeedback = canViewProjectFeedback(project, isSignedIn, user?.id, canUseInstructorPanel)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
     : themePreference
+
+  const updateCloudSaveStatus = useCallback((projectId: string, status: CloudSaveStatus) => {
+    setCloudSaveStatuses((current) => current[projectId] === status ? current : { ...current, [projectId]: status })
+  }, [])
+
+  const scheduleCloudSave = useCallback((projectId: string, delay = 900) => {
+    const existingTimer = syncTimersRef.current.get(projectId)
+    if (existingTimer) window.clearTimeout(existingTimer)
+
+    const timer = window.setTimeout(() => {
+      syncTimersRef.current.delete(projectId)
+      void syncCloudProjectRef.current(projectId)
+    }, delay)
+    syncTimersRef.current.set(projectId, timer)
+  }, [])
+
+  const syncCloudProject = useCallback(async (projectId: string) => {
+    if (!isSignedIn || !hasLoadedCloudProjects) return
+    if (!navigator.onLine) {
+      updateCloudSaveStatus(projectId, 'offline')
+      return
+    }
+    if (syncingProjectIdsRef.current.has(projectId)) {
+      scheduleCloudSave(projectId, 150)
+      return
+    }
+
+    const projectToSave = libraryRef.current.projects.find((candidate) => candidate.id === projectId)
+    if (!projectToSave || (projectToSave.owner && projectToSave.owner.id !== user?.id)) return
+
+    syncingProjectIdsRef.current.add(projectId)
+    updateCloudSaveStatus(projectId, 'saving')
+
+    const res = isCloudProjectId(projectId)
+      ? await api.updateProject(projectToSave)
+      : await api.createProject(projectToSave)
+
+    syncingProjectIdsRef.current.delete(projectId)
+
+    if (res.error || !res.data) {
+      if (res.code === 'project_conflict') {
+        syncRetryCountsRef.current.delete(projectId)
+        const serverProject = res.conflictProject
+        if (serverProject) {
+          const conflictCopy = createConflictCopy(projectToSave)
+          const currentLibrary = libraryRef.current
+          const nextLibrary = {
+            activeProjectId: currentLibrary.activeProjectId === projectId ? conflictCopy.id : currentLibrary.activeProjectId,
+            projects: [
+              conflictCopy,
+              ...currentLibrary.projects.map((candidate) => candidate.id === projectId ? serverProject : candidate),
+            ],
+          }
+          libraryRef.current = nextLibrary
+          setLibrary(nextLibrary)
+          if (currentLibrary.activeProjectId === projectId) setActivePath(conflictCopy.files[0].path)
+          clearProjectPendingCloudSync(projectId)
+          syncedProjectVersionsRef.current.set(serverProject.id, serverProject.updatedAt)
+          markProjectPendingCloudSync(conflictCopy.id, conflictCopy.updatedAt)
+          setCloudSaveStatuses((current) => {
+            const next = { ...current }
+            delete next[projectId]
+            next[serverProject.id] = 'saved'
+            next[conflictCopy.id] = 'pending'
+            return next
+          })
+          scheduleCloudSave(conflictCopy.id, 0)
+          setNotice('Another tab saved first. Your version is safe in a new private Conflict Copy, and the latest server version was restored.')
+        } else {
+          updateCloudSaveStatus(projectId, 'conflict')
+          setNotice('Cloud save conflict: your local copy is safe. Export it before reloading.')
+        }
+        return
+      }
+
+      const retryCount = syncRetryCountsRef.current.get(projectId) ?? 0
+      const retryDelay = CLOUD_SAVE_RETRY_DELAYS[retryCount]
+      if (retryDelay) {
+        syncRetryCountsRef.current.set(projectId, retryCount + 1)
+        updateCloudSaveStatus(projectId, 'pending')
+        scheduleCloudSave(projectId, retryDelay)
+        setNotice(`Cloud save failed: ${res.error || 'unknown error'}. Your local copy is safe; retry ${retryCount + 1} of ${CLOUD_SAVE_RETRY_DELAYS.length} is scheduled.`)
+      } else {
+        updateCloudSaveStatus(projectId, 'failed')
+        setNotice(`Cloud save failed after ${CLOUD_SAVE_RETRY_DELAYS.length} retries: ${res.error || 'unknown error'}. Your local copy is safe; edit again or reconnect to retry.`)
+      }
+      return
+    }
+
+    syncRetryCountsRef.current.delete(projectId)
+    const savedProject = res.data
+    const latestProject = libraryRef.current.projects.find((candidate) => candidate.id === projectId)
+    const changedWhileSaving = Boolean(latestProject && latestProject.updatedAt !== projectToSave.updatedAt)
+    const projectNeedingAnotherSave: SavedProject | null = latestProject && changedWhileSaving
+      ? {
+          ...latestProject,
+          id: savedProject.id,
+          owner: savedProject.owner,
+          organization: savedProject.organization,
+          organizationId: savedProject.organizationId,
+          lockVersion: savedProject.lockVersion,
+        }
+      : null
+    const nextProject = projectNeedingAnotherSave ?? savedProject
+    const currentLibrary = libraryRef.current
+    const nextLibrary = {
+      activeProjectId: currentLibrary.activeProjectId === projectId ? nextProject.id : currentLibrary.activeProjectId,
+      projects: currentLibrary.projects.map((candidate) => candidate.id === projectId ? nextProject : candidate),
+    }
+    libraryRef.current = nextLibrary
+    setLibrary(nextLibrary)
+
+    syncedProjectVersionsRef.current.set(savedProject.id, savedProject.updatedAt)
+    if (savedProject.id !== projectId) {
+      clearProjectPendingCloudSync(projectId)
+      if (changedWhileSaving || projectNeedingAnotherSave) {
+        replacePendingCloudProjectId(projectId, savedProject.id, (projectNeedingAnotherSave ?? latestProject ?? savedProject).updatedAt)
+      }
+      setCloudSaveStatuses((current) => {
+        const next = { ...current }
+        delete next[projectId]
+        next[savedProject.id] = projectNeedingAnotherSave ? 'pending' : 'saved'
+        return next
+      })
+    }
+
+    if (projectNeedingAnotherSave) {
+      markProjectPendingCloudSync(projectNeedingAnotherSave.id, projectNeedingAnotherSave.updatedAt)
+      updateCloudSaveStatus(projectNeedingAnotherSave.id, 'pending')
+      scheduleCloudSave(projectNeedingAnotherSave.id, 0)
+    } else {
+      clearProjectPendingCloudSync(savedProject.id)
+      updateCloudSaveStatus(savedProject.id, 'saved')
+    }
+  }, [hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
+  useEffect(() => {
+    syncCloudProjectRef.current = syncCloudProject
+  }, [syncCloudProject])
 
   const activateProject = (nextProject: SavedProject) => {
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
@@ -372,9 +559,13 @@ export default function App() {
         return
       }
       if (res.data && res.data.length > 0) {
-        const remainingContextProjects = libraryRef.current.projects.filter((candidate) => !projectContextMatches(candidate, activeOrganizationId))
-        const baseLibrary = { ...libraryRef.current, projects: remainingContextProjects }
-        const merged = mergeCloudAndLocalProjects(res.data, baseLibrary, activeOrganizationId)
+        const pendingIds = pendingCloudProjectIds()
+        res.data.forEach((cloudProject) => {
+          if (!pendingIds.has(cloudProject.id)) {
+            syncedProjectVersionsRef.current.set(cloudProject.id, cloudProject.updatedAt)
+          }
+        })
+        const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current, activeOrganizationId)
         const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
@@ -404,33 +595,40 @@ export default function App() {
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
-
-    syncTimerRef.current = window.setTimeout(async () => {
-      if (isCloudProjectId(project.id)) {
-        const res = await api.updateProject(project)
-        if (res.error) setNotice(`Cloud save failed: ${res.error}`)
-        return
-      }
-
-      const res = await api.createProject(project)
-      if (res.error || !res.data) {
-        setNotice(`Cloud save failed: ${res.error || 'unknown error'}`)
-        return
-      }
-
-      replacingCloudIdRef.current = true
-      setLibrary((current) => ({
-        activeProjectId: current.activeProjectId === project.id ? res.data!.id : current.activeProjectId,
-        projects: current.projects.map((candidate) => candidate.id === project.id ? res.data! : candidate),
-      }))
-      window.setTimeout(() => { replacingCloudIdRef.current = false }, 0)
-    }, 900)
-
-    return () => {
-      if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+    if (syncedProjectVersionsRef.current.get(project.id) === project.updatedAt) {
+      updateCloudSaveStatus(project.id, 'saved')
+      return
     }
-  }, [canEditProject, hasLoadedCloudProjects, isSignedIn, library, project])
+
+    markProjectPendingCloudSync(project.id, project.updatedAt)
+    syncRetryCountsRef.current.delete(project.id)
+    updateCloudSaveStatus(project.id, 'pending')
+    scheduleCloudSave(project.id)
+  }, [canEditProject, hasLoadedCloudProjects, isSignedIn, project, scheduleCloudSave, updateCloudSaveStatus])
+
+  useEffect(() => {
+    const syncTimers = syncTimersRef.current
+    const flushPendingProjects = () => {
+      pendingCloudProjectIds().forEach((projectId) => {
+        if (libraryRef.current.projects.some((candidate) => candidate.id === projectId)) {
+          void syncCloudProject(projectId)
+        }
+      })
+    }
+    const retryPendingProjects = () => {
+      syncRetryCountsRef.current.clear()
+      flushPendingProjects()
+    }
+
+    window.addEventListener('pagehide', flushPendingProjects)
+    window.addEventListener('online', retryPendingProjects)
+    return () => {
+      window.removeEventListener('pagehide', flushPendingProjects)
+      window.removeEventListener('online', retryPendingProjects)
+      syncTimers.forEach((timer) => window.clearTimeout(timer))
+      syncTimers.clear()
+    }
+  }, [syncCloudProject])
 
   const setActiveProject = (projectId: string) => {
     const nextProject = library.projects.find((candidate) => candidate.id === projectId)
@@ -440,6 +638,10 @@ export default function App() {
   }
 
   const addProject = (kind: ProjectKind) => {
+    if (workspaceArchived) {
+      setNotice('This classroom is archived and read-only.')
+      return
+    }
     const starter = createProject(kind)
     const next = {
       ...starter,
@@ -483,31 +685,95 @@ export default function App() {
     setNotice(`${res.data.name} created.`)
   }
 
+  const saveOrganizationSettings = async () => {
+    if (!activeOrganizationId || !activeOrganization) return
+    const res = await api.updateOrganization(activeOrganizationId, { school_year: schoolYearDraft.trim() })
+    if (res.error) {
+      setNotice(`Could not update classroom settings: ${res.error}`)
+      return
+    }
+    await syncSession()
+    setNotice('Classroom settings updated.')
+  }
+
+  const toggleOrganizationArchive = async () => {
+    if (!activeOrganizationId || !activeOrganization) return
+    const action = activeOrganization.archived_at ? 'restore' : 'archive'
+    if (!window.confirm(`${action === 'archive' ? 'Archive' : 'Restore'} ${activeOrganization.name}? ${action === 'archive' ? 'Students can still view work, but source changes and new invitations will be disabled.' : 'Source editing and invitations will be enabled again.'}`)) return
+
+    const res = activeOrganization.archived_at
+      ? await api.unarchiveOrganization(activeOrganizationId)
+      : await api.archiveOrganization(activeOrganizationId)
+    if (res.error) {
+      setNotice(`Could not ${action} classroom: ${res.error}`)
+      return
+    }
+    await syncSession()
+    setNotice(`${activeOrganization.name} ${action === 'archive' ? 'archived' : 'restored'}.`)
+  }
+
+  const exportOrganization = async () => {
+    if (!activeOrganizationId || !activeOrganization) return
+    const res = await api.exportOrganization(activeOrganizationId)
+    if (res.error || !res.data) {
+      setNotice(`Could not export classroom: ${res.error || 'unknown error'}`)
+      return
+    }
+
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${activeOrganization.slug}-${activeOrganization.school_year || 'classroom'}-export.json`
+    document.body.append(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setNotice('Classroom export downloaded.')
+  }
+
   const inviteOrgMember = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!activeOrganizationId) return
 
-    const email = inviteEmailDraft.trim().toLowerCase()
-    if (!email) {
-      setNotice('Enter an email address to invite.')
+    const emails = inviteEmailDraft.split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email, index, values) => values.indexOf(email) === index)
+    if (emails.length === 0) {
+      setNotice('Enter at least one email address to invite.')
       return
     }
 
     const role = canManageOrgMembers ? inviteRoleDraft : 'student'
-    const res = await api.createOrgInvitation(activeOrganizationId, email, role)
-    if (res.error || !res.data) {
-      setNotice(`Could not create invitation: ${res.error || 'unknown error'}`)
+    const res = emails.length === 1
+      ? await api.createOrgInvitation(activeOrganizationId, emails[0], role).then((single) => ({
+          data: single.data ? { invitations: [single.data], errors: [] } : null,
+          error: single.error,
+        }))
+      : await api.createOrgInvitations(activeOrganizationId, emails, role)
+    if (res.error || !res.data || res.data.invitations.length === 0) {
+      setNotice(`Could not create invitation${emails.length === 1 ? '' : 's'}: ${res.error || res.data?.errors.map((error) => `${error.email}: ${error.errors.join(', ')}`).join('; ') || 'unknown error'}`)
       return
     }
 
-    const url = res.data.invitation_url || invitationUrl(res.data.token)
-    setOrgInvitations((current) => [res.data!, ...current.filter((candidate) => candidate.id !== res.data!.id)])
+    const createdInvitations = res.data.invitations
+    const latestInvitation = createdInvitations[0]
+    const url = latestInvitation.invitation_url || invitationUrl(latestInvitation.token)
+    setOrgInvitations((current) => [
+      ...createdInvitations,
+      ...current.filter((candidate) => !createdInvitations.some((created) => created.id === candidate.id)),
+    ])
     setInviteEmailDraft('')
     setInviteRoleDraft('student')
     setLastInviteUrl(url)
     const copied = await writeClipboardText(url)
-    if (res.data.email_sent) {
-      setNotice(copied ? 'Invitation email sent. Backup link copied.' : 'Invitation email sent. Backup link is in the classroom panel.')
+    const failedCount = res.data.errors.length
+    const queuedCount = createdInvitations.filter((invitation) => invitation.email_queued).length
+    if (createdInvitations.length > 1) {
+      setNotice(`${createdInvitations.length} invitation${createdInvitations.length === 1 ? '' : 's'} created${queuedCount ? `; ${queuedCount} email${queuedCount === 1 ? '' : 's'} queued` : ''}${failedCount ? `; ${failedCount} failed` : ''}.`)
+    } else if (latestInvitation.email_queued) {
+      setNotice(copied ? 'Invitation email queued. Backup link copied.' : 'Invitation email queued. Backup link is in the classroom panel.')
     } else {
       setNotice(copied ? 'Invitation created. Email is not configured yet, so the link was copied.' : 'Invitation created. Email is not configured yet, so copy the link from the classroom panel.')
     }
@@ -533,12 +799,12 @@ export default function App() {
     const url = res.data.invitation_url || invitationUrl(res.data.token)
     setOrgInvitations((current) => current.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate))
     setLastInviteUrl(url)
-    setNotice(res.data.email_sent ? 'Invitation email resent.' : 'Invitation resent link is ready, but email is not configured yet.')
+    setNotice(res.data.email_queued ? 'Invitation email queued to resend.' : 'Invitation link renewed, but email is not configured yet.')
   }
 
   const revokeInvitation = async (invitation: CloudOrgInvitation) => {
     if (!activeOrganizationId || !invitation.id) return
-    if (!window.confirm(`Revoke the invitation for ${invitation.email}? The current link will stop working.`)) return
+    if (!window.confirm(`Revoke the invitation for ${invitation.email || 'this account'}? The current link will stop working.`)) return
 
     const res = await api.deleteOrgInvitation(activeOrganizationId, invitation.id)
     if (res.error) {
@@ -566,7 +832,7 @@ export default function App() {
 
   const removeOrgMember = async (member: CloudOrgMember) => {
     if (!activeOrganizationId) return
-    if (!window.confirm(`Remove ${member.full_name} from ${activeOrganization?.name || 'this organization'}? Their projects stay in the workspace, but they lose organization access.`)) return
+    if (!window.confirm(`Remove ${member.full_name} from ${activeOrganization?.name || 'this organization'}? Their class projects will move to their private Personal workspace so their work is not stranded.`)) return
 
     const res = await api.deleteOrgMember(activeOrganizationId, member.membership_id)
     if (res.error) {
@@ -619,17 +885,24 @@ export default function App() {
   const flushCloudProject = async (projectToFlush: SavedProject) => {
     if (!isSignedIn || !isCloudProjectId(projectToFlush.id)) return projectToFlush
 
-    if (syncTimerRef.current) {
-      window.clearTimeout(syncTimerRef.current)
-      syncTimerRef.current = null
+    const pendingTimer = syncTimersRef.current.get(projectToFlush.id)
+    if (pendingTimer) {
+      window.clearTimeout(pendingTimer)
+      syncTimersRef.current.delete(projectToFlush.id)
     }
 
     const res = await api.updateProject(projectToFlush)
     if (res.error || !res.data) {
-      setNotice(`Cloud save failed: ${res.error || 'unknown error'}`)
+      updateCloudSaveStatus(projectToFlush.id, res.code === 'project_conflict' ? 'conflict' : 'failed')
+      setNotice(res.code === 'project_conflict'
+        ? 'Cloud save conflict: this project changed in another tab. Export your local copy before reloading.'
+        : `Cloud save failed: ${res.error || 'unknown error'}. Your local copy is still safe.`)
       return null
     }
 
+    clearProjectPendingCloudSync(projectToFlush.id)
+    syncedProjectVersionsRef.current.set(res.data.id, res.data.updatedAt)
+    updateCloudSaveStatus(res.data.id, 'saved')
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
@@ -700,6 +973,10 @@ export default function App() {
   }
 
   const cloneProject = () => {
+    if (workspaceArchived) {
+      setNotice('Restore this classroom before duplicating projects into it.')
+      return
+    }
     setProjectActionsOpen(false)
     const copy = duplicateProject(project)
     setLibrary((current) => ({ activeProjectId: copy.id, projects: [copy, ...current.projects] }))
@@ -950,6 +1227,11 @@ export default function App() {
   }
 
   const copyShareLink = async () => {
+    if (project.organizationId) {
+      setNotice('External snapshot sharing is disabled for classroom projects. Use Teacher only or Class visibility instead.')
+      return
+    }
+
     const share = await api.createShare(project)
     const url = share.data
       ? `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
@@ -1015,7 +1297,13 @@ export default function App() {
           <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
           <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
           <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
-          <button onClick={copyShareLink}><Copy size={16} /> Share</button>
+          <button
+            onClick={copyShareLink}
+            disabled={Boolean(project.organizationId)}
+            title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
+          >
+            <Copy size={16} /> Share
+          </button>
           <input ref={importInputRef} hidden type="file" accept="application/json,.json" onChange={(event) => handleImportFile(event.target.files?.[0])} />
         </div>
         <details className="mobile-actions-menu">
@@ -1027,7 +1315,13 @@ export default function App() {
             <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
             <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
             <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
-            <button onClick={copyShareLink}><Copy size={16} /> Share</button>
+            <button
+              onClick={copyShareLink}
+              disabled={Boolean(project.organizationId)}
+              title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
+            >
+              <Copy size={16} /> Share
+            </button>
           </div>
         </details>
       </header>
@@ -1072,7 +1366,7 @@ export default function App() {
           <h2>{activeOrganization ? activeOrganization.name : 'Personal projects'}</h2>
           <p className="helper-text">
             {activeOrganization
-              ? `${activeOrganization.role} workspace. Private projects are still visible to instructors.`
+              ? `${activeOrganization.role} workspace${activeOrganization.school_year ? ` · ${activeOrganization.school_year}` : ''}${workspaceArchived ? ' · archived and read-only' : ''}. Teacher-only projects are visible to instructors.`
               : 'Your own projects, separate from any classroom or organization.'}
           </p>
         </div>
@@ -1090,7 +1384,7 @@ export default function App() {
                 <option value="personal">Personal projects</option>
                 {organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
-                    {organization.name}
+                    {organization.name}{organization.archived_at ? ' (Archived)' : ''}
                   </option>
                 ))}
               </select>
@@ -1164,30 +1458,97 @@ export default function App() {
             >
               Invitations
             </button>
+            {canManageOrgMembers && (
+              <button
+                className={classroomTab === 'settings' ? 'active' : 'secondary'}
+                type="button"
+                role="tab"
+                aria-selected={classroomTab === 'settings'}
+                onClick={() => {
+                  setSchoolYearDraft(activeOrganization.school_year || '')
+                  setClassroomTab('settings')
+                  api.getOrganizationAuditEvents(String(activeOrganization.id)).then((res) => {
+                    if (res.data) setAuditEvents(res.data)
+                    if (res.error) setNotice(`Could not load classroom activity: ${res.error}`)
+                  })
+                }}
+              >
+                Settings
+              </button>
+            )}
           </div>
+          {workspaceArchived && (
+            <p className="helper-text" role="status">
+              This classroom is archived. Projects, roster changes, invitations, and settings are read-only until an owner restores it.
+            </p>
+          )}
+          {classroomTab === 'settings' && canManageOrgMembers && (
+            <div className="classroom-settings">
+              <label className="file-path-field" htmlFor="school-year">
+                <span>School year or term</span>
+                <input
+                  id="school-year"
+                  value={schoolYearDraft}
+                  onChange={(event) => setSchoolYearDraft(event.target.value)}
+                  placeholder="2026–2027"
+                  maxLength={40}
+                  disabled={workspaceArchived}
+                />
+              </label>
+              <div className="classroom-settings-actions">
+                <button type="button" onClick={saveOrganizationSettings} disabled={workspaceArchived}>Save settings</button>
+                <button className="secondary" type="button" onClick={exportOrganization}>
+                  <Download size={15} /> Export classroom
+                </button>
+                <button className={workspaceArchived ? 'secondary' : 'danger'} type="button" onClick={toggleOrganizationArchive}>
+                  {workspaceArchived ? 'Restore classroom' : 'Archive classroom'}
+                </button>
+              </div>
+              <p className="helper-text">Exports include the roster, source files, and feedback. Archived classrooms stay available for review and export, but project source and invitations become read-only.</p>
+              <div className="audit-event-list" aria-label="Recent classroom activity">
+                <div className="section-row">
+                  <strong>Recent activity</strong>
+                  <small>{auditEvents.length} event{auditEvents.length === 1 ? '' : 's'}</small>
+                </div>
+                {auditEvents.slice(0, 12).map((event) => (
+                  <div className="audit-event-row" key={event.id}>
+                    <span>{event.action.replaceAll('.', ' ')}</span>
+                    <small>{event.actor?.full_name || 'System'} · {formatUpdatedAt(event.created_at)}</small>
+                  </div>
+                ))}
+                {auditEvents.length === 0 && <p className="helper-text">No classroom activity has been recorded yet.</p>}
+              </div>
+            </div>
+          )}
           {classroomTab === 'invitations' && canInviteOrgMembers && (
             <div className="invite-workflow">
               <form className="invite-form" onSubmit={inviteOrgMember}>
                 <label className="file-path-field" htmlFor="invite-email">
-                  <span>Email</span>
-                  <input
+                  <span>Student emails</span>
+                  <textarea
                     id="invite-email"
                     value={inviteEmailDraft}
                     onChange={(event) => setInviteEmailDraft(event.target.value)}
-                    placeholder="student@example.com"
-                    type="email"
+                    placeholder={'student1@example.com\nstudent2@example.com'}
+                    rows={4}
+                    disabled={workspaceArchived}
                   />
                 </label>
                 <label className="file-path-field" htmlFor="invite-role">
                   <span>Role</span>
-                  <select id="invite-role" value={canManageOrgMembers ? inviteRoleDraft : 'student'} onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}>
+                  <select
+                    id="invite-role"
+                    value={canManageOrgMembers ? inviteRoleDraft : 'student'}
+                    onChange={(event) => setInviteRoleDraft(event.target.value as CloudOrgInvitation['role'])}
+                    disabled={workspaceArchived}
+                  >
                     <option value="student">Student</option>
                     {canManageOrgMembers && <option value="instructor">Instructor</option>}
                   </select>
                 </label>
-                <button type="submit"><Send size={16} /> Send invite</button>
+                <button type="submit" disabled={workspaceArchived}><Send size={16} /> Send invite{inviteEmailDraft.split(/[\s,;]+/).filter(Boolean).length > 1 ? 's' : ''}</button>
               </form>
-              <p className="helper-text">Hafa Code emails the invitation when email is configured, and keeps the link here as a backup. New students create a personal account first, then join this workspace.</p>
+              <p className="helper-text">Paste one email or a whole roster separated by lines, commas, or spaces. Hafa Code emails invitations when delivery is configured and keeps each link here as a backup.</p>
               {lastInviteUrl && (
                 <label className="file-path-field invite-link-field" htmlFor="last-invite-url">
                   <span>Latest invite link</span>
@@ -1205,18 +1566,22 @@ export default function App() {
               {orgInvitations.slice(0, 6).map((invitation) => (
                 <div key={invitation.id ?? invitation.token} className="invite-row">
                   <div>
-                    <strong>{invitation.email}</strong>
-                    <small>{invitation.role}{invitation.accepted_at ? ' · accepted' : ' · pending'}</small>
+                    <strong>{invitation.email || 'Invitation'}</strong>
+                    <small>
+                      {invitation.role}
+                      {invitation.accepted_at ? ' · accepted' : ` · ${invitation.delivery_status || 'pending'}`}
+                    </small>
+                    {invitation.delivery_error && <small className="invite-delivery-error">{invitation.delivery_error}</small>}
                   </div>
                   {!invitation.accepted_at && (
                     <div className="invite-actions">
-                      <button className="secondary compact" type="button" onClick={() => copyInvitationLink(invitation)}>
+                      <button className="secondary compact" type="button" disabled={workspaceArchived} onClick={() => copyInvitationLink(invitation)}>
                         <Copy size={14} /> Copy link
                       </button>
-                      <button className="secondary compact" type="button" onClick={() => resendInvitation(invitation)}>
+                      <button className="secondary compact" type="button" disabled={workspaceArchived} onClick={() => resendInvitation(invitation)}>
                         <Send size={14} /> Resend
                       </button>
-                      <button className="danger compact" type="button" onClick={() => revokeInvitation(invitation)}>
+                      <button className="danger compact" type="button" disabled={workspaceArchived} onClick={() => revokeInvitation(invitation)}>
                         <Trash2 size={14} /> Revoke
                       </button>
                     </div>
@@ -1261,12 +1626,13 @@ export default function App() {
                         className="member-role-select"
                         value={member.organization_role}
                         onChange={(event) => updateOrgMemberRole(member, event.target.value as CloudOrgMember['organization_role'])}
+                        disabled={workspaceArchived}
                       >
                         <option value="student">Student</option>
                         <option value="instructor">Instructor</option>
                         <option value="owner">Owner</option>
                       </select>
-                      <button className="danger compact" type="button" onClick={() => removeOrgMember(member)}>
+                      <button className="danger compact" type="button" disabled={workspaceArchived} onClick={() => removeOrgMember(member)}>
                         <Trash2 size={14} /> Remove
                       </button>
                     </div>
@@ -1432,7 +1798,7 @@ export default function App() {
               <label htmlFor="project-title">Project name</label>
               <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} disabled={!canEditProject} />
               <small>
-                {isSignedIn ? 'Autosaved to cloud + local backup' : 'Autosaved locally'}
+                {isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
                 {activeOrganizationId && currentProjectOwnerLabel ? ` · by ${currentProjectOwnerLabel}` : ''}
                 {isArchived(project) ? ' · archived' : ''}
                 {!canEditProject ? ' · read-only instructor view' : ''}
@@ -1449,11 +1815,11 @@ export default function App() {
                         className={project.visibility === visibility ? 'active' : ''}
                         type="button"
                         title={visibilityDescriptions[visibility]}
-                        aria-label={`${visibilityLabels[visibility]}: ${visibilityDescriptions[visibility]}`}
+                        aria-label={`${visibility === 'private' && activeOrganizationId ? 'Teacher only' : visibilityLabels[visibility]}: ${visibilityDescriptions[visibility]}`}
                         disabled={!canEditProject}
                         onClick={() => updateProjectVisibility(visibility)}
                       >
-                        {visibilityLabels[visibility]}
+                        {visibility === 'private' && activeOrganizationId ? 'Teacher only' : visibilityLabels[visibility]}
                       </button>
                     ))}
                   </div>
@@ -1515,6 +1881,10 @@ export default function App() {
             <MoreHorizontal size={16} /> Actions
           </button>
           </div>
+
+          {canAccessProjectFeedback && (
+            <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
+          )}
 
           <div className="workspace">
             <section className="panel editor-panel">
@@ -1646,7 +2016,7 @@ export default function App() {
           setFileDialog(null)
           setFileDialogError('')
         }}>
-          <section className="modal-sheet file-dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="file-dialog-title" onClick={(event) => event.stopPropagation()}>
+          <section ref={fileDialogRef} tabIndex={-1} className="modal-sheet file-dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="file-dialog-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <p className="eyebrow">Workspace file</p>
@@ -1694,7 +2064,7 @@ export default function App() {
 
       {shareDialog && (
         <div className="modal-backdrop" role="presentation" onClick={() => setShareDialog(null)}>
-          <section className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
+          <section ref={shareDialogRef} tabIndex={-1} className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <p className="eyebrow">Snapshot share</p>
@@ -1730,7 +2100,7 @@ export default function App() {
 
       {orgCreateOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setOrgCreateOpen(false)}>
-          <section className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="org-dialog-title" onClick={(event) => event.stopPropagation()}>
+          <section ref={orgDialogRef} tabIndex={-1} className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="org-dialog-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <p className="eyebrow">Organization</p>
@@ -1764,7 +2134,7 @@ export default function App() {
 
       {projectActionsOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setProjectActionsOpen(false)}>
-          <section className="modal-sheet project-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="project-actions-title" onClick={(event) => event.stopPropagation()}>
+          <section ref={projectActionsDialogRef} tabIndex={-1} className="modal-sheet project-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="project-actions-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <p className="eyebrow">Project</p>
@@ -1795,7 +2165,7 @@ export default function App() {
           setConfirmAction(null)
           setPendingCheckpoint(null)
         }}>
-          <section className="modal-sheet confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" onClick={(event) => event.stopPropagation()}>
+          <section ref={confirmDialogRef} tabIndex={-1} className="modal-sheet confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <p className="eyebrow">{confirmAction === 'delete' ? 'Delete project' : confirmAction === 'checkpoint' ? 'Restore checkpoint' : 'Archive project'}</p>

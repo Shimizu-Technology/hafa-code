@@ -7,6 +7,7 @@ module Api
 
       before_action :authenticate_user!
       before_action :set_project
+      before_action :ensure_classroom_writable!, only: [ :create, :restore ]
       before_action :set_checkpoint, only: [ :restore ]
 
       def index
@@ -53,6 +54,7 @@ module Api
               position: file["position"] || index
             )
           end
+          @project.updated_at = Time.current
           @project.save!
         end
 
@@ -69,6 +71,12 @@ module Api
 
       def set_checkpoint
         @checkpoint = @project.project_checkpoints.find(params[:id])
+      end
+
+      def ensure_classroom_writable!
+        return unless @project.organization&.archived?
+
+        render json: { errors: [ "This classroom is archived and read-only" ] }, status: :unprocessable_entity
       end
 
       def prune_old_checkpoints(saved_checkpoint)

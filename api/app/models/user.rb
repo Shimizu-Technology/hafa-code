@@ -5,6 +5,9 @@ class User < ApplicationRecord
   has_many :organization_memberships, dependent: :destroy
   has_many :organizations, through: :organization_memberships
   has_many :created_organizations, class_name: "Organization", foreign_key: :created_by_id, dependent: :restrict_with_error
+  has_many :project_comments, dependent: :restrict_with_error
+  has_many :project_comment_reads, dependent: :destroy
+  has_many :audit_events, foreign_key: :actor_id, dependent: :nullify
 
   validates :clerk_id, presence: true, uniqueness: true
   validates :email, presence: true, uniqueness: { case_sensitive: false }

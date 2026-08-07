@@ -29,6 +29,7 @@ class ApplicationController < ActionController::API
         slug: project.organization.slug
       },
       archived_at: project.archived_at,
+      lock_version: project.lock_version,
       created_at: project.created_at,
       updated_at: project.updated_at,
       files: project.project_files.map do |file|
@@ -41,5 +42,15 @@ class ApplicationController < ActionController::API
         }
       end
     }
+  end
+
+  def audit_event!(action, organization: nil, target: nil, metadata: {})
+    AuditEvent.create!(
+      actor: current_user,
+      organization: organization,
+      target: target,
+      action: action,
+      metadata: metadata
+    )
   end
 end

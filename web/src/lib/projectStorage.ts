@@ -70,6 +70,7 @@ export function normalizeProject(candidate: Partial<SavedProject> | null | undef
     createdAt: String(candidate.createdAt || now),
     updatedAt: String(candidate.updatedAt || now),
     archivedAt: candidate.archivedAt ? String(candidate.archivedAt) : null,
+    lockVersion: Number.isInteger(candidate.lockVersion) ? candidate.lockVersion : undefined,
   }
 }
 
@@ -199,13 +200,22 @@ export function duplicateProject(project: SavedProject): SavedProject {
     id: crypto.randomUUID(),
     title: `${project.title} Copy`,
     visibility: 'private',
-    organizationId: null,
+    organizationId: project.organizationId ?? null,
     owner: null,
-    organization: null,
+    organization: project.organization ?? null,
     files: project.files.map((file) => ({ ...file })),
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
+    lockVersion: undefined,
+  }
+}
+
+export function createConflictCopy(project: SavedProject): SavedProject {
+  const suffix = ' Conflict Copy'
+  return {
+    ...duplicateProject(project),
+    title: `${project.title.slice(0, 120 - suffix.length)}${suffix}`,
   }
 }
 

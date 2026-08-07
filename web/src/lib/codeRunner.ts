@@ -29,6 +29,7 @@ export interface SavedProject {
   createdAt: string
   updatedAt: string
   archivedAt?: string | null
+  lockVersion?: number
 }
 
 export interface ProjectSnapshot {

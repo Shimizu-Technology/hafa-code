@@ -1,10 +1,14 @@
-import { defineConfig, type Plugin } from 'vite'
+import type { Plugin } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
 interface BundleEntry {
   fileName: string
+  type: 'asset' | 'chunk'
+  isEntry?: boolean
+  imports?: string[]
 }
 
 const STATIC_APP_SHELL = [
@@ -26,9 +30,21 @@ function buildServiceWorker(): Plugin {
     apply: 'build',
     generateBundle(_options, bundle: Record<string, BundleEntry>) {
       const appShell = new Set(STATIC_APP_SHELL)
+      const entryImports = new Set<string>()
+      const visitEntryImports = (fileName: string) => {
+        if (entryImports.has(fileName)) return
+        entryImports.add(fileName)
+        const item = bundle[fileName]
+        item?.imports?.forEach(visitEntryImports)
+      }
 
       Object.values(bundle).forEach((item) => {
-        if (!/\.(css|js|json|png|svg|ttf|wasm)$/i.test(item.fileName)) return
+        if (item.type === 'chunk' && item.isEntry) visitEntryImports(item.fileName)
+      })
+
+      Object.values(bundle).forEach((item) => {
+        const isLightweightAsset = /\.(css|json|png|svg|ttf)$/i.test(item.fileName)
+        if (!isLightweightAsset && !entryImports.has(item.fileName)) return
         appShell.add(`/${item.fileName}`)
       })
 
@@ -46,6 +62,10 @@ function buildServiceWorker(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), buildServiceWorker()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
   optimizeDeps: {
     exclude: [
       '@jitl/quickjs-wasmfile-release-sync',
