@@ -1,11 +1,9 @@
-import { defaultEntryPath, inferFileLanguage, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
+import { defaultEntryPath, inferFileLanguage, isProjectFileLanguage, isProjectKind, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
 const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
-const PROJECT_KINDS = new Set<ProjectKind>(['ruby', 'javascript', 'web'])
 const PROJECT_VISIBILITIES = new Set<ProjectVisibility>(['private', 'organization', 'unlisted', 'public'])
-const FILE_LANGUAGES = new Set(['ruby', 'javascript', 'html', 'css', 'json', 'plain'])
 type FileLanguage = SavedProject['files'][number]['language']
 type StoredProjectSnapshot = Partial<ProjectSnapshot> & {
   entry_path?: string
@@ -27,12 +25,8 @@ function safeParse<T>(value: string | null): T | null {
   }
 }
 
-function isProjectKind(value: unknown): value is ProjectKind {
-  return typeof value === 'string' && PROJECT_KINDS.has(value as ProjectKind)
-}
-
 function isFileLanguage(value: unknown): value is FileLanguage {
-  return typeof value === 'string' && FILE_LANGUAGES.has(value)
+  return isProjectFileLanguage(value)
 }
 
 function isProjectVisibility(value: unknown): value is ProjectVisibility {

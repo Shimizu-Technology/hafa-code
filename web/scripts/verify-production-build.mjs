@@ -5,7 +5,10 @@ import path from 'node:path'
 const DIST_DIRECTORY = new URL('../dist/', import.meta.url)
 const HEADERS_PATH = new URL('_headers', DIST_DIRECTORY)
 const ASSETS_DIRECTORY = new URL('assets/', DIST_DIRECTORY)
-const RUNNER_HEADER_PATH = '/assets/codeRunner.worker-*.js'
+const RUNNER_HEADERS = {
+  ruby: '/assets/rubyRunner.worker-*.js',
+  javascript: '/assets/javascriptRunner.worker-*.js',
+}
 
 function parseHeaderRules(source) {
   const rules = new Map()
@@ -49,29 +52,35 @@ function wildcardPathMatches(pattern, candidate) {
 
 const headers = parseHeaderRules(await readFile(HEADERS_PATH, 'utf8'))
 const applicationPolicy = headers.get('/*')?.get('content-security-policy')
-const runnerPolicy = headers.get(RUNNER_HEADER_PATH)?.get('content-security-policy')
+const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security-policy')
+const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
 
 assert(applicationPolicy, 'Missing application Content-Security-Policy')
-assert(runnerPolicy, 'Missing code runner worker Content-Security-Policy')
+assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
+assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Security-Policy')
 
 const applicationScripts = directiveSources(applicationPolicy, 'script-src')
 assert(applicationScripts.includes("'wasm-unsafe-eval'"), 'Application CSP must permit WebAssembly compilation')
 assert(!applicationScripts.includes("'unsafe-eval'"), 'Application CSP must not permit JavaScript string evaluation')
 
-const runnerScripts = directiveSources(runnerPolicy, 'script-src')
-assert(runnerScripts.includes("'wasm-unsafe-eval'"), 'Runner CSP must permit WebAssembly compilation')
-assert(runnerScripts.includes("'unsafe-eval'"), 'Runner CSP must permit the ruby.wasm JS bridge')
-assert.deepEqual(directiveSources(runnerPolicy, 'connect-src'), ["'self'"])
-assert(!runnerPolicy.includes('clerk'), 'Runner CSP must not inherit application third-party script origins')
+const rubyRunnerScripts = directiveSources(rubyRunnerPolicy, 'script-src')
+assert(rubyRunnerScripts.includes("'wasm-unsafe-eval'"), 'Ruby runner CSP must permit WebAssembly compilation')
+assert(rubyRunnerScripts.includes("'unsafe-eval'"), 'Ruby runner CSP must permit the ruby.wasm JS bridge')
+assert.deepEqual(directiveSources(rubyRunnerPolicy, 'connect-src'), ["'self'"])
+assert(!rubyRunnerPolicy.includes('clerk'), 'Ruby runner CSP must not inherit application third-party script origins')
+
+const javascriptRunnerScripts = directiveSources(javascriptRunnerPolicy, 'script-src')
+assert(javascriptRunnerScripts.includes("'wasm-unsafe-eval'"), 'JavaScript runner CSP must permit WebAssembly compilation')
+assert(!javascriptRunnerScripts.includes("'unsafe-eval'"), 'JavaScript runner CSP must not permit JavaScript string evaluation')
+assert.deepEqual(directiveSources(javascriptRunnerPolicy, 'connect-src'), ["'self'"])
+assert(!javascriptRunnerPolicy.includes('clerk'), 'JavaScript runner CSP must not inherit application third-party script origins')
 
 const assetNames = await readdir(ASSETS_DIRECTORY)
-const runnerAssets = assetNames.filter((name) => /^codeRunner\.worker-[^.]+\.js$/.test(name))
-assert.equal(runnerAssets.length, 1, `Expected one code runner worker asset, found ${runnerAssets.length}`)
+for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
+  const runnerAssets = assetNames.filter((name) => new RegExp(`^${runnerName}Runner\\.worker-[^.]+\\.js$`).test(name))
+  assert.equal(runnerAssets.length, 1, `Expected one ${runnerName} runner worker asset, found ${runnerAssets.length}`)
 
-const runnerAssetPath = path.posix.join('/assets', runnerAssets[0])
-assert(
-  wildcardPathMatches(RUNNER_HEADER_PATH, runnerAssetPath),
-  `${runnerAssetPath} is not covered by ${RUNNER_HEADER_PATH}`,
-)
-
-console.log(`Verified production CSP coverage for ${runnerAssetPath}`)
+  const runnerAssetPath = path.posix.join('/assets', runnerAssets[0])
+  assert(wildcardPathMatches(headerPath, runnerAssetPath), `${runnerAssetPath} is not covered by ${headerPath}`)
+  console.log(`Verified production CSP coverage for ${runnerAssetPath}`)
+}

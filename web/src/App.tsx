@@ -36,8 +36,10 @@ import {
 } from 'lucide-react'
 import './App.css'
 import {
+  PROJECT_KINDS,
   defaultEntryPath,
   inferFileLanguage,
+  projectKindDefinition,
   type ProjectFile,
   type ProjectCheckpoint,
   type ProjectKind,
@@ -1673,9 +1675,9 @@ export default function App() {
           <span><strong>{checkpoints.length}</strong> checkpoints</span>
         </div>
         <div className="mobile-home-create" aria-label="Create new project">
-          {(['ruby', 'javascript', 'web'] as ProjectKind[]).map((kind) => (
+          {PROJECT_KINDS.map((kind) => (
             <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-              <Plus size={14} /> {kind === 'javascript' ? 'JS' : kind === 'web' ? 'Web' : 'Ruby'}
+              <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
             </button>
           ))}
         </div>
@@ -1728,9 +1730,9 @@ export default function App() {
                 </button>
               </div>
               <div className="new-project-grid">
-                {(['ruby', 'javascript', 'web'] as ProjectKind[]).map((kind) => (
+                {PROJECT_KINDS.map((kind) => (
                   <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-                    <Plus size={14} /> {kind === 'javascript' ? 'JS' : kind === 'web' ? 'Web' : 'Ruby'}
+                    <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
                   </button>
                 ))}
               </div>
@@ -1765,9 +1767,9 @@ export default function App() {
               </button>
             </div>
           <div className="new-project-grid">
-            {(['ruby', 'javascript', 'web'] as ProjectKind[]).map((kind) => (
+            {PROJECT_KINDS.map((kind) => (
               <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-                <Plus size={14} /> {kind === 'javascript' ? 'JS' : kind === 'web' ? 'Web' : 'Ruby'}
+                <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
               </button>
             ))}
           </div>
@@ -1957,7 +1959,7 @@ export default function App() {
               <div className="mobile-code-runbar">
                 <button type="button" onClick={runFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()}>
                   {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
-                  {project.kind === 'web' ? 'Open preview' : `Run ${project.kind === 'ruby' ? 'Ruby' : 'JS'}`}
+                  {project.kind === 'web' ? 'Open preview' : `Run ${projectKindDefinition(project.kind).shortLabel}`}
                 </button>
               </div>
               <MonacoEditor

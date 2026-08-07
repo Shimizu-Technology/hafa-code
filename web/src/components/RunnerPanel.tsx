@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
-import { RUNNER_TIMEOUT_MS, type ProjectFile, type RunnerLanguage, type SavedProject } from '../lib/codeRunner'
+import { RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 
@@ -20,6 +21,7 @@ type TerminalLine = {
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 
 export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
+  const runner = projectKindDefinition(project.kind).runner
   const [runState, setRunState] = useState<RunState>(emptyRunState)
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
   const [terminalInput, setTerminalInput] = useState('')
@@ -64,12 +66,12 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
   }, [awaitingInput])
 
   const run = () => {
-    if (project.kind === 'web') return
+    if (!runner) return
     if (runState.status === 'running') stopWorker()
 
     const runId = crypto.randomUUID()
     const startedAt = performance.now()
-    const worker = new Worker(new URL('../workers/codeRunner.worker.ts', import.meta.url), { type: 'module' })
+    const worker = runner.createWorker()
 
     workerRef.current = worker
     runIdRef.current = runId
@@ -80,7 +82,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       {
         id: crypto.randomUUID(),
         kind: 'command',
-        text: project.kind === 'ruby' ? `ruby ${entryFile.path}` : `node ${entryFile.path}`,
+        text: runner.terminalCommand(entryFile.path),
       },
     ])
     setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
@@ -100,7 +102,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
 
-    worker.onmessage = (event: MessageEvent<{ id: string; type: 'started' | 'output' | 'input_request' | 'result'; stream?: 'stdout' | 'stderr'; text?: string; stdout?: string; stderr?: string; durationMs?: number }>) => {
+    worker.onmessage = (event: MessageEvent<RunnerResponse>) => {
       if (event.data.id !== runIdRef.current) return
 
       if (event.data.type === 'started') {
@@ -148,12 +150,12 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
     worker.postMessage({
       id: runId,
+      type: 'run',
       entryPath: entryFile.path,
       files: project.files,
       code: entryFile.content,
-      language: project.kind as RunnerLanguage,
       timeoutMs: RUNNER_TIMEOUT_MS,
-    })
+    } satisfies RunRequest)
   }
 
   useEffect(() => {
@@ -170,7 +172,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     appendTerminalLine({ kind: 'input', text: value })
     setTerminalInput('')
     setAwaitingInput(false)
-    workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value })
+    workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value } satisfies RunnerRequest)
     armExecutionTimeoutRef.current()
   }
 
@@ -205,7 +207,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
           </button>
         ) : (
           <button onClick={run} disabled={!entryFile.content.trim()}>
-            <Play size={16} /> Run {project.kind === 'ruby' ? 'Ruby' : 'JS'}
+            <Play size={16} /> Run {runner?.runLabel}
           </button>
         )}
       </div>

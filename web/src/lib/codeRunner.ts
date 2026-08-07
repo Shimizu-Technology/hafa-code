@@ -1,121 +1,57 @@
-export type RunnerLanguage = 'ruby' | 'javascript'
+import {
+  fileLanguageForPath,
+  projectKindDefinition,
+} from './languageRegistry'
+import type { ProjectFile, ProjectKind, SavedProject } from './projectTypes'
 
-export type ProjectKind = RunnerLanguage | 'web'
-export type ProjectVisibility = 'private' | 'organization' | 'unlisted' | 'public'
-
-export interface ProjectFile {
-  path: string
-  language: 'ruby' | 'javascript' | 'html' | 'css' | 'json' | 'plain'
-  content: string
-}
-
-export interface SavedProject {
-  id: string
-  title: string
-  kind: ProjectKind
-  visibility: ProjectVisibility
-  organizationId?: string | null
-  owner?: {
-    id: number
-    fullName: string
-  } | null
-  organization?: {
-    id: number
-    name: string
-    slug: string
-  } | null
-  entryPath: string
-  files: ProjectFile[]
-  createdAt: string
-  updatedAt: string
-  archivedAt?: string | null
-  lockVersion?: number
-}
-
-export interface ProjectSnapshot {
-  title: string
-  kind: ProjectKind
-  entryPath: string
-  files: ProjectFile[]
-}
-
-export interface ProjectCheckpoint {
-  id: string
-  title: string
-  createdAt: string
-  snapshot?: ProjectSnapshot
-}
+export {
+  FILE_LANGUAGES,
+  FILE_LANGUAGE_DEFINITIONS,
+  PROJECT_KINDS,
+  PROJECT_KIND_DEFINITIONS,
+  fileLanguageDefinition,
+  isProjectFileLanguage,
+  isProjectKind,
+  projectKindDefinition,
+} from './languageRegistry'
+export type {
+  ProjectCheckpoint,
+  ProjectFile,
+  ProjectFileLanguage,
+  ProjectKind,
+  ProjectSnapshot,
+  ProjectVisibility,
+  RunnerLanguage,
+  SavedProject,
+} from './projectTypes'
 
 export const RUNNER_TIMEOUT_MS = 3000
 
 export function starterProject(kind: ProjectKind): SavedProject {
   const now = new Date().toISOString()
-  const id = crypto.randomUUID()
-
-  if (kind === 'ruby') {
-    return {
-      id,
-      title: 'Ruby Playground',
-      kind,
-      visibility: 'private',
-      organizationId: null,
-      entryPath: 'main.rb',
-      files: [{ path: 'main.rb', language: 'ruby', content: 'puts "Hafa adai, Ruby!"\n\n3.times do |i|\n  puts "Line #{i + 1}"\nend\n' }],
-      createdAt: now,
-      updatedAt: now,
-    }
-  }
-
-  if (kind === 'javascript') {
-    return {
-      id,
-      title: 'JavaScript Playground',
-      kind,
-      visibility: 'private',
-      organizationId: null,
-      entryPath: 'main.js',
-      files: [{ path: 'main.js', language: 'javascript', content: 'console.log("Hafa adai, JavaScript!")\n\nfor (let i = 1; i <= 3; i++) {\n  console.log(`Line ${i}`)\n}\n' }],
-      createdAt: now,
-      updatedAt: now,
-    }
-  }
+  const definition = projectKindDefinition(kind)
 
   return {
-    id,
-    title: 'Web Page Playground',
+    id: crypto.randomUUID(),
+    title: definition.starterTitle,
     kind,
     visibility: 'private',
     organizationId: null,
-    entryPath: 'index.html',
-    files: [
-      { path: 'index.html', language: 'html', content: '<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>Hafa Code Page</title>\n    <link rel="stylesheet" href="style.css" />\n  </head>\n  <body>\n    <main>\n      <h1>Hafa adai!</h1>\n      <p>Edit HTML, CSS, and JS to build a page.</p>\n      <button id="hello">Click me</button>\n    </main>\n    <script src="script.js"></script>\n  </body>\n</html>\n' },
-      { path: 'style.css', language: 'css', content: 'body {\n  font-family: system-ui, sans-serif;\n  margin: 0;\n  padding: 2rem;\n  background: #0f172a;\n  color: white;\n}\n\nmain {\n  max-width: 680px;\n  margin: auto;\n}\n\nbutton {\n  border: 0;\n  border-radius: 999px;\n  padding: 0.75rem 1rem;\n  background: #ef4444;\n  color: white;\n  font-weight: 700;\n}\n' },
-      { path: 'script.js', language: 'javascript', content: 'document.querySelector("#hello")?.addEventListener("click", () => {\n  alert("You shipped your first web interaction!")\n})\n' },
-    ],
+    entryPath: definition.entryPath,
+    files: definition.starterFiles.map((file) => ({ ...file })),
     createdAt: now,
     updatedAt: now,
   }
 }
 
 export function inferFileLanguage(path: string, kind: ProjectKind): ProjectFile['language'] {
-  const extension = path.toLowerCase().split('.').pop()
-  if (extension === 'rb') return 'ruby'
-  if (extension === 'html' || extension === 'htm') return 'html'
-  if (extension === 'css') return 'css'
-  if (extension === 'js' || extension === 'mjs' || extension === 'cjs') return 'javascript'
-  if (extension === 'json') return 'json'
-  if (kind === 'ruby') return 'ruby'
-  return 'plain'
+  return fileLanguageForPath(path) ?? projectKindDefinition(kind).fallbackFileLanguage
 }
 
 export function defaultEntryPath(files: ProjectFile[], kind: ProjectKind) {
-  const preferred = kind === 'web'
-    ? ['index.html', 'main.html']
-    : kind === 'ruby'
-      ? ['main.rb']
-      : ['main.js', 'index.js']
-  return preferred.map((path) => files.find((file) => file.path === path)?.path).find(Boolean)
-    ?? files.find((file) => file.language === (kind === 'web' ? 'html' : kind))?.path
+  const definition = projectKindDefinition(kind)
+  return definition.preferredEntryPaths.map((path) => files.find((file) => file.path === path)?.path).find(Boolean)
+    ?? files.find((file) => file.language === definition.defaultFileLanguage)?.path
     ?? files[0]?.path
     ?? ''
 }

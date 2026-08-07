@@ -1880,6 +1880,7 @@ button.context-chip.active,
   }
 
   .mobile-home-create button {
+    min-height: 44px;
     min-width: 0;
   }
 
@@ -2097,6 +2098,7 @@ button.context-chip.active,
   }
 
   .new-project-grid button {
+    min-height: 44px;
     min-width: 0;
     padding-inline: 0.5rem;
   }

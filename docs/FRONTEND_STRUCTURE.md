@@ -19,15 +19,20 @@ web/src/
   lib/
     api.ts                    Rails API client and cloud/local data mapping
     clerk.ts                  Clerk env validation
-    codeRunner.ts             Project types, starter projects, preview builder
+    codeRunner.ts             Starter-project and web-preview helpers
+    languageRegistry.ts       Supported languages, starters, editor and runner metadata
+    projectTypes.ts           Shared project, file, and language types
     projectStorage.ts         localStorage, import/export, checkpoints
     workspace.ts              Workspace labels, guards, formatting, path helpers
   workers/
-    codeRunner.worker.ts      Browser-side Ruby and JavaScript execution
+    runnerProtocol.ts         Typed worker request/response contract
+    rubyRunner.worker.ts      Browser-side ruby.wasm execution
+    javascriptRunner.worker.ts Browser-side QuickJS execution
 ```
 
 ## Organization Rules
 
+- Add project kinds and file-language behavior through `lib/languageRegistry.ts`; do not add parallel language switches in components.
 - Keep pure project rules in `lib/workspace.ts` or `lib/codeRunner.ts`.
 - Keep Rails request/response mapping in `lib/api.ts`; UI components should not know API payload casing.
 - Keep browser storage and import/export behavior in `lib/projectStorage.ts`.
