@@ -1426,9 +1426,13 @@ button.context-chip.active,
 
 .terminal-input-row {
   align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(125, 211, 199, 0.34);
+  border-radius: 0.7rem;
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.15rem;
+  margin-top: 0.55rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.65rem;
 }
 
 .terminal-input-row span {
@@ -1445,11 +1449,62 @@ button.context-chip.active,
   font: inherit;
   min-width: 0;
   outline: none;
+  min-height: 44px;
   padding: 0;
 }
 
 .terminal-input-row input::placeholder {
   color: #776d62;
+}
+
+.terminal-input-submit {
+  background: #7dd3c7;
+  border: 0;
+  border-radius: 0.5rem;
+  box-shadow: none;
+  color: #14110f;
+  min-height: 44px;
+  padding: 0.35rem 0.65rem;
+}
+
+.terminal-input-submit span {
+  color: inherit;
+}
+
+.terminal-input-submit:hover:not(:disabled) {
+  background: #a5e5dc;
+  box-shadow: none;
+  transform: none;
+}
+
+.runner-progress {
+  align-items: flex-start;
+  color: #d8cbbb;
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.runner-progress svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.runner-progress div,
+.runner-progress strong,
+.runner-progress span {
+  display: block;
+}
+
+.runner-progress strong {
+  color: #f3eadc;
+  font-size: 0.84rem;
+}
+
+.runner-progress span {
+  color: #9f9185;
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
 }
 
 .empty-output {
@@ -1472,6 +1527,10 @@ button.context-chip.active,
   color: #b9aa99;
   font-size: 0.72rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.output-panel > .panel-header > button {
+  white-space: nowrap;
 }
 
 .error-text { color: #ffb3a7; }
@@ -1886,6 +1945,10 @@ button.context-chip.active,
   .mobile-home-create button {
     min-height: 44px;
     min-width: 0;
+  }
+
+  .terminal-input-row input {
+    font-size: 1rem;
   }
 
   .mobile-tab-home .layout-grid {

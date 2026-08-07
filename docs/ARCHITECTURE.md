@@ -64,6 +64,7 @@ production CSP and can be cached after first use.
 - bridge Python `input()` to the terminal on browsers with WebAssembly JSPI support
 - include the Python standard library, but do not auto-download packages
 - terminate the worker when the UI timeout expires
+- retain an idle worker after successful runs so pinned language runtimes can be reused; project files and module state are reset before each run
 
 ### HTML/CSS/JS
 
