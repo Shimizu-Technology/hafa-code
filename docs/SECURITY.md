@@ -30,6 +30,7 @@ dedicated Web Worker.
 - Project files are copied into an isolated in-memory filesystem per run
 - No backend execution
 - No automatic package or wheel downloads; the initial release is standard-library-only
+- Interactive `input()` is bridged through the existing terminal protocol when the browser supports WebAssembly JSPI
 - The worker can be terminated by the UI timeout or Stop button
 - Runtime assets load only from the application origin
 
@@ -89,6 +90,7 @@ Storage variant processing. `npm audit --audit-level=high` and
 - Ruby WASM is large and first-run startup can be slow on older devices.
 - Pyodide adds another sizable first-run download; the UI keeps its startup and execution guardrails separate.
 - Python package installation is intentionally unavailable in the initial release.
+- Browsers without WebAssembly JSPI can run Python but receive a clear runtime error when a program calls `input()`.
 - The UI timeout can terminate a worker, but Ruby WASM internals may not support as fine-grained interruption as QuickJS.
 - Share links encode project source in the URL hash; users should not put secrets in projects.
 - Anonymous local storage is device/browser scoped and should not be treated as durable cloud backup.

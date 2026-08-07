@@ -61,6 +61,7 @@ production CSP and can be cached after first use.
 - mount every project file into an in-memory project directory
 - execute the configured entry file with normal local Python imports
 - capture stdout and stderr in the browser terminal
+- bridge Python `input()` to the terminal on browsers with WebAssembly JSPI support
 - include the Python standard library, but do not auto-download packages
 - terminate the worker when the UI timeout expires
 

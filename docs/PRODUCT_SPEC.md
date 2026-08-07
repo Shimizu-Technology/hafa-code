@@ -51,7 +51,7 @@ Create a small, open-source coding playground for students and alumni to practic
 3. Python project
    - Multi-file Python editor
    - Standard-library-only Pyodide runtime
-   - stdout/stderr panel
+   - stdout/stderr panel with interactive `input()` on JSPI-capable browsers
    - 3s execution timeout after runtime startup
 
 4. Web page

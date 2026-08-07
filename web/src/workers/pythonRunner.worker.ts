@@ -1,7 +1,14 @@
 import { loadPyodide } from 'pyodide'
 import { installRunner, postRunnerMessage, type RunRequest } from './runnerProtocol'
+import { createStdinBridge } from './stdinBridge'
 
 const PROJECT_ROOT = '/home/pyodide/project'
+const inputBridges = new Map<string, ReturnType<typeof createStdinBridge>>()
+
+type PythonWorkerGlobal = typeof globalThis & {
+  __hafa_readline?: () => Promise<string>
+  __hafa_write_prompt?: (prompt: string) => void
+}
 
 function safeProjectPath(path: string) {
   const segments = path.replace(/\\/g, '/').split('/')
@@ -26,6 +33,9 @@ async function runPython(request: RunRequest) {
   const entryPath = safeProjectPath(request.entryPath)
   const stdout: string[] = []
   const stderr: string[] = []
+  const workerGlobal = globalThis as PythonWorkerGlobal
+  const previousReadline = workerGlobal.__hafa_readline
+  const previousWritePrompt = workerGlobal.__hafa_write_prompt
   const indexURL = new URL(`${import.meta.env.BASE_URL}assets/pyodide/`, self.location.origin).href
   const pyodide = await loadPyodide({
     indexURL,
@@ -45,6 +55,13 @@ async function runPython(request: RunRequest) {
 
   postRunnerMessage({ id, type: 'started' })
 
+  const inputBridge = createStdinBridge(() => postRunnerMessage({ id, type: 'input_request' }))
+  inputBridges.set(id, inputBridge)
+  workerGlobal.__hafa_readline = inputBridge.read
+  workerGlobal.__hafa_write_prompt = (prompt) => {
+    if (prompt) appendOutput(id, 'stdout', prompt, stdout)
+  }
+
   try {
     const projectRoot = JSON.stringify(PROJECT_ROOT)
     const entryFile = JSON.stringify(`${PROJECT_ROOT}/${entryPath}`)
@@ -52,6 +69,16 @@ async function runPython(request: RunRequest) {
 import os
 import runpy
 import sys
+import builtins
+from js import __hafa_readline, __hafa_write_prompt
+from pyodide.ffi import can_run_sync, run_sync
+
+def __hafa_input(prompt=""):
+    if not can_run_sync():
+        raise RuntimeError("Interactive input requires a browser with WebAssembly JSPI support.")
+    if prompt:
+        __hafa_write_prompt(str(prompt))
+    return run_sync(__hafa_readline())
 
 project_root = ${projectRoot}
 entry_file = ${entryFile}
@@ -59,14 +86,23 @@ os.chdir(project_root)
 sys.argv = [entry_file]
 sys.path.insert(0, os.path.dirname(entry_file))
 sys.path.insert(0, project_root)
+builtins.input = __hafa_input
 runpy.run_path(entry_file, run_name="__main__")
 `)
     if (result && typeof result === 'object' && 'destroy' in result) result.destroy()
   } catch (error) {
     appendOutput(id, 'stderr', error instanceof Error ? error.message : String(error), stderr)
+  } finally {
+    inputBridge.abort()
+    inputBridges.delete(id)
+    workerGlobal.__hafa_readline = previousReadline
+    workerGlobal.__hafa_write_prompt = previousWritePrompt
   }
 
   return { stdout: stdout.join(''), stderr: stderr.join('') }
 }
 
-installRunner(runPython)
+installRunner(runPython, {
+  onStdin: ({ id, value }) => inputBridges.get(id)?.write(value),
+  onAbort: ({ id }) => inputBridges.get(id)?.abort(),
+})
