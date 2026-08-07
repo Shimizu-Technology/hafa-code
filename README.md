@@ -8,6 +8,7 @@ A lightweight alternative to Replit focused on the languages CSG actually teache
 
 - Ruby snippets powered by `ruby.wasm`
 - JavaScript snippets powered by QuickJS in a Web Worker
+- Python projects powered by a self-hosted Pyodide runtime in a Web Worker
 - HTML/CSS/JS projects with a sandboxed live preview
 - Save, fork, share, and remix beginner-friendly projects
 - Optional Clerk sign-in with Rails-backed cloud projects
@@ -38,6 +39,7 @@ Run untrusted code in the browser, not on Rails.
 
 - Ruby runs in WebAssembly inside a worker.
 - JavaScript runs in QuickJS inside a worker with memory/time limits.
+- Python runs in Pyodide inside a worker with a standard-library-only project filesystem.
 - HTML/CSS/JS preview runs in a sandboxed iframe.
 - Rails stores users, project metadata, and source files only.
 

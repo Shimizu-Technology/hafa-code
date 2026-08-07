@@ -42,6 +42,12 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     extensions: ['js', 'mjs', 'cjs'],
     starterContent: '// Write JavaScript here\n',
   },
+  python: {
+    label: 'Python',
+    monacoLanguage: 'python',
+    extensions: ['py', 'pyw'],
+    starterContent: '# Write Python here\n',
+  },
   html: {
     label: 'HTML',
     monacoLanguage: 'html',
@@ -109,6 +115,27 @@ export const PROJECT_KIND_DEFINITIONS = {
       runLabel: 'JS',
       terminalCommand: (entryPath) => `node ${entryPath}`,
       createWorker: () => new Worker(new URL('../workers/javascriptRunner.worker.ts', import.meta.url), { type: 'module' }),
+    },
+  },
+  python: {
+    kind: 'python',
+    label: 'Python',
+    shortLabel: 'Python',
+    starterTitle: 'Python Playground',
+    entryPath: 'main.py',
+    starterFiles: [
+      { path: 'main.py', language: 'python', content: 'print("Hafa adai, Python!")\n\nfor line in range(1, 4):\n    print(f"Line {line}")\n' },
+    ],
+    preferredEntryPaths: ['main.py', 'app.py'],
+    defaultFileLanguage: 'python',
+    fallbackFileLanguage: 'python',
+    newFileCandidates: ['helper.py', 'utils.py', 'practice.py'],
+    defaultExtension: 'py',
+    runner: {
+      language: 'python',
+      runLabel: 'Python',
+      terminalCommand: (entryPath) => `python ${entryPath}`,
+      createWorker: () => new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), { type: 'module' }),
     },
   },
   web: {

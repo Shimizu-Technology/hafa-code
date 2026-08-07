@@ -8,7 +8,9 @@ const ASSETS_DIRECTORY = new URL('assets/', DIST_DIRECTORY)
 const RUNNER_HEADERS = {
   ruby: '/assets/rubyRunner.worker-*.js',
   javascript: '/assets/javascriptRunner.worker-*.js',
+  python: '/assets/pythonRunner.worker-*.js',
 }
+const PYODIDE_RUNTIME_FILES = ['pyodide-lock.json', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip']
 
 function parseHeaderRules(source) {
   const rules = new Map()
@@ -54,10 +56,12 @@ const headers = parseHeaderRules(await readFile(HEADERS_PATH, 'utf8'))
 const applicationPolicy = headers.get('/*')?.get('content-security-policy')
 const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security-policy')
 const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
+const pythonRunnerPolicy = headers.get(RUNNER_HEADERS.python)?.get('content-security-policy')
 
 assert(applicationPolicy, 'Missing application Content-Security-Policy')
 assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
 assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Security-Policy')
+assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 
 const applicationScripts = directiveSources(applicationPolicy, 'script-src')
 assert(applicationScripts.includes("'wasm-unsafe-eval'"), 'Application CSP must permit WebAssembly compilation')
@@ -75,6 +79,12 @@ assert(!javascriptRunnerScripts.includes("'unsafe-eval'"), 'JavaScript runner CS
 assert.deepEqual(directiveSources(javascriptRunnerPolicy, 'connect-src'), ["'self'"])
 assert(!javascriptRunnerPolicy.includes('clerk'), 'JavaScript runner CSP must not inherit application third-party script origins')
 
+const pythonRunnerScripts = directiveSources(pythonRunnerPolicy, 'script-src')
+assert(pythonRunnerScripts.includes("'wasm-unsafe-eval'"), 'Python runner CSP must permit WebAssembly compilation')
+assert(!pythonRunnerScripts.includes("'unsafe-eval'"), 'Python runner CSP must not permit JavaScript string evaluation')
+assert.deepEqual(directiveSources(pythonRunnerPolicy, 'connect-src'), ["'self'"])
+assert(!pythonRunnerPolicy.includes('clerk'), 'Python runner CSP must not inherit application third-party script origins')
+
 const assetNames = await readdir(ASSETS_DIRECTORY)
 for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
   const runnerAssets = assetNames.filter((name) => new RegExp(`^${runnerName}Runner\\.worker-[^.]+\\.js$`).test(name))
@@ -84,3 +94,7 @@ for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
   assert(wildcardPathMatches(headerPath, runnerAssetPath), `${runnerAssetPath} is not covered by ${headerPath}`)
   console.log(`Verified production CSP coverage for ${runnerAssetPath}`)
 }
+
+const pyodideAssets = (await readdir(new URL('pyodide/', ASSETS_DIRECTORY))).sort()
+assert.deepEqual(pyodideAssets, PYODIDE_RUNTIME_FILES, 'Expected only the pinned core Pyodide runtime assets')
+console.log(`Verified self-hosted Pyodide runtime: ${pyodideAssets.join(', ')}`)

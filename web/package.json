@@ -19,6 +19,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "monaco-editor": "0.55.1",
+    "pyodide": "314.0.3",
     "quickjs-emscripten": "^0.32.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
@@ -42,6 +43,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "8.0.16",
+    "vite-plugin-static-copy": "4.1.1",
     "vitest": "^4.0.18"
   }
 }

@@ -28,6 +28,7 @@ web/src/
     runnerProtocol.ts         Typed worker request/response contract
     rubyRunner.worker.ts      Browser-side ruby.wasm execution
     javascriptRunner.worker.ts Browser-side QuickJS execution
+    pythonRunner.worker.ts    Browser-side Pyodide execution
 ```
 
 ## Organization Rules

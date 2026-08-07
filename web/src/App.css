@@ -923,7 +923,7 @@ button.context-chip.active,
 
 .new-project-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
   margin: 1rem 0;
 }
@@ -1850,6 +1850,10 @@ button.context-chip.active,
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .mobile-home-create {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mobile-home-stats span {
     background: rgba(255,255,255,0.58);
     border: 1px solid var(--line);
@@ -2320,10 +2324,6 @@ button.context-chip.active,
 @media (max-width: 420px) {
   .hero-actions,
   .mobile-actions-content {
-    grid-template-columns: 1fr;
-  }
-
-  .new-project-grid {
     grid-template-columns: 1fr;
   }
 

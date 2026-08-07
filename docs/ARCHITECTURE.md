@@ -12,9 +12,10 @@ Rails API + React SPA
   └─ web/ React + Vite frontend
       ├─ Monaco editors
       ├─ Componentized workspace shell
-      ├─ Runner worker
+      ├─ Language-specific runner workers
       │   ├─ Ruby WASM
-      │   └─ QuickJS WASM
+      │   ├─ QuickJS WASM
+      │   └─ Pyodide Python WASM
       ├─ HTML preview iframe
       └─ Project storage adapter
           ├─ localStorage anonymous fallback
@@ -51,6 +52,18 @@ Use `quickjs-emscripten` in a Web Worker.
 - set memory limit
 - interrupt after timeout
 
+### Python
+
+Use the pinned Pyodide npm runtime in a Web Worker. Core runtime files are
+self-hosted under the app origin so the runner remains compatible with the
+production CSP and can be cached after first use.
+
+- mount every project file into an in-memory project directory
+- execute the configured entry file with normal local Python imports
+- capture stdout and stderr in the browser terminal
+- include the Python standard library, but do not auto-download packages
+- terminate the worker when the UI timeout expires
+
 ### HTML/CSS/JS
 
 Use a sandboxed iframe with `srcDoc`.
@@ -66,7 +79,7 @@ Do not allow same-origin unless there is a specific reason.
 ## Data Model Draft
 
 ```ts
-type ProjectKind = 'ruby' | 'javascript' | 'web'
+type ProjectKind = 'ruby' | 'javascript' | 'python' | 'web'
 
 type Project = {
   id: string
@@ -83,7 +96,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  language: 'ruby' | 'javascript' | 'html' | 'css'
+  language: 'ruby' | 'javascript' | 'python' | 'html' | 'css'
   content: string
 }
 ```

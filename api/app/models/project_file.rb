@@ -1,5 +1,5 @@
 class ProjectFile < ApplicationRecord
-  LANGUAGES = %w[ruby javascript html css json plain].freeze
+  LANGUAGES = %w[ruby javascript python html css json plain].freeze
   RESERVED_SEGMENTS = %w[. ..].freeze
 
   belongs_to :project
