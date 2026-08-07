@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
+import { CornerDownLeft, Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
 import { RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
+type RunPhase = 'idle' | 'loading' | 'executing' | 'input'
 
 interface RunState {
   status: RunStatus
@@ -23,6 +24,7 @@ const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durati
 export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const runner = projectKindDefinition(project.kind).runner
   const [runState, setRunState] = useState<RunState>(emptyRunState)
+  const [runPhase, setRunPhase] = useState<RunPhase>('idle')
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
   const [terminalInput, setTerminalInput] = useState('')
   const [awaitingInput, setAwaitingInput] = useState(false)
@@ -53,6 +55,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     workerRef.current = null
     runIdRef.current = null
     setAwaitingInput(false)
+    setRunPhase('idle')
   }, [clearRunTimer])
 
   useEffect(() => stopWorker, [stopWorker])
@@ -67,16 +70,18 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
   const run = () => {
     if (!runner) return
-    if (runState.status === 'running') stopWorker()
+    if (runIdRef.current) stopWorker()
+    else clearRunTimer()
 
     const runId = crypto.randomUUID()
     const startedAt = performance.now()
-    const worker = runner.createWorker()
+    const worker = workerRef.current ?? runner.createWorker()
 
     workerRef.current = worker
     runIdRef.current = runId
     outputEmittedRef.current = false
     setAwaitingInput(false)
+    setRunPhase('loading')
     setTerminalInput('')
     setTerminalLines([
       {
@@ -88,13 +93,17 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
 
     timeoutRef.current = window.setTimeout(() => {
+      if (runIdRef.current !== runId) return
       stopWorker()
-      setRunState({ status: 'timeout', stdout: '', stderr: 'Code runner did not start in time.', durationMs: Math.round(performance.now() - startedAt) })
+      const message = 'The browser runtime took too long to load. Check your connection, then try again.'
+      appendTerminalLine({ kind: 'system', text: message })
+      setRunState({ status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
     }, 30_000)
 
     const armExecutionTimeout = () => {
       clearRunTimer()
       timeoutRef.current = window.setTimeout(() => {
+        if (runIdRef.current !== runId) return
         stopWorker()
         appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
         setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
@@ -102,10 +111,16 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
 
-    worker.onmessage = (event: MessageEvent<RunnerResponse>) => {
+    const detachWorkerListeners = () => {
+      worker.removeEventListener('message', handleWorkerMessage)
+      worker.removeEventListener('error', handleWorkerError)
+    }
+
+    const handleWorkerMessage = (event: MessageEvent<RunnerResponse>) => {
       if (event.data.id !== runIdRef.current) return
 
       if (event.data.type === 'started') {
+        setRunPhase('executing')
         armExecutionTimeout()
         return
       }
@@ -119,14 +134,15 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       if (event.data.type === 'input_request') {
         clearRunTimer()
         setAwaitingInput(true)
+        setRunPhase('input')
         return
       }
 
       clearRunTimer()
-      workerRef.current?.terminate()
-      workerRef.current = null
+      detachWorkerListeners()
       runIdRef.current = null
       setAwaitingInput(false)
+      setRunPhase('idle')
 
       if (!outputEmittedRef.current) {
         if (event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
@@ -142,11 +158,19 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       })
     }
 
-    worker.onerror = (event) => {
+    const handleWorkerError = (event: ErrorEvent) => {
+      detachWorkerListeners()
       stopWorker()
-      appendTerminalLine({ kind: 'stderr', text: event.message || 'Runner failed.' })
-      setRunState({ status: 'error', stdout: '', stderr: event.message || 'Runner failed.', durationMs: Math.round(performance.now() - startedAt) })
+      const details = event.message || 'The browser runner stopped unexpectedly.'
+      const message = /fetch|network|load/i.test(details)
+        ? `The browser runtime could not load. Check your connection and try again.\n${details}`
+        : details
+      appendTerminalLine({ kind: 'stderr', text: message })
+      setRunState({ status: 'error', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
     }
+
+    worker.addEventListener('message', handleWorkerMessage)
+    worker.addEventListener('error', handleWorkerError)
 
     worker.postMessage({
       id: runId,
@@ -172,6 +196,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     appendTerminalLine({ kind: 'input', text: value })
     setTerminalInput('')
     setAwaitingInput(false)
+    setRunPhase('executing')
     workerRef.current.postMessage({ id: runIdRef.current, type: 'stdin', value } satisfies RunnerRequest)
     armExecutionTimeoutRef.current()
   }
@@ -187,6 +212,12 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     }))
   }
 
+  const runStatusLabel = awaitingInput
+    ? 'Waiting for input'
+    : runState.status === 'running'
+      ? runPhase === 'loading' ? 'Loading runtime' : 'Running'
+      : runState.status === 'idle' ? 'Ready' : runState.status
+
   useEffect(() => {
     const handleRunRequest = () => runRef.current()
     window.addEventListener('hafa-code-run-active-project', handleRunRequest)
@@ -199,7 +230,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
         <div>
           <p className="eyebrow">Output</p>
           <h2><Terminal size={18} /> Browser runner</h2>
-          <p className="helper-text">Runs locally in a worker with a {RUNNER_TIMEOUT_MS / 1000}s guardrail.</p>
+          <p className="helper-text">Runs privately in your browser. The first run loads the runtime; repeat runs stay warm.</p>
         </div>
         {runState.status === 'running' ? (
           <button className="secondary" onClick={stopRun}>
@@ -207,12 +238,20 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
           </button>
         ) : (
           <button onClick={run} disabled={!entryFile.content.trim()}>
-            <Play size={16} /> Run {runner?.runLabel}
+            <Play size={16} /> {runState.status === 'idle' ? `Run ${runner?.runLabel}` : 'Run again'}
           </button>
         )}
       </div>
       <div className="terminal" ref={terminalScrollRef}>
-        {runState.status === 'running' && terminalLines.length <= 1 && !awaitingInput && <p className="muted inline"><Loader2 className="spin" size={15} /> Loading runtime and executing...</p>}
+        {runState.status === 'running' && terminalLines.length <= 1 && !awaitingInput && (
+          <div className="runner-progress" role="status" aria-live="polite">
+            <Loader2 className="spin" size={16} />
+            <div>
+              <strong>{runPhase === 'loading' ? `Preparing ${runner?.runLabel}…` : `Running ${entryFile.path}…`}</strong>
+              {runPhase === 'loading' && <span>First load may take a few seconds. Later runs are faster.</span>}
+            </div>
+          </div>
+        )}
         {runState.status !== 'running' && outputIsEmpty && terminalLines.length === 0 && (
           <div className="empty-output">
             <Zap size={28} />
@@ -233,13 +272,17 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
               aria-label="Program input"
               autoComplete="off"
               autoCapitalize="off"
+              enterKeyHint="send"
               spellCheck={false}
             />
+            <button type="submit" className="terminal-input-submit" aria-label="Submit program input">
+              <CornerDownLeft size={15} /> <span>Send</span>
+            </button>
           </form>
         )}
       </div>
       <div className="terminal-footer">
-        <span>{awaitingInput ? 'waiting for input' : runState.status === 'idle' ? 'Ready' : runState.status}</span>
+        <span>{runStatusLabel}</span>
         <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
       </div>
     </section>
