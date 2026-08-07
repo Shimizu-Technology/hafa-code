@@ -70,7 +70,8 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
   const run = () => {
     if (!runner) return
-    if (runState.status === 'running') stopWorker()
+    if (runIdRef.current) stopWorker()
+    else clearRunTimer()
 
     const runId = crypto.randomUUID()
     const startedAt = performance.now()
@@ -92,6 +93,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     setRunState({ status: 'running', stdout: '', stderr: '', durationMs: null })
 
     timeoutRef.current = window.setTimeout(() => {
+      if (runIdRef.current !== runId) return
       stopWorker()
       const message = 'The browser runtime took too long to load. Check your connection, then try again.'
       appendTerminalLine({ kind: 'system', text: message })
@@ -101,6 +103,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     const armExecutionTimeout = () => {
       clearRunTimer()
       timeoutRef.current = window.setTimeout(() => {
+        if (runIdRef.current !== runId) return
         stopWorker()
         appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
         setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })

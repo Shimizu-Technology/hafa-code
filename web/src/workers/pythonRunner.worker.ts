@@ -51,6 +51,7 @@ async function runPython(request: RunRequest) {
   const previousWritePrompt = workerGlobal.__hafa_write_prompt
   const indexURL = new URL(`${import.meta.env.BASE_URL}assets/pyodide/`, self.location.origin).href
   const pyodide = await getPyodide(indexURL)
+  const originalInput = pyodide.runPython('import builtins\nbuiltins.input')
   pyodide.setStdout({ batched: (message) => appendOutput(id, 'stdout', message, stdout) })
   pyodide.setStderr({ batched: (message) => appendOutput(id, 'stderr', message, stderr) })
   pyodide.setStdin({ stdin: () => null })
@@ -89,9 +90,6 @@ import builtins
 from js import __hafa_readline, __hafa_write_prompt
 from pyodide.ffi import can_run_sync, run_sync
 
-if not hasattr(builtins, "__hafa_original_input"):
-    builtins.__hafa_original_input = builtins.input
-
 def __hafa_input(prompt=""):
     if not can_run_sync():
         raise RuntimeError("Interactive input requires a browser with WebAssembly JSPI support.")
@@ -118,11 +116,17 @@ runpy.run_path(entry_file, run_name="__main__")
   } catch (error) {
     appendOutput(id, 'stderr', error instanceof Error ? error.message : String(error), stderr)
   } finally {
-    pyodide.runPython('builtins.input = builtins.__hafa_original_input')
-    inputBridge.abort()
-    inputBridges.delete(id)
-    workerGlobal.__hafa_readline = previousReadline
-    workerGlobal.__hafa_write_prompt = previousWritePrompt
+    try {
+      pyodide.globals.set('__hafa_original_input__', originalInput)
+      pyodide.runPython('import builtins\nbuiltins.input = __hafa_original_input__')
+    } finally {
+      pyodide.globals.delete('__hafa_original_input__')
+      if (originalInput && (typeof originalInput === 'object' || typeof originalInput === 'function') && 'destroy' in originalInput) originalInput.destroy()
+      inputBridge.abort()
+      inputBridges.delete(id)
+      workerGlobal.__hafa_readline = previousReadline
+      workerGlobal.__hafa_write_prompt = previousWritePrompt
+    }
   }
 
   return { stdout: stdout.join(''), stderr: stderr.join('') }
