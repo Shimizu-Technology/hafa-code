@@ -1,4 +1,13 @@
-import { inferFileLanguage, type ProjectFile, type ProjectKind, type ProjectVisibility, type SavedProject } from './codeRunner'
+import {
+  FILE_LANGUAGE_DEFINITIONS,
+  PROJECT_KINDS,
+  inferFileLanguage,
+  projectKindDefinition,
+  type ProjectFile,
+  type ProjectKind,
+  type ProjectVisibility,
+  type SavedProject,
+} from './codeRunner'
 import { decodeSharedProject, loadProjectLibrary, type ProjectLibrary } from './projectStorage'
 import { pendingCloudProjectIds } from './cloudSyncStorage'
 
@@ -16,11 +25,9 @@ export type ClassroomTab = 'people' | 'invitations' | 'settings'
 
 export const PROJECT_FILE_LIMIT = 50
 
-export const kindLabels: Record<ProjectKind, string> = {
-  ruby: 'Ruby',
-  javascript: 'JavaScript',
-  web: 'HTML/CSS/JS',
-}
+export const kindLabels = Object.fromEntries(
+  PROJECT_KINDS.map((kind) => [kind, projectKindDefinition(kind).label]),
+) as Record<ProjectKind, string>
 
 export const visibilityLabels: Record<ProjectVisibility, string> = {
   private: 'Private',
@@ -58,17 +65,11 @@ export function projectOwnerLabel(project: SavedProject, currentUserId?: number)
 }
 
 export function languageForFile(file: ProjectFile) {
-  if (file.language === 'ruby') return 'ruby'
-  if (file.language === 'html') return 'html'
-  if (file.language === 'css') return 'css'
-  if (file.language === 'json') return 'json'
-  return 'javascript'
+  return FILE_LANGUAGE_DEFINITIONS[file.language].monacoLanguage
 }
 
 export function formatFileLanguage(file: ProjectFile) {
-  if (file.language === 'javascript') return 'JS'
-  if (file.language === 'plain') return 'Text'
-  return file.language.toUpperCase()
+  return FILE_LANGUAGE_DEFINITIONS[file.language].label
 }
 
 export function normalizeWorkspacePath(path: string) {
@@ -114,22 +115,13 @@ export function nextAvailableCopyPath(path: string, project: SavedProject) {
 
 export function starterContentForPath(path: string, kind: ProjectKind) {
   const language = inferFileLanguage(path, kind)
-  if (language === 'ruby') return '# Write Ruby here\n'
-  if (language === 'javascript') return '// Write JavaScript here\n'
-  if (language === 'html') return '<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>New Page</title>\n  </head>\n  <body>\n    <h1>New page</h1>\n  </body>\n</html>\n'
-  if (language === 'css') return '/* Write CSS here */\n'
-  if (language === 'json') return '{\n  "message": "Hafa adai"\n}\n'
-  return ''
+  return FILE_LANGUAGE_DEFINITIONS[language].starterContent
 }
 
 export function starterPathForProject(kind: ProjectKind, files: ProjectFile[]) {
-  const candidates = kind === 'ruby'
-    ? ['helper.rb', 'greeting.rb', 'practice.rb']
-    : kind === 'javascript'
-      ? ['helper.js', 'utils.js', 'practice.js']
-      : ['about.html', 'styles.css', 'app.js']
-
-  return candidates.find((path) => !files.some((file) => file.path === path)) ?? `new-file-${files.length + 1}.${kind === 'ruby' ? 'rb' : kind === 'web' ? 'html' : 'js'}`
+  const definition = projectKindDefinition(kind)
+  return definition.newFileCandidates.find((path) => !files.some((file) => file.path === path))
+    ?? `new-file-${files.length + 1}.${definition.defaultExtension}`
 }
 
 export function formatUpdatedAt(value: string) {

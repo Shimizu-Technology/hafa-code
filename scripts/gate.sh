@@ -12,6 +12,9 @@ test -d web/node_modules || npm --prefix web install
 echo "-- web lint"
 npm --prefix web run lint
 
+echo "-- web tests"
+npm --prefix web test
+
 echo "-- web build"
 npm --prefix web run build
 

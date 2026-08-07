@@ -53,10 +53,11 @@ Intentional restrictions:
 The application document deliberately permits WebAssembly compilation with
 `'wasm-unsafe-eval'` but does not permit JavaScript string evaluation. The Ruby
 runner is a narrower exception: ruby.wasm's `js` bridge evaluates a small amount
-of bridge code while loading, so only the generated `codeRunner.worker-*.js`
-asset receives a worker-specific policy containing `'unsafe-eval'`. That worker
-policy permits same-origin WASM fetches, blocks nested workers, and does not
-inherit Clerk or other third-party script origins.
+of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
+asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
+`javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
+that broader exception. Both worker policies permit same-origin WASM fetches,
+block nested workers, and do not inherit Clerk or other third-party origins.
 
 `npm run build` verifies that the generated runner filename is covered by the
 worker header rule and that the page-level policy remains free of
