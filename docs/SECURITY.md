@@ -88,8 +88,10 @@ of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
 asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
 `javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
 that broader exception. The Python worker follows the same stricter pattern.
-The Java worker additionally allows the pinned CheerpJ script host and the two
-exact runtime/compiler hosts needed for Java; it still excludes the app API and
+Like ruby.wasm, CheerpJ requires `'unsafe-eval'` for its trusted JavaScript
+bridge. That exception is limited to the generated Java worker response. The
+Java worker also allows the pinned CheerpJ script host and the two exact
+runtime/compiler hosts needed for Java; it still excludes the app API and
 authentication origins. All worker policies block nested workers and do not
 inherit Clerk or other unrelated third-party origins.
 

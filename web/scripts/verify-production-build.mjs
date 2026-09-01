@@ -90,7 +90,7 @@ assert(!pythonRunnerPolicy.includes('clerk'), 'Python runner CSP must not inheri
 
 const javaRunnerScripts = directiveSources(javaRunnerPolicy, 'script-src')
 assert(javaRunnerScripts.includes("'wasm-unsafe-eval'"), 'Java runner CSP must permit WebAssembly compilation')
-assert(!javaRunnerScripts.includes("'unsafe-eval'"), 'Java runner CSP must not permit JavaScript string evaluation')
+assert(javaRunnerScripts.includes("'unsafe-eval'"), 'Java runner CSP must permit the CheerpJ JavaScript bridge')
 assert(javaRunnerScripts.includes('https://cjrtnc.leaningtech.com'), 'Java runner CSP must allow the pinned CheerpJ runtime host')
 assert.deepEqual(directiveSources(javaRunnerPolicy, 'connect-src'), ['https://cjrtnc.leaningtech.com', 'https://javafiddle.leaningtech.com'])
 assert(!javaRunnerPolicy.includes('clerk'), 'Java runner CSP must not inherit application third-party script origins')
