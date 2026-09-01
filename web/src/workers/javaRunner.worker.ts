@@ -4,8 +4,8 @@ import {
   safeJavaProjectPath,
   validateJavaProject,
   type JavaOutputState,
-  type JavaProjectFile,
 } from './javaRunnerCore'
+import type { RunRequest } from './runnerProtocol'
 
 declare function importScripts(...urls: string[]): void
 declare function cheerpjInit(options?: {
@@ -27,16 +27,6 @@ const MAX_COMPILER_BYTES = 25_000_000
 const encoder = new TextEncoder()
 const inputBridges = new Map<string, ReturnType<typeof createStdinBridge>>()
 const runSlot = createJavaRunSlot()
-
-type RunRequest = {
-  id: string
-  type: 'run'
-  code: string
-  entryPath: string
-  files: JavaProjectFile[]
-  timeoutMs: number
-  startupTimeoutMs: number
-}
 
 type StdinRequest = {
   id: string
