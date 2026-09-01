@@ -143,6 +143,7 @@ describe('RunnerPanel', () => {
     const worker = FakeWorker.instances[0]
     const run = worker.messages.find((message) => message.type === 'run')
     if (!run || run.type !== 'run') throw new Error('Expected a Java run request')
+    expect(run.startupTimeoutMs).toBe(120_000)
 
     act(() => vi.advanceTimersByTime(4_000))
     expect(screen.getByText('Loading runtime')).toBeTruthy()
