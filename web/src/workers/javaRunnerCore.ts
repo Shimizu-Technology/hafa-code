@@ -23,6 +23,20 @@ export type JavaOutputState = {
   outputTruncated: boolean
 }
 
+export function createJavaRunSlot() {
+  let activeRunId: string | null = null
+
+  return {
+    reserve(runId: string) {
+      if (activeRunId) throw new Error('A Java program is already running in this browser worker.')
+      activeRunId = runId
+    },
+    release(runId: string) {
+      if (activeRunId === runId) activeRunId = null
+    },
+  }
+}
+
 export function safeJavaProjectPath(path: string) {
   const normalized = path.replace(/\\/g, '/')
   const segments = normalized.split('/')

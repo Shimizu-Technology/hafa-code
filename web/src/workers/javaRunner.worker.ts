@@ -1,5 +1,6 @@
 import {
   appendJavaOutput,
+  createJavaRunSlot,
   safeJavaProjectPath,
   validateJavaProject,
   type JavaOutputState,
@@ -25,6 +26,7 @@ const MAX_COMPILER_BYTES = 25_000_000
 
 const encoder = new TextEncoder()
 const inputBridges = new Map<string, ReturnType<typeof createStdinBridge>>()
+const runSlot = createJavaRunSlot()
 
 type RunRequest = {
   id: string
@@ -326,19 +328,8 @@ function initializeRuntime(startupTimeoutMs: number) {
 }
 
 async function runJava(request: RunRequest) {
-  const { entryPath, javaFiles } = validateJavaProject(request)
-  await initializeRuntime(request.startupTimeoutMs)
-
-  const sourcePaths = javaFiles.map((file) => {
-    const path = safeJavaProjectPath(file.path)
-    const sourcePath = `/str/${path.split('/').pop()}`
-    cheerpOSAddStringFile(sourcePath, encoder.encode(file.content))
-    return sourcePath
-  })
-  const mainClassName = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
-  const inputBridge = createStdinBridge(() => postRunnerMessage({ id: request.id, type: 'input_request' }))
-  inputBridges.set(request.id, inputBridge)
-  activeRun = {
+  runSlot.reserve(request.id)
+  const run: ActiveRun = {
     id: request.id,
     stdout: [],
     stderr: [],
@@ -346,10 +337,24 @@ async function runJava(request: RunRequest) {
     outputTruncated: false,
     exitCode: null,
   }
-
-  postRunnerMessage({ id: request.id, type: 'started' })
+  activeRun = run
+  let inputBridge: ReturnType<typeof createStdinBridge> | null = null
 
   try {
+    const { entryPath, javaFiles } = validateJavaProject(request)
+    await initializeRuntime(request.startupTimeoutMs)
+
+    const sourcePaths = javaFiles.map((file) => {
+      const path = safeJavaProjectPath(file.path)
+      const sourcePath = `/str/${path.split('/').pop()}`
+      cheerpOSAddStringFile(sourcePath, encoder.encode(file.content))
+      return sourcePath
+    })
+    const mainClassName = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
+    inputBridge = createStdinBridge(() => postRunnerMessage({ id: request.id, type: 'input_request' }))
+    inputBridges.set(request.id, inputBridge)
+    postRunnerMessage({ id: request.id, type: 'started' })
+
     const classPath = `${COMPILER_CLASSPATH}:${RUNTIME_CLASSES}:${OUTPUT_DIRECTORY}`
     const cheerpjExitCode = await cheerpjRunMain(
       'dev.hafacode.runtime.Runner',
@@ -359,14 +364,15 @@ async function runJava(request: RunRequest) {
       ...sourcePaths,
     )
     return {
-      stdout: activeRun.stdout.join(''),
-      stderr: activeRun.stderr.join(''),
-      exitCode: activeRun.exitCode ?? cheerpjExitCode,
+      stdout: run.stdout.join(''),
+      stderr: run.stderr.join(''),
+      exitCode: run.exitCode ?? cheerpjExitCode,
     }
   } finally {
-    inputBridge.abort()
+    inputBridge?.abort()
     inputBridges.delete(request.id)
-    activeRun = null
+    if (activeRun === run) activeRun = null
+    runSlot.release(request.id)
   }
 }
 

@@ -4,6 +4,7 @@ import {
   JAVA_MAX_PROJECT_BYTES,
   JAVA_MAX_PROJECT_FILES,
   appendJavaOutput,
+  createJavaRunSlot,
   safeJavaProjectPath,
   validateJavaProject,
   type JavaOutputState,
@@ -63,5 +64,15 @@ describe('Java runner core', () => {
     expect(state.stdout).toEqual(['a'.repeat(JAVA_MAX_OUTPUT_BYTES)])
     expect(state.stderr).toEqual(['\nOutput stopped after 256 KB.\n'])
     expect(emit).toHaveBeenCalledTimes(2)
+  })
+
+  it('holds one run slot until the matching run releases it', () => {
+    const slot = createJavaRunSlot()
+    slot.reserve('first')
+    expect(() => slot.reserve('second')).toThrow(/already running/i)
+    slot.release('second')
+    expect(() => slot.reserve('second')).toThrow(/already running/i)
+    slot.release('first')
+    expect(() => slot.reserve('second')).not.toThrow()
   })
 })
