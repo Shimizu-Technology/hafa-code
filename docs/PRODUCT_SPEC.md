@@ -19,6 +19,8 @@ Create a small, open-source coding playground for students and alumni to practic
 - I can open a browser and immediately write Ruby, JavaScript, Python, or Java.
 - I can press Run and see output/errors.
 - I can create an HTML/CSS/JS page and see it update live.
+- I can look up common syntax without leaving my project.
+- I can open an example in a separate practice project without replacing my code.
 - I can save my work and come back later.
 - I can share a link with an instructor or friend.
 - I can fork a starter exercise and make it my own.
@@ -68,6 +70,14 @@ Create a small, open-source coding playground for students and alumni to practic
    - CSS editor
    - JS editor
    - sandboxed iframe preview
+
+### Language Guides
+
+- One searchable quick reference for each supported project kind: Ruby, JavaScript, Python, Java, and HTML/CSS/JS
+- Plain-language explanations, runnable syntax, expected results, and common mistakes
+- A safe **Try example** action that creates a complete practice project and leaves the current project untouched
+- Responsive presentation: a topic index beside the reference on desktop and a full-screen, touch-friendly guide on mobile
+- Stable topic IDs that later curriculum lessons can link to without making the guide itself sequential or graded
 
 ### Saving
 

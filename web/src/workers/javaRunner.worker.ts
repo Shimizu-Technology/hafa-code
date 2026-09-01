@@ -7,7 +7,6 @@ import {
 } from './javaRunnerCore'
 import type { RunRequest } from './runnerProtocol'
 
-declare function importScripts(...urls: string[]): void
 declare function cheerpjInit(options?: {
   version?: number
   status?: 'splash' | 'none' | 'default'
@@ -16,7 +15,6 @@ declare function cheerpjInit(options?: {
 declare function cheerpjRunMain(className: string, classPath: string, ...args: string[]): Promise<number>
 declare function cheerpOSAddStringFile(path: string, content: Uint8Array): void
 
-const CHEERPJ_LOADER_URL = 'https://cjrtnc.leaningtech.com/4.3/loader.js'
 const COMPILER_URL = 'https://javafiddle.leaningtech.com/tools.jar'
 const COMPILER_CLASSPATH = '/str/tools.jar'
 const RUNTIME_CLASSES = '/files'
@@ -232,7 +230,6 @@ function appendOutput(stream: 'stdout' | 'stderr', value: unknown) {
 
 function initializeRuntime(startupTimeoutMs: number) {
   runtimePromise ??= (async () => {
-    importScripts(CHEERPJ_LOADER_URL)
     await cheerpjInit({
       version: 8,
       status: 'none',
@@ -366,8 +363,7 @@ async function runJava(request: RunRequest) {
   }
 }
 
-// This remains a classic worker because CheerpJ loads through importScripts.
-// Vite bundles the core helper above at build time; runtime ESM imports are unavailable here.
+// The classic bootstrap loads CheerpJ before importing this bundled module.
 self.onmessage = (event: MessageEvent<RunnerRequest>) => {
   const request = event.data
   if (request.type === 'stdin') {

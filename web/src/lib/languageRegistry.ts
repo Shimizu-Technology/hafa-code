@@ -1,3 +1,4 @@
+import javaRunnerModuleUrl from '../workers/javaRunner.worker.ts?worker&url'
 import type { ProjectFile, ProjectFileLanguage, ProjectKind, RunnerLanguage } from './projectTypes'
 
 export const RUNNER_TIMEOUT_MS = 3_000
@@ -10,6 +11,15 @@ function shellArgument(value: string) {
 function directoryName(path: string) {
   const segments = path.split('/')
   return segments.length > 1 ? segments.slice(0, -1).join('/') : '.'
+}
+
+function createJavaRunnerWorker() {
+  const worker = new Worker('/javaRunner.bootstrap.js')
+  worker.postMessage({
+    type: '__hafa_initialize',
+    moduleUrl: new URL(javaRunnerModuleUrl, window.location.href).href,
+  })
+  return worker
 }
 
 interface FileLanguageDefinition {
@@ -180,7 +190,7 @@ export const PROJECT_KIND_DEFINITIONS = {
         const className = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
         return `javac ${shellArgument(entryPath)} && java -cp ${shellArgument(directoryName(entryPath))} ${shellArgument(className)}`
       },
-      createWorker: () => new Worker(new URL('../workers/javaRunner.worker.ts', import.meta.url)),
+      createWorker: createJavaRunnerWorker,
       startupTimeoutMs: 120_000,
       executionTimeoutMs: 30_000,
       startupNote: 'The first Java run downloads the browser compiler and may take longer on a mobile connection.',

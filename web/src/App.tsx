@@ -66,6 +66,8 @@ import { AuthControls } from './components/AuthControls'
 import { RunnerPanel } from './components/RunnerPanel'
 import { WebPreview } from './components/WebPreview'
 import { ProjectFeedback } from './components/ProjectFeedback'
+import { LanguageGuide } from './components/LanguageGuide'
+import type { LanguageGuideTopic } from './lib/languageGuides'
 import {
   clearProjectPendingCloudSync,
   markProjectPendingCloudSync,
@@ -163,6 +165,7 @@ export default function App() {
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
+  const [languageGuideOpen, setLanguageGuideOpen] = useState(false)
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
@@ -656,6 +659,29 @@ export default function App() {
     setShowArchived(false)
     setMobileTab('code')
     setNotice(`${next.title} created.`)
+  }
+
+  const tryGuideExample = (topic: LanguageGuideTopic) => {
+    if (workspaceArchived) {
+      setNotice('Restore this classroom before creating a practice project.')
+      return
+    }
+
+    const starter = createProject(project.kind, topic.practiceProject.title)
+    const practiceProject: SavedProject = {
+      ...starter,
+      organizationId: activeOrganizationId,
+      organization: activeOrganization,
+      visibility: 'private',
+      entryPath: topic.practiceProject.entryPath,
+      files: topic.practiceProject.files.map((file) => ({ ...file })),
+    }
+    setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
+    setActivePath(practiceProject.entryPath)
+    setShowArchived(false)
+    setMobileTab('code')
+    setLanguageGuideOpen(false)
+    setNotice(`${topic.title} opened in a new practice project. Your previous project is unchanged.`)
   }
 
   const updateProjectVisibility = (visibility: ProjectVisibility) => {
@@ -1683,6 +1709,7 @@ export default function App() {
         </div>
         <div className="mobile-home-actions">
           <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
+          <button className="secondary" type="button" onClick={() => setLanguageGuideOpen(true)}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : 'Run project'}
@@ -1830,6 +1857,9 @@ export default function App() {
               </div>
             </div>
             <div className="toolbar-actions">
+              <button className="secondary guide-toolbar-button" type="button" onClick={() => setLanguageGuideOpen(true)}>
+                <BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide
+              </button>
               <details
                 ref={checkpointMenuRef}
                 className="checkpoint-menu"
@@ -1908,6 +1938,14 @@ export default function App() {
                   disabled={!canEditProject}
                 >
                   <FilePlus2 size={17} />
+                </button>
+                <button
+                  className="secondary mobile-editor-guide-button"
+                  type="button"
+                  onClick={() => setLanguageGuideOpen(true)}
+                  aria-label={`Open ${projectKindDefinition(project.kind).label} language guide`}
+                >
+                  <BookOpen size={16} /> Guide
                 </button>
                 <button
                   className="ghost icon-button editor-focus-button"
@@ -2012,6 +2050,14 @@ export default function App() {
           <span>History</span>
         </button>
       </nav>
+
+      <LanguageGuide
+        key={project.kind}
+        kind={project.kind}
+        open={languageGuideOpen}
+        onClose={() => setLanguageGuideOpen(false)}
+        onTryExample={tryGuideExample}
+      />
 
       {fileDialog && (
         <div className="modal-backdrop" role="presentation" onClick={() => {
