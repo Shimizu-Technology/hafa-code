@@ -47,4 +47,18 @@ describe('LanguageGuide', () => {
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledOnce()
   })
+
+  it('shows a manual fallback when clipboard access is blocked', async () => {
+    const user = userEvent.setup()
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('blocked')) },
+      configurable: true,
+    })
+
+    render(<LanguageGuide kind="python" open onClose={vi.fn()} onTryExample={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Copy' }))
+
+    expect(screen.getByRole('button', { name: 'Copy failed' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toMatch(/select the code and copy it manually/i)
+  })
 })

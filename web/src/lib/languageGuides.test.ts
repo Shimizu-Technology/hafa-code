@@ -37,12 +37,13 @@ describe('language guides', () => {
     })
   })
 
-  it('searches titles, descriptions, mistakes, and keywords without changing the guide', () => {
+  it('searches titles, descriptions, literal code, mistakes, and keywords without changing the guide', () => {
     const javaGuide = languageGuideFor('java')
 
     expect(filterGuideTopics(javaGuide, 'scanner').map((topic) => topic.id)).toContain('java-scanner-input')
     expect(filterGuideTopics(javaGuide, 'same object').map((topic) => topic.id)).toContain('java-strings')
     expect(filterGuideTopics(javaGuide, '  CLASS  ').map((topic) => topic.id)).toContain('java-classes-objects')
+    expect(filterGuideTopics(languageGuideFor('web'), 'auto-fit').map((topic) => topic.id)).toContain('web-flexbox-grid')
     expect(filterGuideTopics(javaGuide, '')).toBe(javaGuide.topics)
   })
 })

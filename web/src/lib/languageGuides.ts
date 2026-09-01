@@ -971,6 +971,7 @@ export function filterGuideTopics(guide: LanguageGuide, query: string): readonly
   return guide.topics.filter((topic) => [
     topic.title,
     topic.summary,
+    topic.code,
     topic.commonMistake,
     ...topic.keywords,
   ].some((value) => value.toLowerCase().includes(normalizedQuery)))

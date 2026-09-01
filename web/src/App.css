@@ -1875,7 +1875,7 @@ button.context-chip.active,
 .guide-page-heading h3,
 .guide-empty-state h3 {
   margin: 0;
-  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', Outfit, sans-serif;
   font-size: clamp(1.65rem, 3.2vw, 2.65rem);
   line-height: 1;
   letter-spacing: -0.035em;
@@ -1980,6 +1980,16 @@ button.context-chip.active,
   white-space: pre;
 }
 
+.guide-copy-error {
+  margin: 0;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid rgba(255, 250, 241, 0.12);
+  background: rgba(204, 134, 50, 0.15);
+  color: #f3d8ad;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .guide-notes-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -2002,7 +2012,7 @@ button.context-chip.active,
 
 .guide-note h4 {
   margin: 0;
-  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', Outfit, sans-serif;
   font-size: 0.82rem;
 }
 
@@ -3009,7 +3019,7 @@ button.context-chip.active,
     border-color: rgba(248, 184, 78, 0.48);
     background: rgba(248, 184, 78, 0.13);
     color: #ffe0a6;
-    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
     font-size: 0.72rem;
   }
 

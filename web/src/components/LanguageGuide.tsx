@@ -12,6 +12,11 @@ interface LanguageGuideProps {
   onTryExample: (topic: LanguageGuideTopic) => void
 }
 
+type CopyFeedback = {
+  topicId: string
+  status: 'copied' | 'failed'
+} | null
+
 function inlineCode(text: string) {
   return text.split(/(`[^`]+`)/g).filter(Boolean).map((part, index) => (
     part.startsWith('`') && part.endsWith('`')
@@ -24,16 +29,16 @@ export function LanguageGuide({ kind, open, onClose, onTryExample }: LanguageGui
   const guide = languageGuideFor(kind)
   const [query, setQuery] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState(guide.topics[0].id)
-  const [copiedTopicId, setCopiedTopicId] = useState<string | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
   const dialogRef = useModalFocus<HTMLElement>(open, onClose)
   const filteredTopics = useMemo(() => filterGuideTopics(guide, query), [guide, query])
   const selectedTopic = filteredTopics.find((topic) => topic.id === selectedTopicId) ?? filteredTopics[0] ?? null
 
   useEffect(() => {
-    if (!copiedTopicId) return
-    const timer = window.setTimeout(() => setCopiedTopicId(null), 1_800)
+    if (!copyFeedback) return
+    const timer = window.setTimeout(() => setCopyFeedback(null), 2_400)
     return () => window.clearTimeout(timer)
-  }, [copiedTopicId])
+  }, [copyFeedback])
 
   useEffect(() => {
     if (!open) return
@@ -48,7 +53,7 @@ export function LanguageGuide({ kind, open, onClose, onTryExample }: LanguageGui
 
   const copyCode = async (topic: LanguageGuideTopic) => {
     const copied = await writeClipboardText(topic.code)
-    setCopiedTopicId(copied ? topic.id : null)
+    setCopyFeedback({ topicId: topic.id, status: copied ? 'copied' : 'failed' })
   }
 
   return (
@@ -123,11 +128,22 @@ export function LanguageGuide({ kind, open, onClose, onTryExample }: LanguageGui
                   <div className="guide-section-heading">
                     <span><Terminal size={15} /> Runnable example</span>
                     <button className="guide-copy-button" type="button" onClick={() => copyCode(selectedTopic)}>
-                      {copiedTopicId === selectedTopic.id ? <Check size={15} /> : <Copy size={15} />}
-                      {copiedTopicId === selectedTopic.id ? 'Copied' : 'Copy'}
+                      {copyFeedback?.topicId === selectedTopic.id && copyFeedback.status === 'copied'
+                        ? <Check size={15} />
+                        : copyFeedback?.topicId === selectedTopic.id && copyFeedback.status === 'failed'
+                          ? <TriangleAlert size={15} />
+                          : <Copy size={15} />}
+                      {copyFeedback?.topicId === selectedTopic.id && copyFeedback.status === 'copied'
+                        ? 'Copied'
+                        : copyFeedback?.topicId === selectedTopic.id && copyFeedback.status === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy'}
                     </button>
                   </div>
                   <pre><code>{selectedTopic.code}</code></pre>
+                  {copyFeedback?.topicId === selectedTopic.id && copyFeedback.status === 'failed' && (
+                    <p className="guide-copy-error" role="status">Copy was blocked. Select the code and copy it manually.</p>
+                  )}
                 </section>
 
                 <div className="guide-notes-grid">
