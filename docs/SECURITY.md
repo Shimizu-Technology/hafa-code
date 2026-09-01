@@ -34,6 +34,25 @@ dedicated Web Worker.
 - The worker can be terminated by the UI timeout or Stop button
 - Runtime assets load only from the application origin
 
+### Java
+
+Java source is compiled and executed through CheerpJ in a dedicated classic
+Web Worker. Rails never compiles or runs Java.
+
+- The worker accepts at most 50 files and 2 MiB of Java source per run
+- Hidden paths, traversal paths, packages, and duplicate basenames are rejected
+- Compiler annotation processing is disabled with `-proc:none`
+- Output is capped at 256 KiB
+- Runtime startup and project execution have separate time limits
+- Stop terminates the worker, including the JVM and the running program
+- The worker response CSP can contact only the pinned CheerpJ runtime and JavaFiddle compiler hosts
+- The Java worker cannot contact the Hafa API, Clerk, or arbitrary application origins
+
+CheerpJ and the Java 8 compiler are fetched only for Java runs. This is a
+third-party runtime dependency; deployment eligibility must continue to be
+checked against CheerpJ's current license terms. Hafa provides visible
+attribution and does not self-host CheerpJ Core.
+
 ### HTML/CSS/JS Preview
 
 Web projects render in a sandboxed iframe.
@@ -69,8 +88,10 @@ of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
 asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
 `javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
 that broader exception. The Python worker follows the same stricter pattern.
-All worker policies permit same-origin WASM fetches, block nested workers, and
-do not inherit Clerk or other third-party origins.
+The Java worker additionally allows the pinned CheerpJ script host and the two
+exact runtime/compiler hosts needed for Java; it still excludes the app API and
+authentication origins. All worker policies block nested workers and do not
+inherit Clerk or other unrelated third-party origins.
 
 `npm run build` verifies that the generated runner filename is covered by the
 worker header rule and that the page-level policy remains free of
@@ -89,6 +110,9 @@ Storage variant processing. `npm audit --audit-level=high` and
 - Browser-side execution is appropriate for learning snippets and simple web pages, not production backend apps.
 - Ruby WASM is large and first-run startup can be slow on older devices.
 - Pyodide adds another sizable first-run download; the UI keeps its startup and execution guardrails separate.
+- Java's first run downloads CheerpJ plus an approximately 18 MiB Java 8 compiler archive; slower connections can take noticeably longer.
+- Java is currently a Java 8, default-package learning environment without Maven, Gradle, external JARs, desktop GUIs, or arbitrary networking.
+- CheerpJ production use must remain within the Community License or move to an appropriate commercial license; technical evaluation alone does not cover normal organizational use.
 - Python package installation is intentionally unavailable in the initial release.
 - Browsers without WebAssembly JSPI can run Python but receive a clear runtime error when a program calls `input()`.
 - The UI timeout can terminate a worker, but Ruby WASM internals may not support as fine-grained interruption as QuickJS.

@@ -15,7 +15,8 @@ Rails API + React SPA
       ├─ Language-specific runner workers
       │   ├─ Ruby WASM
       │   ├─ QuickJS WASM
-      │   └─ Pyodide Python WASM
+      │   ├─ Pyodide Python WASM
+      │   └─ CheerpJ Java runtime
       ├─ HTML preview iframe
       └─ Project storage adapter
           ├─ localStorage anonymous fallback
@@ -66,6 +67,26 @@ production CSP and can be cached after first use.
 - terminate the worker when the UI timeout expires
 - retain an idle worker after successful runs so pinned language runtimes can be reused; project files and module state are reset before each run
 
+### Java
+
+Use CheerpJ 4.3 in a classic Web Worker with its Java 8 runtime. On the first
+run, the worker downloads the hosted CheerpJ runtime and the JavaFiddle Java 8
+compiler archive. The compiler archive is copied into CheerpJ's transient
+`/str` filesystem, so Hafa does not need to proxy or redistribute it.
+
+- compile `Main.java` and default-package helper classes with `javac`
+- isolate each run's class output in its own browser filesystem directory
+- load compiled classes through a run-scoped class loader
+- stream stdout and stderr through a small trusted Java-to-JavaScript bridge
+- bridge line-oriented `System.in` reads to the browser terminal
+- keep the initialized worker warm for repeat runs
+- terminate the entire worker for Stop or timeout
+- permit only the CheerpJ and JavaFiddle hosts in the Java worker's production CSP
+
+The first release targets Java 8 language and library behavior. It does not
+provide packages, Maven/Gradle, external JARs, desktop GUI support, or a general
+network client. See [Java runtime](JAVA_RUNTIME.md) for the exact boundary.
+
 ### HTML/CSS/JS
 
 Use a sandboxed iframe with `srcDoc`.
@@ -81,7 +102,7 @@ Do not allow same-origin unless there is a specific reason.
 ## Data Model Draft
 
 ```ts
-type ProjectKind = 'ruby' | 'javascript' | 'python' | 'web'
+type ProjectKind = 'ruby' | 'javascript' | 'python' | 'java' | 'web'
 
 type Project = {
   id: string
@@ -98,7 +119,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  language: 'ruby' | 'javascript' | 'python' | 'html' | 'css'
+  language: 'ruby' | 'javascript' | 'python' | 'java' | 'html' | 'css'
   content: string
 }
 ```

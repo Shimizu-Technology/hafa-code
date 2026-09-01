@@ -9,6 +9,7 @@ A lightweight alternative to Replit focused on the languages CSG actually teache
 - Ruby snippets powered by `ruby.wasm`
 - JavaScript snippets powered by QuickJS in a Web Worker
 - Python projects powered by a self-hosted Pyodide runtime in a Web Worker
+- Java 8 projects compiled and run through CheerpJ in a Web Worker
 - HTML/CSS/JS projects with a sandboxed live preview
 - Save, fork, share, and remix beginner-friendly projects
 - Optional Clerk sign-in with Rails-backed cloud projects
@@ -40,8 +41,11 @@ Run untrusted code in the browser, not on Rails.
 - Ruby runs in WebAssembly inside a worker.
 - JavaScript runs in QuickJS inside a worker with memory/time limits.
 - Python runs in Pyodide inside a worker with a standard-library-only project filesystem.
+- Java runs in CheerpJ inside a dedicated worker. The Java runtime and compiler are downloaded only when Java is first run.
 - HTML/CSS/JS preview runs in a sandboxed iframe.
 - Rails stores users, project metadata, and source files only.
+
+Java is intentionally a focused practice environment rather than a full desktop JDK. It supports `Main.java`, helper classes in the default package, compiler diagnostics, standard input, stdout/stderr, and stop/time limits. Maven, Gradle, third-party dependencies, packages, GUI apps, and arbitrary network access are not part of the first release. See [Java runtime](docs/JAVA_RUNTIME.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Development
 

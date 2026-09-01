@@ -1,7 +1,7 @@
 {
   "name": "Hafa Code",
   "short_name": "Hafa Code",
-  "description": "A beginner-friendly browser coding playground for Ruby, JavaScript, HTML, and CSS.",
+  "description": "A beginner-friendly browser coding playground for Ruby, JavaScript, Python, Java, HTML, and CSS.",
   "id": "/",
   "start_url": "/",
   "display": "standalone",

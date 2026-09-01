@@ -1279,7 +1279,7 @@ export default function App() {
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
           <h1>Hafa Code</h1>
-          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, Python, and HTML/CSS/JS in the browser.</p>
+          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, Python, Java, and HTML/CSS/JS in the browser.</p>
           <div className="trust-row" aria-label="Platform guardrails">
             <span><ShieldCheck size={15} /> Browser-sandboxed</span>
             <span><Rocket size={15} /> No setup</span>
@@ -2207,6 +2207,10 @@ export default function App() {
         <span>Hafa Code is open source.</span>
         <a href="https://github.com/Shimizu-Technology/hafa-code" target="_blank" rel="noreferrer">
           View the code on GitHub
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href="https://cheerpj.com/" target="_blank" rel="noreferrer">
+          Java powered by CheerpJ
         </a>
       </footer>
     </main>

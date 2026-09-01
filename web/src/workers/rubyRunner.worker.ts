@@ -110,7 +110,7 @@ async function runRuby({ id, code, files, entryPath, stdin = '' }: RunRequest) {
     pendingInputResolvers.delete(id)
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join('') }
+  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
 }
 
 installRunner(runRuby, {

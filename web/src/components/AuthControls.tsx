@@ -3,19 +3,23 @@ import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/c
 import { Cloud, Loader2 } from 'lucide-react'
 
 export function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
+  if (!cloudEnabled) {
+    return <span className="cloud-pill muted"><Cloud size={15} /> Add a valid Clerk key for cloud save</span>
+  }
+
+  return <CloudAuthControls sessionLoading={sessionLoading} />
+}
+
+function CloudAuthControls({ sessionLoading }: { sessionLoading: boolean }) {
   const { isLoaded } = useAuth()
   const [loadTimedOut, setLoadTimedOut] = useState(false)
 
   useEffect(() => {
-    if (!cloudEnabled || isLoaded) return
+    if (isLoaded) return
 
     const timeout = window.setTimeout(() => setLoadTimedOut(true), 8_000)
     return () => window.clearTimeout(timeout)
-  }, [cloudEnabled, isLoaded])
-
-  if (!cloudEnabled) {
-    return <span className="cloud-pill muted"><Cloud size={15} /> Add a valid Clerk key for cloud save</span>
-  }
+  }, [isLoaded])
 
   if (!isLoaded && loadTimedOut) {
     return <span className="cloud-pill muted"><Cloud size={15} /> Cloud sign-in unavailable</span>

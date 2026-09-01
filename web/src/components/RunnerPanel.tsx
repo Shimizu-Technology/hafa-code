@@ -23,6 +23,8 @@ const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durati
 
 export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const runner = projectKindDefinition(project.kind).runner
+  const startupTimeoutMs = runner?.startupTimeoutMs ?? 30_000
+  const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
   const [runState, setRunState] = useState<RunState>(emptyRunState)
   const [runPhase, setRunPhase] = useState<RunPhase>('idle')
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
@@ -98,16 +100,16 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       const message = 'The browser runtime took too long to load. Check your connection, then try again.'
       appendTerminalLine({ kind: 'system', text: message })
       setRunState({ status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
-    }, 30_000)
+    }, startupTimeoutMs)
 
     const armExecutionTimeout = () => {
       clearRunTimer()
       timeoutRef.current = window.setTimeout(() => {
         if (runIdRef.current !== runId) return
         stopWorker()
-        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.` })
-        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`, durationMs: Math.round(performance.now() - startedAt) })
-      }, RUNNER_TIMEOUT_MS + 250)
+        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${executionTimeoutMs}ms.` })
+        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${executionTimeoutMs}ms.`, durationMs: Math.round(performance.now() - startedAt) })
+      }, executionTimeoutMs + 250)
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
 
@@ -151,7 +153,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
       const stderr = event.data.stderr ?? ''
       setRunState({
-        status: stderr.trim() ? 'error' : 'success',
+        status: event.data.exitCode === undefined ? (stderr.trim() ? 'error' : 'success') : (event.data.exitCode === 0 ? 'success' : 'error'),
         stdout: event.data.stdout ?? '',
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
@@ -248,7 +250,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
             <Loader2 className="spin" size={16} />
             <div>
               <strong>{runPhase === 'loading' ? `Preparing ${runner?.runLabel}…` : `Running ${entryFile.path}…`}</strong>
-              {runPhase === 'loading' && <span>First load may take a few seconds. Later runs are faster.</span>}
+              {runPhase === 'loading' && <span>{runner?.startupNote ?? 'First load may take a few seconds. Later runs are faster.'}</span>}
             </div>
           </div>
         )}
@@ -283,7 +285,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       </div>
       <div className="terminal-footer">
         <span>{runStatusLabel}</span>
-        <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${RUNNER_TIMEOUT_MS}ms limit` : `${runState.durationMs}ms`}</span>
+        <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${executionTimeoutMs}ms limit` : `${runState.durationMs}ms`}</span>
       </div>
     </section>
   )

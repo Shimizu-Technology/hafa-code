@@ -129,7 +129,7 @@ runpy.run_path(entry_file, run_name="__main__")
     }
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join('') }
+  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
 }
 
 installRunner(runPython, {

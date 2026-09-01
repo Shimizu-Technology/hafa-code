@@ -12,6 +12,9 @@ export interface RunnerDefinition {
   runLabel: string
   terminalCommand: (entryPath: string) => string
   createWorker: () => Worker
+  startupTimeoutMs?: number
+  executionTimeoutMs?: number
+  startupNote?: string
 }
 
 export interface ProjectKindDefinition {
@@ -47,6 +50,12 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     monacoLanguage: 'python',
     extensions: ['py', 'pyw'],
     starterContent: '# Write Python here\n',
+  },
+  java: {
+    label: 'Java',
+    monacoLanguage: 'java',
+    extensions: ['java'],
+    starterContent: '// Write Java here\n',
   },
   html: {
     label: 'HTML',
@@ -136,6 +145,30 @@ export const PROJECT_KIND_DEFINITIONS = {
       runLabel: 'Python',
       terminalCommand: (entryPath) => `python ${entryPath}`,
       createWorker: () => new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), { type: 'module' }),
+    },
+  },
+  java: {
+    kind: 'java',
+    label: 'Java',
+    shortLabel: 'Java',
+    starterTitle: 'Java Playground',
+    entryPath: 'Main.java',
+    starterFiles: [
+      { path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hafa adai, Java!");\n\n    for (int line = 1; line <= 3; line++) {\n      System.out.println("Line " + line);\n    }\n  }\n}\n' },
+    ],
+    preferredEntryPaths: ['Main.java'],
+    defaultFileLanguage: 'java',
+    fallbackFileLanguage: 'java',
+    newFileCandidates: ['Helper.java', 'Greeting.java', 'Practice.java'],
+    defaultExtension: 'java',
+    runner: {
+      language: 'java',
+      runLabel: 'Java',
+      terminalCommand: (entryPath) => `javac ${entryPath} && java ${entryPath.replace(/\.java$/i, '')}`,
+      createWorker: () => new Worker(new URL('../workers/javaRunner.worker.ts', import.meta.url)),
+      startupTimeoutMs: 120_000,
+      executionTimeoutMs: 30_000,
+      startupNote: 'The first Java run downloads the browser compiler and may take longer on a mobile connection.',
     },
   },
   web: {
