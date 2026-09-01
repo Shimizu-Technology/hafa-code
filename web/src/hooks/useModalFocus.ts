@@ -24,7 +24,8 @@ export function useModalFocus<T extends HTMLElement>(open: boolean, onClose: () 
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = dialogRef.current
     const focusable = dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) : []
-    window.requestAnimationFrame(() => (focusable[0] ?? dialog)?.focus())
+    const initialFocus = dialog?.querySelector<HTMLElement>('[data-modal-initial-focus]') ?? focusable[0]
+    window.requestAnimationFrame(() => (initialFocus ?? dialog)?.focus())
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

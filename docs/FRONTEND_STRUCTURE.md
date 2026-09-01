@@ -10,7 +10,8 @@ web/src/
   App.css                     App-level styling for the workspace UI
   components/
     AuthControls.tsx          Clerk/local cloud-sync controls
-    RunnerPanel.tsx           Ruby/JavaScript terminal runner UI
+    LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
+    RunnerPanel.tsx           Ruby/JavaScript/Python/Java terminal runner UI
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
   contexts/
     AuthContext.tsx           Clerk session sync into Rails
@@ -20,6 +21,7 @@ web/src/
     api.ts                    Rails API client and cloud/local data mapping
     clerk.ts                  Clerk env validation
     codeRunner.ts             Starter-project and web-preview helpers
+    languageGuides.ts         Guide topics and complete practice projects for every project kind
     languageRegistry.ts       Supported languages, starters, editor and runner metadata
     projectTypes.ts           Shared project, file, and language types
     projectStorage.ts         localStorage, import/export, checkpoints
@@ -29,11 +31,15 @@ web/src/
     rubyRunner.worker.ts      Browser-side ruby.wasm execution
     javascriptRunner.worker.ts Browser-side QuickJS execution
     pythonRunner.worker.ts    Browser-side Pyodide execution
+    javaRunner.worker.ts      Browser-side CheerpJ compiler and runtime bridge
 ```
+
+`web/public/javaRunner.bootstrap.js` is the small classic-worker entry point that loads CheerpJ before importing the bundled Java runner module. It exists because CheerpJ's worker API uses `importScripts`, while the application code is bundled as ES modules.
 
 ## Organization Rules
 
 - Add project kinds and file-language behavior through `lib/languageRegistry.ts`; do not add parallel language switches in components.
+- Add syntax-reference content through `lib/languageGuides.ts`; every topic needs a stable ID and a complete practice project.
 - Keep pure project rules in `lib/workspace.ts` or `lib/codeRunner.ts`.
 - Keep Rails request/response mapping in `lib/api.ts`; UI components should not know API payload casing.
 - Keep browser storage and import/export behavior in `lib/projectStorage.ts`.

@@ -17,6 +17,9 @@
 /assets/javaRunner.worker-*.js
   Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cjrtnc.leaningtech.com; worker-src 'none'; connect-src https://cjrtnc.leaningtech.com https://javafiddle.leaningtech.com;
 
+/javaRunner.bootstrap.js
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cjrtnc.leaningtech.com; worker-src 'none'; connect-src https://cjrtnc.leaningtech.com https://javafiddle.leaningtech.com;
+
 /preview-frame.html
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

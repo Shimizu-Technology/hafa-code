@@ -11,6 +11,7 @@ const RUNNER_HEADERS = {
   python: '/assets/pythonRunner.worker-*.js',
   java: '/assets/javaRunner.worker-*.js',
 }
+const JAVA_BOOTSTRAP_HEADER = '/javaRunner.bootstrap.js'
 const PYODIDE_RUNTIME_FILES = ['pyodide-lock.json', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip']
 
 function parseHeaderRules(source) {
@@ -59,12 +60,14 @@ const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security
 const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
 const pythonRunnerPolicy = headers.get(RUNNER_HEADERS.python)?.get('content-security-policy')
 const javaRunnerPolicy = headers.get(RUNNER_HEADERS.java)?.get('content-security-policy')
+const javaBootstrapPolicy = headers.get(JAVA_BOOTSTRAP_HEADER)?.get('content-security-policy')
 
 assert(applicationPolicy, 'Missing application Content-Security-Policy')
 assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
 assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Security-Policy')
 assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
+assert(javaBootstrapPolicy, 'Missing Java bootstrap worker Content-Security-Policy')
 
 const applicationScripts = directiveSources(applicationPolicy, 'script-src')
 const applicationConnections = directiveSources(applicationPolicy, 'connect-src')
@@ -108,6 +111,16 @@ for (const applicationOrigin of applicationThirdPartyOrigins) {
     `Java runner CSP must not inherit application origin ${applicationOrigin}`,
   )
 }
+
+const javaBootstrapScripts = directiveSources(javaBootstrapPolicy, 'script-src')
+assert(javaBootstrapScripts.includes("'wasm-unsafe-eval'"), 'Java bootstrap CSP must permit WebAssembly compilation')
+assert(javaBootstrapScripts.includes("'unsafe-eval'"), 'Java bootstrap CSP must permit the CheerpJ JavaScript bridge')
+assert(javaBootstrapScripts.includes('https://cjrtnc.leaningtech.com'), 'Java bootstrap CSP must allow the pinned CheerpJ runtime host')
+assert.deepEqual(
+  directiveSources(javaBootstrapPolicy, 'connect-src'),
+  javaRunnerConnections,
+  'Java bootstrap and bundled worker CSPs must allow the same runtime connections',
+)
 
 const assetNames = await readdir(ASSETS_DIRECTORY)
 for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
