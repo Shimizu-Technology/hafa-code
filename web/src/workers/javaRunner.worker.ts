@@ -12,6 +12,7 @@ const COMPILER_URL = 'https://javafiddle.leaningtech.com/tools.jar'
 const COMPILER_CLASSPATH = '/str/tools.jar'
 const RUNTIME_CLASSES = '/files'
 const RUNTIME_SOURCE_PATH = '/str/Runner.java'
+const OUTPUT_DIRECTORY = `/files/hafa-java-${crypto.randomUUID().replace(/-/g, '')}`
 const MAX_PROJECT_FILES = 50
 const MAX_PROJECT_BYTES = 2 * 1024 * 1024
 const MAX_OUTPUT_BYTES = 256 * 1024
@@ -106,6 +107,16 @@ public final class Runner {
   private static native String readLine();
   private static native void reportResult(int exitCode);
 
+  private static boolean deleteRecursively(java.io.File file) {
+    java.io.File[] children = file.listFiles();
+    if (children != null) {
+      for (java.io.File child : children) {
+        if (!deleteRecursively(child)) return false;
+      }
+    }
+    return file.delete();
+  }
+
   private static final class BrowserOutputStream extends OutputStream {
     private final String stream;
 
@@ -173,6 +184,11 @@ public final class Runner {
     String outputDirectory = args[0];
     String mainClassName = args[1];
     java.io.File outputDirectoryFile = new java.io.File(outputDirectory);
+    if (outputDirectoryFile.exists() && !deleteRecursively(outputDirectoryFile)) {
+      System.err.println("Java could not reset its browser output directory.");
+      reportResult(1);
+      return;
+    }
     if (!outputDirectoryFile.exists() && !outputDirectoryFile.mkdirs()) {
       System.err.println("Java could not prepare its browser output directory.");
       reportResult(1);
@@ -339,8 +355,6 @@ async function runJava(request: RunRequest) {
   const { entryPath, javaFiles } = validateProject(request)
   await initializeRuntime()
 
-  const runToken = request.id.replace(/[^a-zA-Z0-9]/g, '')
-  const outputDirectory = `/files/runs/${runToken}`
   const sourcePaths = javaFiles.map((file) => {
     const path = safeProjectPath(file.path)
     const sourcePath = `/str/${path.split('/').pop()}`
@@ -362,11 +376,11 @@ async function runJava(request: RunRequest) {
   postRunnerMessage({ id: request.id, type: 'started' })
 
   try {
-    const classPath = `${COMPILER_CLASSPATH}:${RUNTIME_CLASSES}:${outputDirectory}`
+    const classPath = `${COMPILER_CLASSPATH}:${RUNTIME_CLASSES}:${OUTPUT_DIRECTORY}`
     const cheerpjExitCode = await cheerpjRunMain(
       'dev.hafacode.runtime.Runner',
       classPath,
-      outputDirectory,
+      OUTPUT_DIRECTORY,
       mainClassName,
       ...sourcePaths,
     )
