@@ -1,5 +1,17 @@
 import type { ProjectFile, ProjectFileLanguage, ProjectKind, RunnerLanguage } from './projectTypes'
 
+export const RUNNER_TIMEOUT_MS = 3_000
+export const RUNNER_STARTUP_TIMEOUT_MS = 30_000
+
+function shellArgument(value: string) {
+  return /^[a-zA-Z0-9_./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function directoryName(path: string) {
+  const segments = path.split('/')
+  return segments.length > 1 ? segments.slice(0, -1).join('/') : '.'
+}
+
 interface FileLanguageDefinition {
   label: string
   monacoLanguage: string
@@ -164,7 +176,10 @@ export const PROJECT_KIND_DEFINITIONS = {
     runner: {
       language: 'java',
       runLabel: 'Java',
-      terminalCommand: (entryPath) => `javac ${entryPath} && java ${entryPath.replace(/\.java$/i, '')}`,
+      terminalCommand: (entryPath) => {
+        const className = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
+        return `javac ${shellArgument(entryPath)} && java -cp ${shellArgument(directoryName(entryPath))} ${shellArgument(className)}`
+      },
       createWorker: () => new Worker(new URL('../workers/javaRunner.worker.ts', import.meta.url)),
       startupTimeoutMs: 120_000,
       executionTimeoutMs: 30_000,

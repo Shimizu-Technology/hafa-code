@@ -67,6 +67,10 @@ assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
 
 const applicationScripts = directiveSources(applicationPolicy, 'script-src')
+const applicationConnections = directiveSources(applicationPolicy, 'connect-src')
+const applicationThirdPartyOrigins = new Set(
+  [...applicationScripts, ...applicationConnections].filter((source) => source.startsWith('https://')),
+)
 assert(applicationScripts.includes("'wasm-unsafe-eval'"), 'Application CSP must permit WebAssembly compilation')
 assert(!applicationScripts.includes("'unsafe-eval'"), 'Application CSP must not permit JavaScript string evaluation')
 
@@ -92,8 +96,18 @@ const javaRunnerScripts = directiveSources(javaRunnerPolicy, 'script-src')
 assert(javaRunnerScripts.includes("'wasm-unsafe-eval'"), 'Java runner CSP must permit WebAssembly compilation')
 assert(javaRunnerScripts.includes("'unsafe-eval'"), 'Java runner CSP must permit the CheerpJ JavaScript bridge')
 assert(javaRunnerScripts.includes('https://cjrtnc.leaningtech.com'), 'Java runner CSP must allow the pinned CheerpJ runtime host')
-assert.deepEqual(directiveSources(javaRunnerPolicy, 'connect-src'), ['https://cjrtnc.leaningtech.com', 'https://javafiddle.leaningtech.com'])
-assert(!javaRunnerPolicy.includes('clerk'), 'Java runner CSP must not inherit application third-party script origins')
+const javaRunnerConnections = directiveSources(javaRunnerPolicy, 'connect-src')
+assert.deepEqual(
+  javaRunnerConnections,
+  ['https://cjrtnc.leaningtech.com', 'https://javafiddle.leaningtech.com'],
+  'Java runner CSP connect-src must allow exactly the CheerpJ and JavaFiddle hosts',
+)
+for (const applicationOrigin of applicationThirdPartyOrigins) {
+  assert(
+    ![...javaRunnerScripts, ...javaRunnerConnections].includes(applicationOrigin),
+    `Java runner CSP must not inherit application origin ${applicationOrigin}`,
+  )
+}
 
 const assetNames = await readdir(ASSETS_DIRECTORY)
 for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {

@@ -1,3 +1,11 @@
+import {
+  appendJavaOutput,
+  safeJavaProjectPath,
+  validateJavaProject,
+  type JavaOutputState,
+  type JavaProjectFile,
+} from './javaRunnerCore'
+
 declare function importScripts(...urls: string[]): void
 declare function cheerpjInit(options?: {
   version?: number
@@ -13,18 +21,10 @@ const COMPILER_CLASSPATH = '/str/tools.jar'
 const RUNTIME_CLASSES = '/files'
 const RUNTIME_SOURCE_PATH = '/str/Runner.java'
 const OUTPUT_DIRECTORY = `/files/hafa-java-${crypto.randomUUID().replace(/-/g, '')}`
-const MAX_PROJECT_FILES = 50
-const MAX_PROJECT_BYTES = 2 * 1024 * 1024
-const MAX_OUTPUT_BYTES = 256 * 1024
+const MAX_COMPILER_BYTES = 25_000_000
 
 const encoder = new TextEncoder()
 const inputBridges = new Map<string, ReturnType<typeof createStdinBridge>>()
-
-type JavaProjectFile = {
-  path: string
-  content: string
-  language: string
-}
 
 type RunRequest = {
   id: string
@@ -33,6 +33,7 @@ type RunRequest = {
   entryPath: string
   files: JavaProjectFile[]
   timeoutMs: number
+  startupTimeoutMs: number
 }
 
 type StdinRequest = {
@@ -48,12 +49,8 @@ type AbortRequest = {
 
 type RunnerRequest = RunRequest | StdinRequest | AbortRequest
 
-type ActiveRun = {
+type ActiveRun = JavaOutputState & {
   id: string
-  stdout: string[]
-  stderr: string[]
-  outputBytes: number
-  outputTruncated: boolean
   exitCode: number | null
 }
 
@@ -233,36 +230,15 @@ public final class Runner {
 }
 `
 
-function safeProjectPath(path: string) {
-  const normalized = path.replace(/\\/g, '/')
-  const segments = normalized.split('/')
-  if (segments.some((segment) => !segment || segment === '.' || segment === '..' || segment.startsWith('.'))) {
-    throw new Error(`Unsupported Java file path: ${path}`)
-  }
-  return segments.join('/')
-}
-
 function appendOutput(stream: 'stdout' | 'stderr', value: unknown) {
   if (!activeRun) return
-  const text = String(value)
-  const nextBytes = encoder.encode(text).byteLength
-
-  if (activeRun.outputBytes + nextBytes > MAX_OUTPUT_BYTES) {
-    if (!activeRun.outputTruncated) {
-      activeRun.outputTruncated = true
-      const message = `\nOutput stopped after ${MAX_OUTPUT_BYTES / 1024} KB.\n`
-      activeRun.stderr.push(message)
-      postRunnerMessage({ id: activeRun.id, type: 'output', stream: 'stderr', text: message })
-    }
-    return
-  }
-
-  activeRun.outputBytes += nextBytes
-  activeRun[stream].push(text)
-  postRunnerMessage({ id: activeRun.id, type: 'output', stream, text })
+  const run = activeRun
+  appendJavaOutput(run, stream, value, (outputStream, text) => {
+    postRunnerMessage({ id: run.id, type: 'output', stream: outputStream, text })
+  })
 }
 
-function initializeRuntime() {
+function initializeRuntime(startupTimeoutMs: number) {
   runtimePromise ??= (async () => {
     importScripts(CHEERPJ_LOADER_URL)
     await cheerpjInit({
@@ -282,11 +258,35 @@ function initializeRuntime() {
       },
     })
 
-    const compilerResponse = await fetch(COMPILER_URL)
-    if (!compilerResponse.ok) {
-      throw new Error(`The Java compiler could not be downloaded (${compilerResponse.status}).`)
+    const downloadController = new AbortController()
+    const compilerDownloadTimeoutMs = Math.max(1_000, Math.floor(startupTimeoutMs / 2))
+    const downloadTimeout = self.setTimeout(() => downloadController.abort(), compilerDownloadTimeoutMs)
+    let compilerBytes: ArrayBuffer
+    try {
+      const compilerResponse = await fetch(COMPILER_URL, { signal: downloadController.signal })
+      if (!compilerResponse.ok) {
+        throw new Error(`The Java compiler could not be downloaded (${compilerResponse.status}).`)
+      }
+      const announcedBytes = Number(compilerResponse.headers.get('content-length'))
+      if (Number.isFinite(announcedBytes) && announcedBytes > MAX_COMPILER_BYTES) {
+        throw new Error('The Java compiler download was larger than the browser safety limit.')
+      }
+      compilerBytes = await compilerResponse.arrayBuffer()
+      if (compilerBytes.byteLength > MAX_COMPILER_BYTES) {
+        throw new Error('The Java compiler download was larger than the browser safety limit.')
+      }
+    } catch (error) {
+      if (downloadController.signal.aborted) {
+        throw new Error(
+          `The Java compiler download did not finish within ${compilerDownloadTimeoutMs / 1000} seconds.`,
+          { cause: error },
+        )
+      }
+      throw error
+    } finally {
+      self.clearTimeout(downloadTimeout)
     }
-    cheerpOSAddStringFile(COMPILER_CLASSPATH, new Uint8Array(await compilerResponse.arrayBuffer()))
+    cheerpOSAddStringFile(COMPILER_CLASSPATH, new Uint8Array(compilerBytes))
     cheerpOSAddStringFile(RUNTIME_SOURCE_PATH, encoder.encode(RUNTIME_SOURCE))
     const compilerMessages: string[] = []
     const originalConsoleLog = console.log
@@ -325,40 +325,14 @@ function initializeRuntime() {
   return runtimePromise
 }
 
-function validateProject(request: RunRequest) {
-  if (request.files.length > MAX_PROJECT_FILES) throw new Error(`Java projects support up to ${MAX_PROJECT_FILES} files.`)
-  const totalBytes = request.files.reduce((total, file) => total + encoder.encode(file.content).byteLength, 0)
-  if (totalBytes > MAX_PROJECT_BYTES) throw new Error('Java projects support up to 2 MB of source code.')
-
-  const entryPath = safeProjectPath(request.entryPath)
-  const javaFiles = request.files.filter((file) => file.language === 'java' || file.path.toLowerCase().endsWith('.java'))
-  if (!javaFiles.some((file) => safeProjectPath(file.path) === entryPath)) {
-    throw new Error(`Java entry file not found: ${entryPath}`)
-  }
-  if (!entryPath.toLowerCase().endsWith('.java')) throw new Error('The Java entry file must end in .java.')
-
-  for (const file of javaFiles) {
-    if (/^\s*package\s+[\w.]+\s*;/m.test(file.content)) {
-      throw new Error('Java packages are not supported yet. Keep Main.java and helper classes in the default package.')
-    }
-  }
-
-  const basenames = javaFiles.map((file) => safeProjectPath(file.path).split('/').pop() ?? '')
-  if (new Set(basenames).size !== basenames.length) {
-    throw new Error('Java files must have unique filenames while packages are disabled.')
-  }
-
-  return { entryPath, javaFiles }
-}
-
 async function runJava(request: RunRequest) {
-  const { entryPath, javaFiles } = validateProject(request)
-  await initializeRuntime()
+  const { entryPath, javaFiles } = validateJavaProject(request)
+  await initializeRuntime(request.startupTimeoutMs)
 
   const sourcePaths = javaFiles.map((file) => {
-    const path = safeProjectPath(file.path)
+    const path = safeJavaProjectPath(file.path)
     const sourcePath = `/str/${path.split('/').pop()}`
-    cheerpOSAddStringFile(sourcePath, encoder.encode(path === entryPath ? request.code : file.content))
+    cheerpOSAddStringFile(sourcePath, encoder.encode(file.content))
     return sourcePath
   })
   const mainClassName = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
@@ -396,6 +370,8 @@ async function runJava(request: RunRequest) {
   }
 }
 
+// This remains a classic worker because CheerpJ loads through importScripts.
+// Vite bundles the core helper above at build time; runtime ESM imports are unavailable here.
 self.onmessage = (event: MessageEvent<RunnerRequest>) => {
   const request = event.data
   if (request.type === 'stdin') {

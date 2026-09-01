@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { projectKindDefinition } from '../lib/codeRunner'
 import type { RunnerRequest, RunnerResponse } from '../workers/runnerProtocol'
 import { RunnerPanel } from './RunnerPanel'
 
@@ -55,7 +56,7 @@ const javaProject = {
   id: 'java-project',
   title: 'Java Playground',
   kind: 'java' as const,
-  entryPath: 'Main.java',
+  entryPath: projectKindDefinition('java').entryPath,
   files: [{ path: 'Main.java', language: 'java' as const, content: 'public class Main {}' }],
 }
 
@@ -132,19 +133,29 @@ describe('RunnerPanel', () => {
     act(() => vi.advanceTimersByTime(0))
   })
 
-  it('uses Java-specific timing and trusts its exit code instead of treating stderr as failure', async () => {
-    const user = userEvent.setup()
+  it('uses Java-specific timing and trusts its exit code instead of treating stderr as failure', () => {
+    vi.useFakeTimers()
     render(<RunnerPanel project={javaProject} entryFile={javaProject.files[0]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Run Java' }))
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
     expect(screen.getByText(/first Java run downloads the browser compiler/i)).toBeTruthy()
 
     const worker = FakeWorker.instances[0]
     const run = worker.messages.find((message) => message.type === 'run')
     if (!run || run.type !== 'run') throw new Error('Expected a Java run request')
 
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(screen.getByText('Loading runtime')).toBeTruthy()
+    expect(screen.queryByText(/took too long to load/i)).toBeNull()
+
     act(() => {
       worker.respond({ id: run.id, type: 'started' })
+      vi.advanceTimersByTime(4_000)
+    })
+    expect(screen.getByText('Running')).toBeTruthy()
+    expect(screen.queryByText(/execution stopped/i)).toBeNull()
+
+    act(() => {
       worker.respond({ id: run.id, type: 'result', stdout: 'Done\n', stderr: 'Diagnostic\n', exitCode: 0, durationMs: 40 })
     })
 

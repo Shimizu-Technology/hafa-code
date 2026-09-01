@@ -39,7 +39,7 @@ dedicated Web Worker.
 Java source is compiled and executed through CheerpJ in a dedicated classic
 Web Worker. Rails never compiles or runs Java.
 
-- The worker accepts at most 50 files and 2 MiB of Java source per run
+- The worker accepts at most 50 files and exactly 2,000,000 bytes of Java source per run, matching the Rails project limit
 - Hidden paths, traversal paths, packages, and duplicate basenames are rejected
 - Compiler annotation processing is disabled with `-proc:none`
 - Output is capped at 256 KiB

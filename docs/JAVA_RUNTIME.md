@@ -37,7 +37,7 @@ but Rails never executes them.
 - no Swing, JavaFX, applets, or other desktop UI
 - no general-purpose shell
 - no arbitrary network access from student code
-- up to 50 Java files, 2 MiB of source, and 256 KiB of output per run
+- up to 50 Java files, exactly 2,000,000 bytes of source, and 256 KiB of output per run
 
 These limits keep the experience understandable, mobile-tolerant, and safer
 than adding a remote container service. Apex-specific syntax and curriculum can

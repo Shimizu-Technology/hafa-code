@@ -8,6 +8,7 @@ export interface RunRequest {
   files: ProjectFile[]
   stdin?: string
   timeoutMs: number
+  startupTimeoutMs: number
 }
 
 export interface StdinRequest {

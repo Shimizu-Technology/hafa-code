@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
-import { RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
@@ -23,7 +23,7 @@ const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durati
 
 export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
   const runner = projectKindDefinition(project.kind).runner
-  const startupTimeoutMs = runner?.startupTimeoutMs ?? 30_000
+  const startupTimeoutMs = runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS
   const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
   const [runState, setRunState] = useState<RunState>(emptyRunState)
   const [runPhase, setRunPhase] = useState<RunPhase>('idle')
@@ -152,8 +152,11 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       }
 
       const stderr = event.data.stderr ?? ''
+      const status: RunStatus = event.data.exitCode === undefined
+        ? (stderr.trim() ? 'error' : 'success')
+        : (event.data.exitCode === 0 ? 'success' : 'error')
       setRunState({
-        status: event.data.exitCode === undefined ? (stderr.trim() ? 'error' : 'success') : (event.data.exitCode === 0 ? 'success' : 'error'),
+        status,
         stdout: event.data.stdout ?? '',
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
@@ -181,6 +184,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       files: project.files,
       code: entryFile.content,
       timeoutMs: RUNNER_TIMEOUT_MS,
+      startupTimeoutMs,
     } satisfies RunRequest)
   }
 
