@@ -1,5 +1,17 @@
 import type { ProjectFile, ProjectFileLanguage, ProjectKind, RunnerLanguage } from './projectTypes'
 
+export const RUNNER_TIMEOUT_MS = 3_000
+export const RUNNER_STARTUP_TIMEOUT_MS = 30_000
+
+function shellArgument(value: string) {
+  return /^[a-zA-Z0-9_./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function directoryName(path: string) {
+  const segments = path.split('/')
+  return segments.length > 1 ? segments.slice(0, -1).join('/') : '.'
+}
+
 interface FileLanguageDefinition {
   label: string
   monacoLanguage: string
@@ -12,6 +24,9 @@ export interface RunnerDefinition {
   runLabel: string
   terminalCommand: (entryPath: string) => string
   createWorker: () => Worker
+  startupTimeoutMs?: number
+  executionTimeoutMs?: number
+  startupNote?: string
 }
 
 export interface ProjectKindDefinition {
@@ -47,6 +62,12 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     monacoLanguage: 'python',
     extensions: ['py', 'pyw'],
     starterContent: '# Write Python here\n',
+  },
+  java: {
+    label: 'Java',
+    monacoLanguage: 'java',
+    extensions: ['java'],
+    starterContent: '// Write Java here\n',
   },
   html: {
     label: 'HTML',
@@ -136,6 +157,33 @@ export const PROJECT_KIND_DEFINITIONS = {
       runLabel: 'Python',
       terminalCommand: (entryPath) => `python ${entryPath}`,
       createWorker: () => new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), { type: 'module' }),
+    },
+  },
+  java: {
+    kind: 'java',
+    label: 'Java',
+    shortLabel: 'Java',
+    starterTitle: 'Java Playground',
+    entryPath: 'Main.java',
+    starterFiles: [
+      { path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hafa adai, Java!");\n\n    for (int line = 1; line <= 3; line++) {\n      System.out.println("Line " + line);\n    }\n  }\n}\n' },
+    ],
+    preferredEntryPaths: ['Main.java'],
+    defaultFileLanguage: 'java',
+    fallbackFileLanguage: 'java',
+    newFileCandidates: ['Helper.java', 'Greeting.java', 'Practice.java'],
+    defaultExtension: 'java',
+    runner: {
+      language: 'java',
+      runLabel: 'Java',
+      terminalCommand: (entryPath) => {
+        const className = entryPath.split('/').pop()?.replace(/\.java$/i, '') ?? 'Main'
+        return `javac ${shellArgument(entryPath)} && java -cp ${shellArgument(directoryName(entryPath))} ${shellArgument(className)}`
+      },
+      createWorker: () => new Worker(new URL('../workers/javaRunner.worker.ts', import.meta.url)),
+      startupTimeoutMs: 120_000,
+      executionTimeoutMs: 30_000,
+      startupNote: 'The first Java run downloads the browser compiler and may take longer on a mobile connection.',
     },
   },
   web: {

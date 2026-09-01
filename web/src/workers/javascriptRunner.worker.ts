@@ -244,7 +244,7 @@ async function runJavaScript({ id, code, timeoutMs, files, entryPath }: RunReque
     runtime.dispose()
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join('') }
+  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
 }
 
 installRunner(runJavaScript)

@@ -9,6 +9,8 @@ export {
   FILE_LANGUAGE_DEFINITIONS,
   PROJECT_KINDS,
   PROJECT_KIND_DEFINITIONS,
+  RUNNER_STARTUP_TIMEOUT_MS,
+  RUNNER_TIMEOUT_MS,
   fileLanguageDefinition,
   isProjectFileLanguage,
   isProjectKind,
@@ -24,8 +26,6 @@ export type {
   RunnerLanguage,
   SavedProject,
 } from './projectTypes'
-
-export const RUNNER_TIMEOUT_MS = 3000
 
 export function starterProject(kind: ProjectKind): SavedProject {
   const now = new Date().toISOString()

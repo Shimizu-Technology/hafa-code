@@ -87,6 +87,24 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal %w[helper.py main.py], response.parsed_body.dig("project", "files").pluck("path")
   end
 
+  test "creates Java projects and chooses Main.java as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "Java Playground",
+        kind: "java",
+        files: [
+          { path: "Helper.java", language: "java", content: "class Helper {}" },
+          { path: "Main.java", language: "java", content: "public class Main { public static void main(String[] args) {} }" }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "java", response.parsed_body.dig("project", "kind")
+    assert_equal "Main.java", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[Helper.java Main.java], response.parsed_body.dig("project", "files").pluck("path")
+  end
+
   test "rejects malformed file entries without crashing" do
     post "/api/v1/projects",
       params: {

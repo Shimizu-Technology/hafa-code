@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a small, open-source coding playground for students and alumni to practice Ruby, JavaScript, Python, HTML, and CSS without installing a local dev environment.
+Create a small, open-source coding playground for students and alumni to practice Ruby, JavaScript, Python, Java, HTML, and CSS without installing a local dev environment.
 
 ## Primary Users
 
@@ -16,7 +16,7 @@ Create a small, open-source coding playground for students and alumni to practic
 
 ### Student
 
-- I can open a browser and immediately write Ruby, JavaScript, or Python.
+- I can open a browser and immediately write Ruby, JavaScript, Python, or Java.
 - I can press Run and see output/errors.
 - I can create an HTML/CSS/JS page and see it update live.
 - I can save my work and come back later.
@@ -56,7 +56,14 @@ Create a small, open-source coding playground for students and alumni to practic
    - warm repeat runs with fresh project files and module imports
    - 3s execution timeout after runtime startup
 
-4. Web page
+4. Java project
+   - `Main.java` plus default-package helper classes
+   - Java 8 compiler diagnostics, stdout/stderr, and line-oriented standard input
+   - explicit startup and execution states with a Stop control
+   - warm repeat runs after the first runtime download
+   - no packages, build tools, external dependencies, or desktop GUI support
+
+5. Web page
    - HTML editor
    - CSS editor
    - JS editor
@@ -99,6 +106,7 @@ These can come later, but only after the simple learning loop is excellent.
 - Ruby WASM for Ruby
 - QuickJS WASM for JavaScript
 - Pyodide WASM for Python
+- CheerpJ for Java 8
 - Sandboxed iframe for HTML/CSS/JS
 - PostgreSQL for users, projects, files, forks, and share metadata
 

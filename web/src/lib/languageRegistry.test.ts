@@ -10,8 +10,8 @@ import {
 
 describe('language registry', () => {
   it('describes every supported project kind in display order', () => {
-    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'python', 'web'])
-    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'Python', 'Web'])
+    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'python', 'java', 'web'])
+    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'Python', 'Java', 'Web'])
   })
 
   it('keeps runnable and preview-only project capabilities explicit', () => {
@@ -21,6 +21,14 @@ describe('language registry', () => {
     expect(projectKindDefinition('javascript').runner?.terminalCommand('src/main.js')).toBe('node src/main.js')
     expect(projectKindDefinition('python').runner?.language).toBe('python')
     expect(projectKindDefinition('python').runner?.terminalCommand('src/main.py')).toBe('python src/main.py')
+    expect(projectKindDefinition('java').runner?.language).toBe('java')
+    expect(projectKindDefinition('java').entryPath).toBe('Main.java')
+    expect(projectKindDefinition('java').runner?.terminalCommand('Main.java')).toBe('javac Main.java && java -cp . Main')
+    expect(projectKindDefinition('java').runner?.terminalCommand('src/Main.java')).toBe('javac src/Main.java && java -cp src Main')
+    expect(projectKindDefinition('java').runner?.terminalCommand('practice files/Main.java')).toBe("javac 'practice files/Main.java' && java -cp 'practice files' Main")
+    expect(projectKindDefinition('java').runner?.startupTimeoutMs).toBe(120_000)
+    expect(projectKindDefinition('java').runner?.executionTimeoutMs).toBe(30_000)
+    expect(projectKindDefinition('java').runner?.startupNote).toBe('The first Java run downloads the browser compiler and may take longer on a mobile connection.')
     expect(projectKindDefinition('web').runner).toBeUndefined()
   })
 
@@ -43,10 +51,11 @@ describe('language registry', () => {
   })
 
   it('centralizes file extensions while preserving unknown-file fallbacks', () => {
-    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'python', 'html', 'css', 'json', 'plain'])
+    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'python', 'java', 'html', 'css', 'json', 'plain'])
     expect(inferFileLanguage('lib/hello.rb', 'javascript')).toBe('ruby')
     expect(inferFileLanguage('src/index.mjs', 'ruby')).toBe('javascript')
     expect(inferFileLanguage('src/main.py', 'ruby')).toBe('python')
+    expect(inferFileLanguage('src/Main.java', 'ruby')).toBe('java')
     expect(inferFileLanguage('README', 'ruby')).toBe('ruby')
     expect(inferFileLanguage('README', 'javascript')).toBe('plain')
     expect(inferFileLanguage('README', 'python')).toBe('python')

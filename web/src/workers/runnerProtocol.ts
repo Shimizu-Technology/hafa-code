@@ -8,6 +8,7 @@ export interface RunRequest {
   files: ProjectFile[]
   stdin?: string
   timeoutMs: number
+  startupTimeoutMs: number
 }
 
 export interface StdinRequest {
@@ -31,11 +32,13 @@ export interface RunnerResponse {
   stdout?: string
   stderr?: string
   durationMs?: number
+  exitCode?: number
 }
 
 export interface RunnerResult {
   stdout: string
   stderr: string
+  exitCode: number
 }
 
 export type RunHandler = (request: RunRequest) => Promise<RunnerResult>
@@ -65,12 +68,13 @@ export function installRunner(
 
     const startedAt = performance.now()
     run(request)
-      .then(({ stdout, stderr }) => {
+      .then(({ stdout, stderr, exitCode }) => {
         postRunnerMessage({
           id: request.id,
           type: 'result',
           stdout,
           stderr,
+          exitCode,
           durationMs: Math.round(performance.now() - startedAt),
         })
       })
@@ -80,6 +84,7 @@ export function installRunner(
           type: 'result',
           stdout: '',
           stderr: error instanceof Error ? error.message : String(error),
+          exitCode: 1,
           durationMs: Math.round(performance.now() - startedAt),
         })
       })
