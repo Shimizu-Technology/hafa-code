@@ -1,20 +1,22 @@
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { languageGuideFor } from './lib/languageGuides'
 import { practiceChallengeById } from './lib/practiceLab'
-import { practiceChallengeIdForProject } from './lib/practiceProgress'
+import { practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
+import { createConflictCopy } from './lib/projectStorage'
 import type { ProjectLibrary } from './lib/projectStorage'
+import type { RunnerOutcome } from './lib/runnerOutcome'
 
 vi.mock('@monaco-editor/react', () => ({
-  default: ({ value }: { value?: string }) => (
-    <textarea aria-label="Code editor" readOnly value={value ?? ''} />
+  default: ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
+    <textarea aria-label="Code editor" value={value ?? ''} onChange={(event) => onChange?.(event.target.value)} />
   ),
 }))
 
 const runnerHarness = vi.hoisted(() => ({
-  onRunComplete: undefined as undefined | ((outcome: { status: 'success'; stdout: string; stderr: string; durationMs: number }) => void),
+  onRunComplete: undefined as undefined | ((outcome: RunnerOutcome) => void),
 }))
 
 vi.mock('./components/RunnerPanel', () => ({
@@ -130,5 +132,68 @@ describe('App language guide practice projects', () => {
 
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Ruby Playground')
     expect(screen.queryByText('Challenge complete')).toBeNull()
+  })
+
+  it('checks the code snapshot that was sent to the runner', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+
+    fireEvent.change(screen.getByLabelText('Code editor'), { target: { value: 'puts "edited while running"\n' } })
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success',
+      stdout: 'Hafa adai, Lina!\nLessons: 4\n',
+      stderr: '',
+      durationMs: 12,
+    }))
+
+    expect(screen.getByText('Challenge complete')).toBeTruthy()
+  })
+
+  it('restores the challenge panel for a practice conflict copy', async () => {
+    const user = userEvent.setup()
+    const view = render(<App />)
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+
+    const currentLibrary = storedLibrary()
+    const practiceProject = currentLibrary.projects.find((candidate) => candidate.id === currentLibrary.activeProjectId)!
+    const conflictCopy = createConflictCopy(practiceProject)
+    preservePracticeConflictLinks(practiceProject.id, conflictCopy.id, practiceProject.id)
+    view.unmount()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      activeProjectId: conflictCopy.id,
+      projects: [conflictCopy, ...currentLibrary.projects],
+    }))
+
+    render(<App />)
+
+    expect(practiceChallengeIdForProject(conflictCopy.id)).toBe('ruby-variables-greeting')
+    expect(screen.getByRole('heading', { name: 'Build a greeting' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
+  })
+
+  it('lets the learner retry after manually stopping a practice run', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'stopped',
+      stdout: '',
+      stderr: 'Execution stopped.',
+      durationMs: 5,
+    }))
+
+    expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
+    expect(screen.queryByText(/almost there/i)).toBeNull()
   })
 })

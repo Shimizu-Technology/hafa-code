@@ -193,7 +193,7 @@ describe('RunnerPanel', () => {
     expect(screen.getByText('Execution stopped.')).toBeTruthy()
     expect(onRunComplete).toHaveBeenCalledOnce()
     expect(onRunComplete).toHaveBeenCalledWith({
-      status: 'timeout',
+      status: 'stopped',
       stdout: 'Halfway\n',
       stderr: 'Execution stopped.',
       durationMs: expect.any(Number),

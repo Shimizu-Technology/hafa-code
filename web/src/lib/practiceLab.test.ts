@@ -6,6 +6,7 @@ import {
   completedPracticeChallengeIds,
   linkPracticeProject,
   practiceChallengeIdForProject,
+  preservePracticeConflictLinks,
   remapPendingPracticeCheck,
   replacePracticeProjectId,
 } from './practiceProgress'
@@ -85,8 +86,34 @@ describe('practice challenge catalog', () => {
       content: '<!-- <main><h1>Lina</h1><a href="/work">View work</a></main> -->',
     }])
 
+    const cssChallenge = practiceChallengeById('web-responsive-grid')!
+    const cssResult = evaluatePracticeChallenge(cssChallenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '/* .project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; } */',
+    }])
+
     expect(rubyResult.checks[0].passed).toBe(false)
     expect(webResult.checks.every((check) => !check.passed)).toBe(true)
+    expect(cssResult.checks.every((check) => !check.passed)).toBe(true)
+  })
+
+  it('accepts a nested function callback and declarations without final semicolons', () => {
+    const counterChallenge = practiceChallengeById('web-click-counter')!
+    const counterResult = evaluatePracticeChallenge(counterChallenge, [{
+      path: 'script.js',
+      language: 'javascript',
+      content: 'button.addEventListener("click", function (event) {\n  if (event) { count += 1 }\n  output.textContent = count\n})',
+    }])
+    const cssChallenge = practiceChallengeById('web-responsive-grid')!
+    const cssResult = evaluatePracticeChallenge(cssChallenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem }',
+    }])
+
+    expect(counterResult.checks.every((check) => check.passed)).toBe(true)
+    expect(cssResult.checks.every((check) => check.passed)).toBe(true)
   })
 })
 
@@ -104,10 +131,20 @@ describe('practice progress', () => {
   })
 
   it('remaps only the pending check that belongs to the saved local project', () => {
-    const pending = { projectId: 'local-project', challengeId: 'python-loop-stops' }
+    const pending = { projectId: 'local-project', challengeId: 'python-loop-stops', files: [] }
 
-    expect(remapPendingPracticeCheck(pending, 'local-project', '42')).toEqual({ projectId: '42', challengeId: 'python-loop-stops' })
+    expect(remapPendingPracticeCheck(pending, 'local-project', '42')).toEqual({ projectId: '42', challengeId: 'python-loop-stops', files: [] })
     expect(remapPendingPracticeCheck(pending, 'another-project', '42')).toBe(pending)
+  })
+
+  it('keeps a conflict copy and restored server project linked to the challenge', () => {
+    linkPracticeProject('local-project', 'python-loop-stops')
+
+    preservePracticeConflictLinks('local-project', 'conflict-copy', 'server-project')
+
+    expect(practiceChallengeIdForProject('local-project')).toBeNull()
+    expect(practiceChallengeIdForProject('conflict-copy')).toBe('python-loop-stops')
+    expect(practiceChallengeIdForProject('server-project')).toBe('python-loop-stops')
   })
 
   it('keeps practice usable when the browser blocks storage writes', () => {

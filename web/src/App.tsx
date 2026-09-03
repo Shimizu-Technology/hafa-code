@@ -65,6 +65,7 @@ import {
   completedPracticeChallengeIds,
   linkPracticeProject,
   practiceChallengeIdForProject,
+  preservePracticeConflictLinks,
   remapPendingPracticeCheck,
   replacePracticeProjectId,
   type PendingPracticeCheck,
@@ -299,6 +300,7 @@ export default function App() {
         if (serverProject) {
           const conflictCopy = createConflictCopy(projectToSave)
           const currentLibrary = libraryRef.current
+          preservePracticeConflictLinks(projectId, conflictCopy.id, serverProject.id)
           if (currentLibrary.activeProjectId === projectId) clearPendingPracticeCheck()
           const nextLibrary = {
             activeProjectId: currentLibrary.activeProjectId === projectId ? conflictCopy.id : currentLibrary.activeProjectId,
@@ -747,7 +749,11 @@ export default function App() {
       return
     }
 
-    pendingPracticeCheckRef.current = { projectId: project.id, challengeId: currentPracticeChallenge.id }
+    pendingPracticeCheckRef.current = {
+      projectId: project.id,
+      challengeId: currentPracticeChallenge.id,
+      files: project.files.map((file) => ({ ...file })),
+    }
     setPracticeChecking(true)
     setMobileTab('output')
     window.dispatchEvent(new Event('hafa-code-run-active-project'))
@@ -761,13 +767,17 @@ export default function App() {
       setPracticeChecking(false)
       return
     }
-    const checkedProject = libraryRef.current.projects.find((candidate) => candidate.id === pending.projectId)
+    if (outcome.status === 'stopped') {
+      setPracticeChecking(false)
+      setPracticeResult(null)
+      return
+    }
     const challenge = practiceChallengeById(pending.challengeId)
-    if (!checkedProject || !challenge) {
+    if (!challenge) {
       setPracticeChecking(false)
       return
     }
-    recordPracticeResult(challenge, evaluatePracticeChallenge(challenge, checkedProject.files, outcome))
+    recordPracticeResult(challenge, evaluatePracticeChallenge(challenge, pending.files, outcome))
   }
 
   const updateProjectVisibility = (visibility: ProjectVisibility) => {

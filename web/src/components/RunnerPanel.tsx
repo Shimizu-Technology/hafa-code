@@ -259,7 +259,7 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
     stopWorker()
     appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
     const outcome: RunnerOutcome = {
-      status: 'timeout',
+      status: 'stopped',
       stdout: streamedOutputRef.current.stdout,
       stderr: streamedOutputRef.current.stderr || 'Execution stopped.',
       durationMs: startedAtRef.current === null ? runState.durationMs : Math.round(performance.now() - startedAtRef.current),

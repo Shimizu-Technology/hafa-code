@@ -1,4 +1,4 @@
-export type RunnerStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
+export type RunnerStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout' | 'stopped'
 
 export interface RunnerOutcome {
   status: Exclude<RunnerStatus, 'idle' | 'running'>

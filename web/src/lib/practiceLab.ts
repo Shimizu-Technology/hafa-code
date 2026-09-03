@@ -7,9 +7,11 @@ export interface PracticeFileCheck {
   filePath: string
   label: string
   pattern: RegExp
-  withinPattern?: RegExp
+  scope?: (source: string) => string
   ignoreStrings?: boolean
 }
+
+const CLICK_HANDLER_BODY = (source: string) => extractClickHandlerBody(source)
 
 export interface PracticeChallenge {
   id: string
@@ -211,9 +213,9 @@ const webChallenges: PracticeChallenge[] = [
       { path: 'style.css', language: 'css', content: 'body { margin: 0; padding: 2rem; font-family: system-ui, sans-serif; }\n\n.project-grid {\n  /* Make this layout responsive. */\n}\n\narticle { padding: 1.25rem; border: 2px solid #14110f; }\n' },
     ] },
     checks: [
-      { filePath: 'style.css', label: 'Use CSS Grid', pattern: /\.project-grid\s*\{[\s\S]*display\s*:\s*grid\s*;/i },
-      { filePath: 'style.css', label: 'Create flexible columns', pattern: /grid-template-columns\s*:\s*repeat\s*\(\s*auto-fit\s*,\s*minmax\s*\(/i },
-      { filePath: 'style.css', label: 'Add space between cards', pattern: /\bgap\s*:\s*(?!0(?:[;\s]|$))[^;]+;/i },
+      { filePath: 'style.css', label: 'Use CSS Grid', pattern: /\.project-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i },
+      { filePath: 'style.css', label: 'Create flexible columns', pattern: /\.project-grid\s*\{[^}]*grid-template-columns\s*:\s*repeat\s*\(\s*auto-fit\s*,\s*minmax\s*\(/i },
+      { filePath: 'style.css', label: 'Add space between cards', pattern: /\.project-grid\s*\{[^}]*\bgap\s*:\s*(?!0(?:[;}\s]|$))[^;}]+[;}]/i },
     ],
   },
   {
@@ -228,8 +230,8 @@ const webChallenges: PracticeChallenge[] = [
     ] },
     checks: [
       { filePath: 'script.js', label: 'Listen for button clicks', pattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']/ },
-      { filePath: 'script.js', label: 'Increase the count inside the click handler', pattern: /(?:\+\+count|count\+\+|count\s*\+=\s*1|count\s*=\s*count\s*\+\s*1)/, withinPattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*\)/, ignoreStrings: true },
-      { filePath: 'script.js', label: 'Update the output inside the click handler', pattern: /\boutput\s*\.\s*(?:textContent|innerText)\s*=\s*count\b/, withinPattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*\)/, ignoreStrings: true },
+      { filePath: 'script.js', label: 'Increase the count inside the click handler', pattern: /(?:\+\+count|count\+\+|count\s*\+=\s*1|count\s*=\s*count\s*\+\s*1)/, scope: CLICK_HANDLER_BODY, ignoreStrings: true },
+      { filePath: 'script.js', label: 'Update the output inside the click handler', pattern: /\boutput\s*\.\s*(?:textContent|innerText)\s*=\s*count\b/, scope: CLICK_HANDLER_BODY, ignoreStrings: true },
     ],
   },
 ]
@@ -295,7 +297,10 @@ function sourceWithoutComments(file: ProjectFile) {
         result += file.content[index] === '\n' ? '\n' : ' '
         index += 1
       }
-      if (index < file.content.length) result += '  '
+      if (index < file.content.length) {
+        result += '  '
+        index += 1
+      }
       else index -= 1
       continue
     }
@@ -349,6 +354,22 @@ function sourceWithoutStringContents(source: string) {
   return result
 }
 
+function extractClickHandlerBody(source: string) {
+  const callbackStart = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*(?:(?:function(?:\s+[$\w]+)?\s*\([^)]*\))|(?:(?:\([^)]*\)|[$A-Z_a-z][$\w]*)\s*=>))\s*\{/g
+  const match = callbackStart.exec(source)
+  if (!match) return ''
+
+  const openingBrace = match.index + match[0].lastIndexOf('{')
+  const structure = sourceWithoutStringContents(source)
+  let depth = 1
+  for (let index = openingBrace + 1; index < structure.length; index += 1) {
+    if (structure[index] === '{') depth += 1
+    if (structure[index] === '}') depth -= 1
+    if (depth === 0) return source.slice(openingBrace + 1, index)
+  }
+  return ''
+}
+
 function normalizeOutput(output: string) {
   return output.replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n').trim()
 }
@@ -358,8 +379,7 @@ export function evaluatePracticeChallenge(challenge: PracticeChallenge, files: P
   const checks = challenge.checks.map((check) => {
     const file = files.find((candidate) => candidate.path === check.filePath)
     const commentFreeSource = file ? sourceWithoutComments(file) : ''
-    const scopedMatch = check.withinPattern ? commentFreeSource.match(check.withinPattern) : null
-    const scopedSource = check.withinPattern ? (scopedMatch?.[1] ?? '') : commentFreeSource
+    const scopedSource = check.scope ? check.scope(commentFreeSource) : commentFreeSource
     const source = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
     return { label: check.label, passed: Boolean(file && check.pattern.test(source)) }
   })

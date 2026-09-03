@@ -1,3 +1,5 @@
+import type { ProjectFile } from './projectTypes'
+
 const STORAGE_KEY = 'hafa-code-practice-progress-v1'
 let memoryFallback: PracticeProgress | null = null
 
@@ -9,6 +11,7 @@ interface PracticeProgress {
 export interface PendingPracticeCheck {
   projectId: string
   challengeId: string
+  files: ProjectFile[]
 }
 
 const emptyProgress = (): PracticeProgress => ({ completedChallengeIds: [], projectChallenges: {} })
@@ -81,6 +84,17 @@ export function replacePracticeProjectId(previousId: string, nextId: string) {
 /** Updates an in-flight check when cloud sync assigns its project a new id. */
 export function remapPendingPracticeCheck(pending: PendingPracticeCheck | null, previousId: string, nextId: string) {
   return pending?.projectId === previousId ? { ...pending, projectId: nextId } : pending
+}
+
+/** Keeps both sides of a cloud conflict connected to the original practice challenge. */
+export function preservePracticeConflictLinks(sourceProjectId: string, conflictCopyId: string, restoredProjectId: string) {
+  const challengeId = practiceChallengeIdForProject(sourceProjectId)
+  if (!challengeId) return true
+  const copySaved = linkPracticeProject(conflictCopyId, challengeId)
+  const restoredSaved = sourceProjectId === restoredProjectId
+    ? true
+    : replacePracticeProjectId(sourceProjectId, restoredProjectId)
+  return copySaved && restoredSaved
 }
 
 /** Records a completed challenge once while keeping attempts unlimited. */
