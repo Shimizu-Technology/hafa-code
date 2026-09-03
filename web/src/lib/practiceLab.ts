@@ -386,8 +386,8 @@ function findExecutableMatch(source: string, pattern: RegExp) {
 }
 
 function sourceWithoutJavaScriptRegexLiterals(source: string) {
-  const structure = [...source]
-  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
+  const structure = source.split('')
+  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
   let canStartRegex = true
 
   for (let index = 0; index < source.length; index += 1) {

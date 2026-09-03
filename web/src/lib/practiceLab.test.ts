@@ -128,6 +128,37 @@ describe('practice challenge catalog', () => {
     expect(result.checks.slice(1).every((check) => !check.passed)).toBe(true)
   })
 
+  it('masks regular-expression literals after else and do keywords', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const fakeHandler = '/button.addEventListener("click", () => { count += 1; output.textContent = count })/'
+    const afterElse = evaluatePracticeChallenge(challenge, [{
+      path: 'script.js',
+      language: 'javascript',
+      content: `if (ready) {} else ${fakeHandler}\n`,
+    }])
+    const afterDo = evaluatePracticeChallenge(challenge, [{
+      path: 'script.js',
+      language: 'javascript',
+      content: `do ${fakeHandler}; while (false)\n`,
+    }])
+
+    expect(afterElse.passed).toBe(false)
+    expect(afterElse.checks.slice(1).every((check) => !check.passed)).toBe(true)
+    expect(afterDo.passed).toBe(false)
+    expect(afterDo.checks.slice(1).every((check) => !check.passed)).toBe(true)
+  })
+
+  it('keeps handler offsets aligned after an astral character', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'script.js',
+      language: 'javascript',
+      content: 'const emoji = /😀/u\nbutton.addEventListener("click", () => { count += 1; output.textContent = count })\n',
+    }])
+
+    expect(result.checks.every((check) => check.passed)).toBe(true)
+  })
+
   it('does not count syntax examples hidden in comments or string literals', () => {
     const rubyChallenge = practiceChallengeById('ruby-loop-stops')!
     const rubyResult = evaluatePracticeChallenge(rubyChallenge, [{
