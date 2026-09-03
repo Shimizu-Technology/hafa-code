@@ -64,6 +64,30 @@ describe('practice challenge catalog', () => {
     expect(result.checks.find((check) => check.label === 'Add the View work link')?.passed).toBe(false)
   })
 
+  it('requires the View work link to have the exact normalized visible label', () => {
+    const challenge = practiceChallengeById('web-semantic-profile')!
+    const extraPrefix = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<main><h1>Lina</h1><a href="/work">Preview: View work</a></main>',
+    }])
+    const longerWord = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<main><h1>Lina</h1><a href="/work">View workflow</a></main>',
+    }])
+    const normalizedWhitespace = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<main><h1>Lina</h1><a href="/work">  View\n work  </a></main>',
+    }])
+
+    const linkCheck = (result: ReturnType<typeof evaluatePracticeChallenge>) => result.checks.find((check) => check.label === 'Add the View work link')?.passed
+    expect(linkCheck(extraPrefix)).toBe(false)
+    expect(linkCheck(longerWord)).toBe(false)
+    expect(linkCheck(normalizedWhitespace)).toBe(true)
+  })
+
   it('does not treat markup inside a textarea as semantic page elements', () => {
     const challenge = practiceChallengeById('web-semantic-profile')!
     const result = evaluatePracticeChallenge(challenge, [{
@@ -82,6 +106,15 @@ describe('practice challenge catalog', () => {
 
     expect(result.passed).toBe(false)
     expect(result.checks.map((check) => check.passed)).toEqual([true, false, false])
+  })
+
+  it('does not extract click-handler behavior from a quoted example', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const quotedExample = 'const example = \'button.addEventListener("click", () => { count++; output.textContent = count })\'\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: quotedExample }])
+
+    expect(result.passed).toBe(false)
+    expect(result.checks.slice(1).every((check) => !check.passed)).toBe(true)
   })
 
   it('does not count syntax examples hidden in comments or string literals', () => {

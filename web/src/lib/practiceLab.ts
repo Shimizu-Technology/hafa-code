@@ -200,7 +200,10 @@ const webChallenges: PracticeChallenge[] = [
     checks: [
       { filePath: 'index.html', label: 'Use a main element', domCheck: (document) => Boolean(document.querySelector('main')) },
       { filePath: 'index.html', label: 'Add Lina as the main heading', domCheck: (document) => Boolean(document.querySelector('main h1')?.textContent?.includes('Lina')) },
-      { filePath: 'index.html', label: 'Add the View work link', domCheck: (document) => Array.from(document.querySelectorAll('main a[href]')).some((anchor) => Boolean(anchor.getAttribute('href')?.trim()) && Boolean(anchor.textContent?.includes('View work'))) },
+      { filePath: 'index.html', label: 'Add the View work link', domCheck: (document) => Array.from(document.querySelectorAll('main a[href]')).some((anchor) => (
+        Boolean(anchor.getAttribute('href')?.trim())
+        && (anchor.textContent ?? '').replace(/\s+/g, ' ').trim() === 'View work'
+      )) },
     ],
   },
   {
@@ -360,15 +363,26 @@ function sourceWithoutStringContents(source: string) {
 
 function extractClickHandlerBody(source: string) {
   const callbackStart = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*(?:(?:function(?:\s+[$\w]+)?\s*\([^)]*\))|(?:(?:\([^)]*\)|[$A-Z_a-z][$\w]*)\s*=>))\s*\{/g
-  const match = callbackStart.exec(source)
+  const match = findExecutableMatch(source, callbackStart)
   if (match) return extractBracedBody(source, match.index + match[0].lastIndexOf('{'))
 
-  const namedCallback = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*([$A-Z_a-z][$\w]*)\s*\)/.exec(source)?.[1]
+  const namedCallback = findExecutableMatch(source, /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*([$A-Z_a-z][$\w]*)\s*\)/g)?.[1]
   if (!namedCallback) return ''
   const escapedName = namedCallback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const namedStart = new RegExp(`(?:function\\s+${escapedName}\\s*\\([^)]*\\)|(?:const|let|var)\\s+${escapedName}\\s*=\\s*(?:(?:function\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>)))\\s*\\{`)
-  const namedMatch = namedStart.exec(source)
+  const namedStart = new RegExp(`(?:function\\s+${escapedName}\\s*\\([^)]*\\)|(?:const|let|var)\\s+${escapedName}\\s*=\\s*(?:(?:function\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>)))\\s*\\{`, 'g')
+  const namedMatch = findExecutableMatch(source, namedStart)
   return namedMatch ? extractBracedBody(source, namedMatch.index + namedMatch[0].lastIndexOf('{')) : ''
+}
+
+function findExecutableMatch(source: string, pattern: RegExp) {
+  const structure = sourceWithoutStringContents(source)
+  pattern.lastIndex = 0
+  let match = pattern.exec(source)
+  while (match) {
+    if (structure[match.index] === source[match.index]) return match
+    match = pattern.exec(source)
+  }
+  return null
 }
 
 function extractBracedBody(source: string, openingBrace: number) {
