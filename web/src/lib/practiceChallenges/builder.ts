@@ -78,6 +78,10 @@ function withoutFormatNameDeclaration(source: string) {
     .replace(/\bstatic\s+String\s+formatName\s*\(\s*String\s+name\s*\)/g, '')
 }
 
+function markStrictHighPriorityComparisons(source: string) {
+  return source.replace(/(\bpriority\s*===\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
+}
+
 /** Additional intermediate exercises. The original loop/grid challenge remains first for every language. */
 export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
   {
@@ -158,7 +162,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · JavaScript Priority Count', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\n\n// Count the high-priority requests.\n\nconsole.log(`High priority: ${highCount}`)\n' }] },
     checks: [
       { filePath: 'main.js', label: 'Loop over priorities', pattern: /\bfor\s*\([^)]*\bof\s+priorities\s*\)/, ignoreStrings: true },
-      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===\s*["']high["'][\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/ },
+      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===\s*HIGH_PRIORITY_LITERAL[\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/, scope: markStrictHighPriorityComparisons, ignoreStrings: true },
     ],
     expectedOutput: 'High priority: 2',
   },
