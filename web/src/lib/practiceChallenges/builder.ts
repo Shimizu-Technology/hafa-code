@@ -82,6 +82,88 @@ function markStrictHighPriorityComparisons(source: string) {
   return source.replace(/(\bpriority\s*===\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
 }
 
+function javascriptExecutableStructure(source: string) {
+  const structure = source.split('')
+  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
+  let canStartRegex = true
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (/\s/.test(char)) continue
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char
+      let escaped = false
+      structure[index] = ' '
+      index += 1
+      while (index < source.length) {
+        const stringChar = source[index]
+        structure[index] = stringChar === '\n' ? '\n' : ' '
+        if (!escaped && stringChar === quote) break
+        if (escaped) escaped = false
+        else if (stringChar === '\\') escaped = true
+        index += 1
+      }
+      canStartRegex = false
+      continue
+    }
+
+    if (/[$A-Z_a-z]/.test(char)) {
+      const start = index
+      while (index + 1 < source.length && /[$\w]/.test(source[index + 1])) index += 1
+      canStartRegex = regexPrefixKeywords.has(source.slice(start, index + 1))
+      continue
+    }
+
+    if (/\d/.test(char)) {
+      while (index + 1 < source.length && /[\d._]/.test(source[index + 1])) index += 1
+      canStartRegex = false
+      continue
+    }
+
+    if (char === '/' && canStartRegex) {
+      let escaped = false
+      let inCharacterClass = false
+      structure[index] = ' '
+      index += 1
+      while (index < source.length) {
+        const regexChar = source[index]
+        structure[index] = regexChar === '\n' ? '\n' : ' '
+        if (regexChar === '\n') break
+        if (escaped) escaped = false
+        else if (regexChar === '\\') escaped = true
+        else if (regexChar === '[') inCharacterClass = true
+        else if (regexChar === ']') inCharacterClass = false
+        else if (regexChar === '/' && !inCharacterClass) {
+          while (index + 1 < source.length && /[a-z]/i.test(source[index + 1])) {
+            index += 1
+            structure[index] = ' '
+          }
+          break
+        }
+        index += 1
+      }
+      canStartRegex = false
+      continue
+    }
+
+    canStartRegex = !/[\])}]/.test(char) && char !== '.'
+  }
+
+  return structure.join('')
+}
+
+function strictHighPriorityLoopBodies(source: string) {
+  const structure = javascriptExecutableStructure(source)
+  const loopStart = /\bfor\s*\([^)]*\bof\s+priorities\s*\)\s*\{/g
+  return Array.from(structure.matchAll(loopStart), (match) => {
+    const openingBrace = match.index + match[0].lastIndexOf('{')
+    const closingBrace = closingBraceIndex(structure, openingBrace)
+    const body = closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
+    return markStrictHighPriorityComparisons(body)
+  }).join('\n')
+}
+
 /** Additional intermediate exercises. The original loop/grid challenge remains first for every language. */
 export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
   {
@@ -162,7 +244,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · JavaScript Priority Count', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\n\n// Count the high-priority requests.\n\nconsole.log(`High priority: ${highCount}`)\n' }] },
     checks: [
       { filePath: 'main.js', label: 'Loop over priorities', pattern: /\bfor\s*\([^)]*\bof\s+priorities\s*\)/, ignoreStrings: true },
-      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===\s*HIGH_PRIORITY_LITERAL[\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/, scope: markStrictHighPriorityComparisons, ignoreStrings: true },
+      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===\s*HIGH_PRIORITY_LITERAL[\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/, scope: strictHighPriorityLoopBodies, ignoreStrings: true },
     ],
     expectedOutput: 'High priority: 2',
   },
