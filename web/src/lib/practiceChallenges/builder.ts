@@ -1,5 +1,6 @@
 import type { PracticeChallenge } from '../practiceLab'
 
+/** Reports whether an element or one of its ancestors is explicitly hidden. */
 function isObviouslyHidden(element: Element) {
   let current: Element | null = element
   while (current) {
@@ -15,6 +16,7 @@ function isObviouslyHidden(element: Element) {
   return false
 }
 
+/** Collects rendered descendant text while excluding hidden and non-rendered elements. */
 function visibleTextContent(element: Element): string {
   return Array.from(element.childNodes).map((node) => {
     if (node.nodeType === 3) return node.textContent ?? ''
@@ -25,6 +27,7 @@ function visibleTextContent(element: Element): string {
   }).join('')
 }
 
+/** Finds the closing brace paired with an opening brace while respecting quoted text. */
 function closingBraceIndex(source: string, openingBrace: number) {
   let depth = 1
   let quote: string | null = null
@@ -45,6 +48,7 @@ function closingBraceIndex(source: string, openingBrace: number) {
   return -1
 }
 
+/** Returns the text inside a balanced pair of braces. */
 function extractBracedBody(source: string, openingBrace: number) {
   const closingBrace = closingBraceIndex(source, openingBrace)
   return closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
@@ -52,6 +56,7 @@ function extractBracedBody(source: string, openingBrace: number) {
 
 const MIN_WIDTH_MEDIA_START = /@media\b(?![^{}]*\bnot\b)[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
 
+/** Collects the bodies of non-negated min-width media queries. */
 function minWidthMediaBodies(source: string) {
   const mediaStart = new RegExp(MIN_WIDTH_MEDIA_START)
   return Array.from(source.matchAll(mediaStart), (match) => (
@@ -59,6 +64,7 @@ function minWidthMediaBodies(source: string) {
   )).join('\n')
 }
 
+/** Removes min-width media blocks so default styles can be checked independently. */
 function withoutMinWidthMediaBlocks(source: string) {
   const mediaStart = new RegExp(MIN_WIDTH_MEDIA_START)
   const ranges = Array.from(source.matchAll(mediaStart), (match) => {
@@ -71,6 +77,7 @@ function withoutMinWidthMediaBlocks(source: string) {
   ), source)
 }
 
+/** Removes formatter signatures so only genuine call sites satisfy invocation checks. */
 function withoutFormatNameDeclaration(source: string) {
   return source
     .replace(/^\s*def\s+format_name\s*\(\s*name\s*\)\s*:?.*$/gm, '')
@@ -78,10 +85,12 @@ function withoutFormatNameDeclaration(source: string) {
     .replace(/\bstatic\s+String\s+formatName\s*\(\s*String\s+name\s*\)/g, '')
 }
 
+/** Replaces the required strict comparison literal with a marker that survives string masking. */
 function markStrictHighPriorityComparisons(source: string) {
   return source.replace(/(\bpriority\s*===\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
 }
 
+/** Preserves executable JavaScript structure while masking strings and regular expressions. */
 function javascriptExecutableStructure(source: string) {
   const structure = source.split('')
   const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
@@ -153,6 +162,7 @@ function javascriptExecutableStructure(source: string) {
   return structure.join('')
 }
 
+/** Returns executable bodies from real for-of loops over priorities. */
 function strictHighPriorityLoopBodies(source: string) {
   const structure = javascriptExecutableStructure(source)
   const loopStart = /\bfor\s*\([^)]*\bof\s+priorities\s*\)\s*\{/g
@@ -160,7 +170,7 @@ function strictHighPriorityLoopBodies(source: string) {
     const openingBrace = match.index + match[0].lastIndexOf('{')
     const closingBrace = closingBraceIndex(structure, openingBrace)
     const body = closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
-    return markStrictHighPriorityComparisons(body)
+    return javascriptExecutableStructure(markStrictHighPriorityComparisons(body))
   }).join('\n')
 }
 
