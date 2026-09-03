@@ -2270,6 +2270,108 @@ button.context-chip.active,
   width: min(320px, 100%);
 }
 
+.practice-tier-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.practice-tier-progress button {
+  min-width: 0;
+  min-height: 64px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem 0.2rem 0.75rem 0.2rem;
+  text-align: left;
+}
+
+.practice-tier-progress button.active {
+  border-color: color-mix(in srgb, var(--lagoon) 65%, var(--line));
+  background: color-mix(in srgb, var(--lagoon) 10%, var(--paper));
+  color: var(--ink);
+}
+
+.practice-tier-progress button > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.practice-tier-progress small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.practice-tier-progress progress {
+  width: 100%;
+  height: 0.35rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 72%, transparent);
+  accent-color: var(--lagoon);
+}
+
+.practice-tier-progress progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.practice-tier-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--lagoon);
+}
+
+.practice-filter-row {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px dashed var(--line);
+}
+
+.practice-filter-row fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.practice-filter-row legend {
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.practice-filter-row fieldset > div {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.1rem 0.1rem 0.2rem;
+  scrollbar-width: thin;
+}
+
+.practice-filter-row button {
+  min-height: 38px;
+  flex: 0 0 auto;
+  padding: 0.45rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+
+.practice-filter-row button.active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .practice-challenge-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2295,6 +2397,11 @@ button.context-chip.active,
   box-shadow: inset 0 4px 0 color-mix(in srgb, var(--lagoon) 70%, transparent);
 }
 
+.practice-challenge-card.current {
+  border-color: var(--brand);
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--gold) 62%, transparent);
+}
+
 .practice-card-topline {
   display: flex;
   align-items: center;
@@ -2309,7 +2416,8 @@ button.context-chip.active,
 }
 
 .practice-difficulty,
-.practice-complete {
+.practice-complete,
+.practice-current {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.23rem 0.45rem;
@@ -2326,6 +2434,16 @@ button.context-chip.active,
   margin-left: auto;
   border-color: color-mix(in srgb, var(--lagoon) 45%, var(--line));
   color: var(--lagoon);
+}
+
+.practice-current {
+  margin-left: auto;
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--line));
+  color: var(--brand);
+}
+
+.practice-complete + .practice-current {
+  margin-left: 0;
 }
 
 .practice-challenge-card h3 {
@@ -2375,6 +2493,11 @@ button.context-chip.active,
 .practice-empty h3 {
   margin: 0;
   color: var(--ink);
+}
+
+.practice-empty p {
+  margin: 0;
+  text-align: center;
 }
 
 .practice-session {
@@ -2534,6 +2657,40 @@ button.context-chip.active,
   color: var(--ink);
 }
 
+.practice-next-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed color-mix(in srgb, var(--lagoon) 45%, var(--line));
+}
+
+.practice-next-step > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.practice-next-step span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.practice-next-step strong {
+  overflow-wrap: anywhere;
+}
+
+.practice-next-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+}
+
 .practice-check-row {
   grid-column: 1 / -1;
   display: flex;
@@ -2559,6 +2716,10 @@ button.context-chip.active,
 .app-shell[data-theme="dark"] .practice-language-tabs button.active {
   background: #f5efe7;
   color: #14110f;
+}
+
+.app-shell[data-theme="dark"] .practice-session-actions button.ghost {
+  color: var(--muted);
 }
 
 .learning-sidecar {
@@ -2752,6 +2913,12 @@ button.context-chip.active,
 
 .learning-sidecar .practice-lab-toolbar .guide-search {
   width: 100%;
+}
+
+.learning-sidecar .practice-filter-row {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
 .learning-sidecar .practice-challenge-grid {
@@ -3967,6 +4134,25 @@ button.context-chip.active,
     width: 100%;
   }
 
+  .practice-tier-progress {
+    gap: 0.45rem;
+  }
+
+  .practice-tier-progress button {
+    min-height: 68px;
+    padding: 0.55rem;
+  }
+
+  .practice-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .practice-filter-row button {
+    min-height: 44px;
+  }
+
   .practice-challenge-grid {
     grid-template-columns: 1fr;
   }
@@ -4005,6 +4191,16 @@ button.context-chip.active,
   }
 
   .practice-check-row button {
+    width: 100%;
+  }
+
+  .practice-next-step,
+  .practice-next-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .practice-next-actions button {
     width: 100%;
   }
 

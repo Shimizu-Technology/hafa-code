@@ -7,7 +7,7 @@ import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
 import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
 import { practiceChallengeById } from './lib/practiceLab'
-import { completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
+import { completePracticeChallenge, completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
 import { createConflictCopy } from './lib/projectStorage'
 import type { ProjectLibrary } from './lib/projectStorage'
 import type { RunnerOutcome } from './lib/runnerOutcome'
@@ -210,6 +210,96 @@ describe('App language guide practice projects', () => {
     })
     expect(practiceChallengeIdForProject(practiceProject.id)).toBe(challenge.id)
     expect(screen.getByRole('heading', { name: challenge.title })).toBeTruthy()
+  })
+
+  it('starts the next unfinished challenge directly after a passing result', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success',
+      stdout: 'Hafa adai, Lina!\nLessons: 4\n',
+      stderr: '',
+      durationMs: 12,
+    }))
+
+    expect(screen.getByText('Up next · Builder')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Next challenge' }))
+
+    await waitFor(() => expect(storedLibrary().projects).toHaveLength(3))
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Practice · Ruby Loop')
+    expect(screen.getByRole('heading', { name: 'Count the stops' })).toBeTruthy()
+  })
+
+  it('skips completed challenges and returns to the highlighted recommendation in the lab', async () => {
+    const user = userEvent.setup()
+    completePracticeChallenge('ruby-loop-stops')
+    const { container } = render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success', stdout: 'Hafa adai, Lina!\nLessons: 4\n', stderr: '', durationMs: 12,
+    }))
+
+    expect(screen.getByText('Up next · Stretch')).toBeTruthy()
+    expect(screen.getByText('Make a launch check')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
+
+    const practicePanel = screen.getByRole('tabpanel', { name: 'Practice lab' })
+    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/3/ }).getAttribute('aria-current')).toBe('page')
+    expect(within(practicePanel).getByText('Your place')).toBeTruthy()
+    expect(container.querySelector('[data-practice-challenge-id="ruby-method-condition"]')?.classList.contains('current')).toBe(true)
+  })
+
+  it('wraps from the last challenge to an unfinished earlier challenge', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[2])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'def launch_status(tests_passing)\n  if tests_passing\n    "Ready to ship"\n  else\n    "Keep working"\n  end\nend\n\nputs launch_status(true)\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success', stdout: 'Ready to ship\n', stderr: '', durationMs: 12,
+    }))
+
+    expect(screen.getByText('Up next · Starter')).toBeTruthy()
+    expect(screen.getByText('Build a greeting')).toBeTruthy()
+  })
+
+  it('shows the language-complete fallback after the final unfinished challenge', async () => {
+    const user = userEvent.setup()
+    completePracticeChallenge('ruby-loop-stops')
+    completePracticeChallenge('ruby-method-condition')
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success', stdout: 'Hafa adai, Lina!\nLessons: 4\n', stderr: '', durationMs: 12,
+    }))
+
+    expect(screen.getByText('Language complete')).toBeTruthy()
+    expect(screen.getByText('You finished every ruby challenge.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Next challenge' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Explore Practice Lab' })).toBeTruthy()
   })
 
   it('ignores a delayed practice result after the learner switches projects', async () => {

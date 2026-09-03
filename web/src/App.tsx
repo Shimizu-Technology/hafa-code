@@ -65,7 +65,7 @@ import { ProjectSidebar } from './components/ProjectSidebar'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
 import type { LanguageGuideTopic } from './lib/languageGuides'
-import { evaluatePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
+import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -173,6 +173,7 @@ export default function App() {
   const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
   const [practiceChecking, setPracticeChecking] = useState(false)
   const [completedPracticeIds, setCompletedPracticeIds] = useState(() => completedPracticeChallengeIds())
+  const [practiceLabFocusChallengeId, setPracticeLabFocusChallengeId] = useState<string | null>(null)
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
@@ -212,6 +213,12 @@ export default function App() {
     setLearningSidecarOpen(true)
   }, [project.kind])
   const openPracticeLab = useCallback(() => {
+    setPracticeLabFocusChallengeId(null)
+    setLearningTab('practice')
+    setLearningSidecarOpen(true)
+  }, [])
+  const openPracticeLabAtChallenge = useCallback((challengeId: string) => {
+    setPracticeLabFocusChallengeId(challengeId)
     setLearningTab('practice')
     setLearningSidecarOpen(true)
   }, [])
@@ -238,6 +245,9 @@ export default function App() {
     () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
     [project.id],
   )
+  const nextPracticeChallenge = currentPracticeChallenge && practiceResult?.passed
+    ? nextIncompletePracticeChallenge(currentPracticeChallenge, new Set([...completedPracticeIds, currentPracticeChallenge.id]))
+    : null
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
@@ -1938,9 +1948,13 @@ export default function App() {
                 challenge={currentPracticeChallenge}
                 checking={practiceChecking}
                 completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
+                nextChallenge={nextPracticeChallenge}
                 result={practiceResult}
                 onCheck={checkPracticeWork}
-                onOpenLab={openPracticeLab}
+                onOpenLab={() => openPracticeLabAtChallenge(nextPracticeChallenge?.id ?? currentPracticeChallenge.id)}
+                onStartNext={() => {
+                  if (nextPracticeChallenge) startPracticeChallenge(nextPracticeChallenge)
+                }}
               />
             )}
 
@@ -1973,6 +1987,7 @@ export default function App() {
           activeTab={learningTab}
           coachContext={learningCoachContext}
           completedChallengeIds={completedPracticeIds}
+          focusChallengeId={practiceLabFocusChallengeId}
           guideKind={languageGuideKind}
           guideNavigationRevision={guideNavigationRevision}
           guideTopicId={languageGuideTopicId}

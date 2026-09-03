@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { practiceChallengeById } from '../lib/practiceLab'
@@ -40,6 +40,53 @@ describe('PracticeLab', () => {
     expect(screen.queryByRole('heading', { name: 'Build a profile card' })).toBeNull()
   })
 
+  it('filters by difficulty and completion status while showing level progress', async () => {
+    const user = userEvent.setup()
+    render(<PracticeLab completedChallengeIds={['java-variables-greeting']} initialKind="java" open onClose={vi.fn()} onStartChallenge={vi.fn()} />)
+
+    expect(screen.getByRole('progressbar', { name: '1 of 1 Starter challenges complete' })).toBeTruthy()
+    const filters = screen.getByLabelText('Challenge filters')
+    await user.click(within(filters).getByRole('button', { name: 'Builder' }))
+    expect(screen.getByRole('heading', { name: 'Count the stops' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Build a greeting' })).toBeNull()
+
+    const difficultyFilters = screen.getByText('Difficulty').closest('fieldset')!
+    await user.click(within(difficultyFilters).getByRole('button', { name: 'All' }))
+    await user.click(within(filters).getByRole('button', { name: 'Completed' }))
+    expect(screen.getByRole('heading', { name: 'Build a greeting' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Count the stops' })).toBeNull()
+  })
+
+  it('returns to a highlighted challenge in its language', () => {
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+
+    try {
+      const { container } = render(
+        <PracticeLab
+          completedChallengeIds={['java-variables-greeting']}
+          focusChallengeId="java-loop-stops"
+          initialKind="ruby"
+          open
+          onClose={vi.fn()}
+          onStartChallenge={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByRole('button', { name: /Java 1\/3/i }).getAttribute('aria-current')).toBe('page')
+      expect(container.querySelector('[data-practice-challenge-id="java-loop-stops"]')?.classList.contains('current')).toBe(true)
+      expect(screen.getByText('Your place')).toBeTruthy()
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: originalScrollIntoView })
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+      }
+    }
+  })
+
   it('follows a changed initial language without requiring a remount', () => {
     const props = { completedChallengeIds: [], open: true, onClose: vi.fn(), onStartChallenge: vi.fn() }
     const { rerender } = render(<PracticeLab {...props} initialKind="ruby" />)
@@ -56,7 +103,7 @@ describe('PracticeLab', () => {
 
     await user.type(screen.getByRole('searchbox'), 'not-a-real-concept')
     expect(screen.getByRole('heading', { name: /no challenges match/i })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(3)
     await user.keyboard('{Escape}')
 
@@ -96,6 +143,8 @@ describe('PracticeSessionPanel', () => {
         }}
         onCheck={onCheck}
         onOpenLab={vi.fn()}
+        nextChallenge={null}
+        onStartNext={vi.fn()}
       />,
     )
 
@@ -106,5 +155,30 @@ describe('PracticeSessionPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Check my work' }))
     expect(onCheck).toHaveBeenCalledOnce()
+  })
+
+  it('offers the next challenge and a route back to the lab after completion', async () => {
+    const user = userEvent.setup()
+    const onOpenLab = vi.fn()
+    const onStartNext = vi.fn()
+    render(
+      <PracticeSessionPanel
+        challenge={practiceChallengeById('java-variables-greeting')!}
+        checking={false}
+        completed
+        nextChallenge={practiceChallengeById('java-loop-stops')!}
+        result={{ passed: true, checks: [{ label: 'Set the name variable to Lina', passed: true }] }}
+        onCheck={vi.fn()}
+        onOpenLab={onOpenLab}
+        onStartNext={onStartNext}
+      />,
+    )
+
+    expect(screen.getByText('Up next · Builder')).toBeTruthy()
+    expect(screen.getByText('Count the stops')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Next challenge' }))
+    await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
+    expect(onStartNext).toHaveBeenCalledOnce()
+    expect(onOpenLab).toHaveBeenCalledOnce()
   })
 })
