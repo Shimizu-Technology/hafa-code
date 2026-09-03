@@ -94,6 +94,29 @@ describe('practice challenge catalog', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('requires the Web email label to be visible', () => {
+    const challenge = practiceChallengeById('web-accessible-email')!
+    const checkLabel = 'Connect a visible label to the field'
+    const labelPassed = (markup: string) => evaluatePracticeChallenge(challenge, [
+      { path: 'index.html', language: 'html', content: markup },
+    ]).checks.find((check) => check.label === checkLabel)?.passed
+
+    expect(labelPassed('<label for="email" hidden>Email</label><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email" aria-hidden="true">Email</label><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email">Email</label><input id="email" name="email" type="email">')).toBe(true)
+  })
+
+  it('does not mistake background-color for an action foreground color', () => {
+    const challenge = practiceChallengeById('web-style-action')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.action { background-color: #176b78; padding: 1rem; }',
+    }])
+
+    expect(result.checks.find((check) => check.label === 'Set the action text color')?.passed).toBe(false)
+  })
+
   it('checks both Java syntax requirements and normalized runtime output', () => {
     const challenge = practiceChallengeById('java-variables-greeting')!
     const files = [{

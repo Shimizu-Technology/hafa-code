@@ -244,7 +244,13 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Accessible Email Field', entryPath: 'index.html', files: [{ path: 'index.html', language: 'html', content: '<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Updates</title></head>\n<body><main><h1>Get community updates</h1><form><!-- Add the labeled email field here. --><button>Sign up</button></form></main></body>\n</html>\n' }] },
     checks: [
       { filePath: 'index.html', label: 'Add the email input', domCheck: (document) => Boolean(document.querySelector('input#email[type="email"][name="email"]')) },
-      { filePath: 'index.html', label: 'Connect a visible label to the field', domCheck: (document) => Boolean(document.querySelector('label[for="email"]')?.textContent?.trim()) },
+      { filePath: 'index.html', label: 'Connect a visible label to the field', domCheck: (document) => (
+        Array.from(document.querySelectorAll('label[for="email"]')).some((label) => (
+          !label.hasAttribute('hidden')
+          && label.getAttribute('aria-hidden')?.toLowerCase() !== 'true'
+          && Boolean(label.textContent?.trim())
+        ))
+      ) },
     ],
   },
   {
@@ -261,7 +267,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
       { filePath: 'style.css', label: 'Target the action class', pattern: /\.action\s*\{[^}]*\}/i },
       { filePath: 'style.css', label: 'Add an action background', pattern: /\.action\s*\{[^}]*(?:background|background-color)\s*:\s*(?!transparent\b|none\b)[^;}]+[;}]/i },
       { filePath: 'style.css', label: 'Add space inside the action', pattern: /\.action\s*\{[^}]*padding\s*:\s*(?:0*\.(?:\d*[1-9]\d*)|[1-9]\d*(?:\.\d+)?)(?:px|rem|em|%|vw|vh|ch)(?:\s+[^;}]+)?[;}]/i },
-      { filePath: 'style.css', label: 'Set the action text color', pattern: /\.action\s*\{[^}]*\bcolor\s*:\s*[^;}]+[;}]/i },
+      { filePath: 'style.css', label: 'Set the action text color', pattern: /\.action\s*\{(?:[^;}]+;\s*)*color\s*:\s*[^;}]+[;}]/i },
     ],
   },
   {
