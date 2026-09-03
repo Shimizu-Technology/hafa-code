@@ -763,6 +763,7 @@ export default function App() {
       return
     }
 
+    window.dispatchEvent(new Event('hafa-code-cancel-active-run'))
     const checkToken = crypto.randomUUID()
     pendingPracticeCheckRef.current = {
       token: checkToken,

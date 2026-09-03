@@ -64,6 +64,17 @@ describe('practice challenge catalog', () => {
     expect(result.checks.find((check) => check.label === 'Add the View work link')?.passed).toBe(false)
   })
 
+  it('does not treat markup inside a textarea as semantic page elements', () => {
+    const challenge = practiceChallengeById('web-semantic-profile')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<textarea><main><h1>Lina</h1><a href="/work">View work</a></main></textarea>',
+    }])
+
+    expect(result.checks.every((check) => !check.passed)).toBe(true)
+  })
+
   it('requires counter updates to happen inside the registered click handler', () => {
     const challenge = practiceChallengeById('web-click-counter')!
     const disconnectedSource = 'button.addEventListener("click", () => {})\ncount += 1\noutput.textContent = count\n'

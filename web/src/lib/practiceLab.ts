@@ -6,7 +6,8 @@ export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 export interface PracticeFileCheck {
   filePath: string
   label: string
-  pattern: RegExp
+  pattern?: RegExp
+  domCheck?: (document: Document) => boolean
   scope?: (source: string) => string
   ignoreStrings?: boolean
 }
@@ -197,9 +198,9 @@ const webChallenges: PracticeChallenge[] = [
       { path: 'style.css', language: 'css', content: 'body {\n  margin: 0;\n  min-height: 100vh;\n  display: grid;\n  place-items: center;\n  font-family: system-ui, sans-serif;\n  background: #f7f0e5;\n}\n\nmain {\n  max-width: 24rem;\n  padding: 2rem;\n  border: 2px solid #14110f;\n}\n' },
     ] },
     checks: [
-      { filePath: 'index.html', label: 'Use a main element', pattern: /<main(?:\s|>)/i },
-      { filePath: 'index.html', label: 'Add Lina as the main heading', pattern: /<h1(?:\s[^>]*)?>[^<]*Lina[^<]*<\/h1>/i },
-      { filePath: 'index.html', label: 'Add the View work link', pattern: /<a(?=[^>]*\bhref\s*=\s*["'][^"']+["'])[^>]*>[^<]*View work[^<]*<\/a>/i },
+      { filePath: 'index.html', label: 'Use a main element', domCheck: (document) => Boolean(document.querySelector('main')) },
+      { filePath: 'index.html', label: 'Add Lina as the main heading', domCheck: (document) => Boolean(document.querySelector('main h1')?.textContent?.includes('Lina')) },
+      { filePath: 'index.html', label: 'Add the View work link', domCheck: (document) => Array.from(document.querySelectorAll('main a[href]')).some((anchor) => Boolean(anchor.getAttribute('href')?.trim()) && Boolean(anchor.textContent?.includes('View work'))) },
     ],
   },
   {
@@ -387,12 +388,18 @@ function normalizeOutput(output: string) {
 
 /** Checks source requirements first, then runtime output when the challenge has an executable result. */
 export function evaluatePracticeChallenge(challenge: PracticeChallenge, files: ProjectFile[], outcome?: RunnerOutcome): PracticeCheckResult {
+  const parsedHtml = new Map<string, Document>()
   const checks = challenge.checks.map((check) => {
     const file = files.find((candidate) => candidate.path === check.filePath)
+    if (file && check.domCheck) {
+      const document = parsedHtml.get(file.path) ?? new DOMParser().parseFromString(file.content, 'text/html')
+      parsedHtml.set(file.path, document)
+      return { label: check.label, passed: check.domCheck(document) }
+    }
     const commentFreeSource = file ? sourceWithoutComments(file) : ''
     const scopedSource = check.scope ? check.scope(commentFreeSource) : commentFreeSource
     const source = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
-    return { label: check.label, passed: Boolean(file && check.pattern.test(source)) }
+    return { label: check.label, passed: Boolean(file && check.pattern?.test(source)) }
   })
 
   if (challenge.expectedOutput !== undefined) {

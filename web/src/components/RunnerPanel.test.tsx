@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition } from '../lib/codeRunner'
@@ -72,6 +72,7 @@ describe('RunnerPanel', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -145,6 +146,26 @@ describe('RunnerPanel', () => {
 
     unmount()
     act(() => vi.advanceTimersByTime(0))
+  })
+
+  it('cancels the active run before an external workflow starts its replacement', () => {
+    const onRunCancel = vi.fn()
+    const onRunComplete = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunCancel={onRunCancel} onRunComplete={onRunComplete} />)
+
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances[0]
+    const run = worker.messages.find((message) => message.type === 'run')
+    if (!run || run.type !== 'run') throw new Error('Expected a run request')
+
+    act(() => window.dispatchEvent(new Event('hafa-code-cancel-active-run')))
+
+    expect(onRunCancel).toHaveBeenCalledOnce()
+    expect(worker.messages).toContainEqual({ id: run.id, type: 'abort' })
+    expect(worker.onmessage).toBeNull()
+    expect(worker.onerror).toBeNull()
+    act(() => worker.respond({ id: run.id, type: 'result', stdout: 'Stale run\n', stderr: '', durationMs: 5 }))
+    expect(onRunComplete).not.toHaveBeenCalled()
   })
 
   it('uses Java-specific timing and trusts its exit code instead of treating stderr as failure', () => {
@@ -254,6 +275,30 @@ describe('RunnerPanel', () => {
     })
     expect(worker.onmessage).toBeNull()
     expect(worker.onerror).toBeNull()
+  })
+
+  it('preserves streamed output when the final result omits its payload', () => {
+    const onRunComplete = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
+
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances.at(-1)!
+    const run = worker.messages.find((message) => message.type === 'run')
+    if (!run || run.type !== 'run') throw new Error('Expected a run request')
+    act(() => {
+      worker.respond({ id: run.id, type: 'started' })
+      worker.respond({ id: run.id, type: 'output', stream: 'stdout', text: 'Streamed result\n' })
+      worker.respond({ id: run.id, type: 'result', stdout: '', stderr: '', exitCode: 0, durationMs: 18 })
+    })
+
+    expect(screen.getAllByText('Streamed result')).toHaveLength(1)
+    expect(onRunComplete).toHaveBeenCalledOnce()
+    expect(onRunComplete).toHaveBeenCalledWith({
+      status: 'success',
+      stdout: 'Streamed result\n',
+      stderr: '',
+      durationMs: 18,
+    })
   })
 
   it('reports an unexpected worker error exactly once', () => {

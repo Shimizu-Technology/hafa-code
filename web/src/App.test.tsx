@@ -17,11 +17,16 @@ vi.mock('@monaco-editor/react', () => ({
 }))
 
 const runnerHarness = vi.hoisted(() => ({
+  onRunCancel: undefined as undefined | (() => void),
   onRunComplete: undefined as undefined | ((outcome: RunnerOutcome) => void),
 }))
 
 vi.mock('./components/RunnerPanel', () => ({
-  RunnerPanel: ({ onRunComplete }: { onRunComplete?: typeof runnerHarness.onRunComplete }) => {
+  RunnerPanel: ({ onRunCancel, onRunComplete }: {
+    onRunCancel?: typeof runnerHarness.onRunCancel
+    onRunComplete?: typeof runnerHarness.onRunComplete
+  }) => {
+    runnerHarness.onRunCancel = onRunCancel
     runnerHarness.onRunComplete = onRunComplete
     return <section aria-label="Test runner" />
   },
@@ -36,6 +41,7 @@ function storedLibrary() {
 describe('App language guide practice projects', () => {
   beforeEach(() => {
     localStorage.clear()
+    runnerHarness.onRunCancel = undefined
     runnerHarness.onRunComplete = undefined
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
       configurable: true,
@@ -159,6 +165,33 @@ describe('App language guide practice projects', () => {
     }))
 
     expect(screen.getByText('Challenge complete')).toBeTruthy()
+  })
+
+  it('keeps a new practice check pending after cancelling an older run', async () => {
+    const user = userEvent.setup()
+    const relayRunnerCancellation = () => runnerHarness.onRunCancel?.()
+    window.addEventListener('hafa-code-cancel-active-run', relayRunnerCancellation)
+
+    try {
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+      await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+      fireEvent.change(screen.getByLabelText('Code editor'), {
+        target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Check my work' }))
+      act(() => runnerHarness.onRunComplete?.({
+        status: 'success',
+        stdout: 'Hafa adai, Lina!\nLessons: 4\n',
+        stderr: '',
+        durationMs: 12,
+      }))
+
+      expect(screen.getByText('Challenge complete')).toBeTruthy()
+    } finally {
+      window.removeEventListener('hafa-code-cancel-active-run', relayRunnerCancellation)
+    }
   })
 
   it('restores the challenge panel for a practice conflict copy', async () => {
