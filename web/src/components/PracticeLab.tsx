@@ -3,9 +3,9 @@ import { ArrowRight, Check, Dumbbell, Search, X } from 'lucide-react'
 import { useModalFocus } from '../hooks/useModalFocus'
 import { PROJECT_KINDS, projectKindDefinition, type ProjectKind } from '../lib/codeRunner'
 import {
-  PRACTICE_CHALLENGES,
   PRACTICE_DIFFICULTIES,
   practiceChallengeById,
+  practiceChallengesFor,
   type PracticeChallenge,
   type PracticeDifficulty,
 } from '../lib/practiceLab'
@@ -46,15 +46,14 @@ export function PracticeLabContent({ completedChallengeIds, focusChallengeId, in
   const completed = useMemo(() => new Set(completedChallengeIds), [completedChallengeIds])
   const visibleChallenges = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    return PRACTICE_CHALLENGES.filter((challenge) => (
-      challenge.kind === selectedKind
-      && (difficulty === 'All' || challenge.difficulty === difficulty)
+    return practiceChallengesFor(selectedKind).filter((challenge) => (
+      (difficulty === 'All' || challenge.difficulty === difficulty)
       && (status === 'All' || (status === 'Completed') === completed.has(challenge.id))
       && (!normalizedQuery || [challenge.title, challenge.summary, ...challenge.concepts].join(' ').toLowerCase().includes(normalizedQuery))
     ))
   }, [completed, difficulty, query, selectedKind, status])
 
-  const languageChallenges = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === selectedKind)
+  const languageChallenges = practiceChallengesFor(selectedKind)
   const languageCompletedCount = languageChallenges.filter((challenge) => completed.has(challenge.id)).length
 
   useEffect(() => {
@@ -70,7 +69,7 @@ export function PracticeLabContent({ completedChallengeIds, focusChallengeId, in
         <div className="practice-lab-body practice-content">
           <nav className="practice-language-tabs" aria-label="Practice languages">
             {PROJECT_KINDS.map((kind) => {
-              const kindChallenges = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === kind)
+              const kindChallenges = practiceChallengesFor(kind)
               const count = kindChallenges.filter((challenge) => completed.has(challenge.id)).length
               return (
                 <button
