@@ -62,11 +62,20 @@ const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
   ],
 }
 
+export function errorCoachGuideTopicIds(kind: ProjectKind) {
+  const topics = [
+    basicsTopic[kind],
+    ...(kind === 'web' ? [] : [loopsTopic[kind]]),
+    ...(sharedRules[kind] ?? []).map((rule) => rule.topic),
+  ]
+  return [...new Set(topics)]
+}
+
 function errorLocation(message: string, entryPath: string) {
   const candidates = [
     /File ["']([^"']+)["'], line (\d+)/,
-    /([^\s():]+\.(?:java|rb|js|py)):(\d+)(?::\d+)?/,
-    /\(([^\s():]+\.(?:java|rb|js|py)):(\d+)(?::\d+)?\)/,
+    /([^\s():]+\.(?:java|rb|js|py|html)):(\d+)(?::\d+)?/,
+    /\(([^\s():]+\.(?:java|rb|js|py|html)):(\d+)(?::\d+)?\)/,
   ]
   for (const pattern of candidates) {
     const match = pattern.exec(message)

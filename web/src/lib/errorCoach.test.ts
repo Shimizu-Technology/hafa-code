@@ -24,6 +24,11 @@ describe('contextual error coach', () => {
     expect(advice).toMatchObject({ title: 'The program kept running too long', guideTopicId: 'java-loops' })
   })
 
+  it('retains HTML line context for inline browser errors', () => {
+    const advice = coachRunnerError('web', 'index.html', failure('ReferenceError: total is not defined\n    at index.html:12:4'))
+    expect(advice?.location).toBe('index.html · line 12')
+  })
+
   it('stays out of the way after successful or manually stopped runs', () => {
     expect(coachRunnerError('python', 'main.py', { status: 'success', stdout: 'ok', stderr: '', durationMs: 1 })).toBeNull()
     expect(coachRunnerError('python', 'main.py', { status: 'stopped', stdout: '', stderr: 'Execution stopped.', durationMs: 1 })).toBeNull()

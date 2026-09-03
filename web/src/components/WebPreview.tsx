@@ -8,6 +8,8 @@ interface PreviewConsoleMessage {
   source: 'hafa-code-preview-console'
   level: 'log' | 'warn' | 'error'
   message: string
+  path?: string
+  line?: number
 }
 
 function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['level'] {
@@ -23,9 +25,11 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
   const previewIsStale = draftPreview !== renderedPreview
   const latestError = [...consoleMessages].reverse().find((message) => message.level === 'error')
-  const scriptPath = files.find((file) => file.language === 'javascript')?.path ?? entryPath
-  const errorAdvice = latestError ? coachRunnerError('web', scriptPath, {
-    status: 'error', stdout: '', stderr: latestError.message, durationMs: 0,
+  const errorDetail = latestError?.path
+    ? `${latestError.message}\n${latestError.path}${latestError.line ? `:${latestError.line}` : ''}`
+    : latestError?.message ?? ''
+  const errorAdvice = latestError ? coachRunnerError('web', entryPath, {
+    status: 'error', stdout: '', stderr: errorDetail, durationMs: 0,
   }) : null
 
   const sendPreviewToFrame = useCallback((html: string) => {
@@ -55,6 +59,9 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
         source: 'hafa-code-preview-console',
         level,
         message: String(message.message),
+        ...(typeof message.path === 'string' && files.some((file) => file.path === message.path)
+          ? { path: message.path, ...(Number.isInteger(message.line) && Number(message.line) > 0 ? { line: Number(message.line) } : {}) }
+          : {}),
       }
       setConsoleMessages((current) => [
         ...current,
@@ -67,7 +74,7 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
       source: 'hafa-code-preview-update',
       html: renderedPreview,
     })
-  }, [renderedPreview])
+  }, [files, renderedPreview])
 
   useEffect(() => {
     const handlePreviewConnect = (event: MessageEvent) => {
