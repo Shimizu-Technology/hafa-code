@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
+import type { ErrorCoachContext } from '../lib/errorCoach'
 import { formatFileLanguage, languageForFile } from '../lib/workspace'
 import { RunnerPanel } from './RunnerPanel'
 import { WebPreview } from './WebPreview'
@@ -32,8 +33,8 @@ type EditorWorkspaceProps = {
   onDuplicateFile: (file: ProjectFile) => void
   onEditorExpandedChange: (expanded: boolean) => void
   onOpenGuide: () => void
-  onOpenGuideTopic?: (topicId: string) => void
   onOpenPractice: () => void
+  onErrorAdviceChange?: (context: ErrorCoachContext) => void
   onRenameFile: (file: ProjectFile) => void
   onRunFromMobileCode: () => void
   onSelectFile: (path: string) => void
@@ -56,8 +57,8 @@ export function EditorWorkspace({
   onDuplicateFile,
   onEditorExpandedChange,
   onOpenGuide,
-  onOpenGuideTopic = onOpenGuide,
   onOpenPractice,
+  onErrorAdviceChange,
   onRenameFile,
   onRunFromMobileCode,
   onSelectFile,
@@ -162,8 +163,8 @@ export function EditorWorkspace({
       </section>
 
       {project.kind === 'web'
-        ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onOpenGuideTopic={onOpenGuideTopic} />
-        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onOpenGuideTopic={onOpenGuideTopic} />}
+        ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onErrorAdviceChange={onErrorAdviceChange} />
+        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
     </div>
   )
 }

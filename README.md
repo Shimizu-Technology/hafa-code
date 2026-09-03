@@ -11,6 +11,7 @@ A lightweight alternative to Replit focused on the languages CSG actually teache
 - Python projects powered by a self-hosted Pyodide runtime in a Web Worker
 - Java 8 projects compiled and run through CheerpJ in a Web Worker
 - HTML/CSS/JS projects with a sandboxed live preview
+- A dockable learning sidecar with per-language syntax guides, practice challenges, and contextual error coaching
 - Save, fork, share, and remix beginner-friendly projects
 - Optional Clerk sign-in with Rails-backed cloud projects
 

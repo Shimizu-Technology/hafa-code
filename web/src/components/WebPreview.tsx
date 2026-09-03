@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { buildHtmlPreview, type ProjectFile } from '../lib/codeRunner'
-import { coachRunnerError } from '../lib/errorCoach'
-import { ErrorCoach } from './ErrorCoach'
+import { coachRunnerError, type ErrorCoachContext } from '../lib/errorCoach'
 
 interface PreviewConsoleMessage {
   source: 'hafa-code-preview-console'
@@ -16,7 +15,7 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
   return level === 'log' || level === 'warn' || level === 'error'
 }
 
-export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { files: ProjectFile[]; entryPath: string; onOpenGuideTopic?: (topicId: string) => void }) {
+export function WebPreview({ files, entryPath, onErrorAdviceChange }: { files: ProjectFile[]; entryPath: string; onErrorAdviceChange?: (context: ErrorCoachContext) => void }) {
   const draftPreview = useMemo(() => buildHtmlPreview(files, entryPath), [entryPath, files])
   const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -25,10 +24,17 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
   const previewIsStale = draftPreview !== renderedPreview
-  const latestError = [...consoleMessages].reverse().find((message) => message.level === 'error')
-  const errorAdvice = latestError ? coachRunnerError('web', entryPath, {
+  const latestError = useMemo(
+    () => [...consoleMessages].reverse().find((message) => message.level === 'error'),
+    [consoleMessages],
+  )
+  const errorAdvice = useMemo(() => latestError ? coachRunnerError('web', entryPath, {
     status: 'error', stdout: '', stderr: latestError.message, durationMs: 0,
-  }, latestError.path ? { path: latestError.path, ...(latestError.line ? { line: latestError.line } : {}) } : undefined) : null
+  }, latestError.path ? { path: latestError.path, ...(latestError.line ? { line: latestError.line } : {}) } : undefined) : null, [entryPath, latestError])
+
+  useEffect(() => {
+    onErrorAdviceChange?.(errorAdvice ? { advice: errorAdvice, kind: 'web' } : null)
+  }, [errorAdvice, onErrorAdviceChange])
 
   useEffect(() => {
     filesRef.current = files
@@ -132,7 +138,6 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
           ))
         )}
       </div>
-      {errorAdvice && <ErrorCoach advice={errorAdvice} kind="web" onOpenGuideTopic={onOpenGuideTopic} />}
     </section>
   )
 }

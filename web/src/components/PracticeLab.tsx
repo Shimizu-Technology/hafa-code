@@ -12,14 +12,15 @@ interface PracticeLabProps {
   onStartChallenge: (challenge: PracticeChallenge) => void
 }
 
+export type PracticeLabContentProps = Pick<PracticeLabProps, 'completedChallengeIds' | 'initialKind' | 'onStartChallenge'>
+
 /** Lets learners browse short, language-specific exercises without committing to a curriculum. */
-export function PracticeLab({ completedChallengeIds, initialKind, open, onClose, onStartChallenge }: PracticeLabProps) {
+export function PracticeLabContent({ completedChallengeIds, initialKind, onStartChallenge }: PracticeLabContentProps) {
   const [filters, setFilters] = useState({ initialKind, selectedKind: initialKind, query: '' })
   if (filters.initialKind !== initialKind) {
     setFilters({ initialKind, selectedKind: initialKind, query: '' })
   }
   const { selectedKind, query } = filters
-  const dialogRef = useModalFocus<HTMLElement>(open, onClose)
   const completed = useMemo(() => new Set(completedChallengeIds), [completedChallengeIds])
   const visibleChallenges = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -28,42 +29,11 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
     ))
   }, [query, selectedKind])
 
-  useEffect(() => {
-    if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = previousOverflow }
-  }, [open])
-
-  if (!open) return null
-
   const languageChallenges = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === selectedKind)
   const languageCompletedCount = languageChallenges.filter((challenge) => completed.has(challenge.id)).length
 
   return (
-    <div className="guide-backdrop" role="presentation" onClick={onClose}>
-      <section
-        ref={dialogRef}
-        className="practice-lab"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="practice-lab-title"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="practice-lab-header">
-          <div className="guide-heading-mark" aria-hidden="true"><Dumbbell size={23} /></div>
-          <div>
-            <p className="eyebrow">Learn by changing real code</p>
-            <h2 id="practice-lab-title">Practice Lab</h2>
-            <p>Choose a small challenge, work in a private project, and check your answer when you are ready.</p>
-          </div>
-          <button className="ghost icon-button guide-close-button" type="button" onClick={onClose} aria-label="Close practice lab">
-            <X size={19} />
-          </button>
-        </header>
-
-        <div className="practice-lab-body">
+        <div className="practice-lab-body practice-content">
           <nav className="practice-language-tabs" aria-label="Practice languages">
             {PROJECT_KINDS.map((kind) => {
               const kindChallenges = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === kind)
@@ -135,6 +105,49 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
             )}
           </div>
         </div>
+  )
+}
+
+/** Lets learners browse short, language-specific exercises without committing to a curriculum. */
+export function PracticeLab({ completedChallengeIds, initialKind, open, onClose, onStartChallenge }: PracticeLabProps) {
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose)
+
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="guide-backdrop" role="presentation" onClick={onClose}>
+      <section
+        ref={dialogRef}
+        className="practice-lab"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="practice-lab-title"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="practice-lab-header">
+          <div className="guide-heading-mark" aria-hidden="true"><Dumbbell size={23} /></div>
+          <div>
+            <p className="eyebrow">Learn by changing real code</p>
+            <h2 id="practice-lab-title">Practice Lab</h2>
+            <p>Choose a small challenge, work in a private project, and check your answer when you are ready.</p>
+          </div>
+          <button className="ghost icon-button guide-close-button" type="button" onClick={onClose} aria-label="Close practice lab">
+            <X size={19} />
+          </button>
+        </header>
+        <PracticeLabContent
+          completedChallengeIds={completedChallengeIds}
+          initialKind={initialKind}
+          onStartChallenge={onStartChallenge}
+        />
       </section>
     </div>
   )

@@ -76,6 +76,8 @@ describe('App language guide practice projects', () => {
     const topic = languageGuideFor('ruby').topics.find((candidate) => candidate.id === 'ruby-variables-types')!
 
     await user.click(screen.getAllByRole('button', { name: 'Ruby guide' })[0])
+    const learningSidecar = screen.getByRole('complementary', { name: 'Ruby learning' })
+    expect(document.querySelector('.layout-grid')?.contains(learningSidecar)).toBe(false)
     await user.type(screen.getByRole('searchbox'), 'variables')
     await user.click(screen.getByRole('button', { name: /variables and data types/i }))
     await user.click(screen.getByRole('button', { name: 'Try example' }))

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition } from '../lib/codeRunner'
@@ -232,8 +232,8 @@ describe('RunnerPanel', () => {
   it('reports a startup timeout exactly once', () => {
     vi.useFakeTimers()
     const onRunComplete = vi.fn()
-    const onOpenGuideTopic = vi.fn()
-    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} onOpenGuideTopic={onOpenGuideTopic} />)
+    const onErrorAdviceChange = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} onErrorAdviceChange={onErrorAdviceChange} />)
 
     act(() => {
       window.dispatchEvent(new Event('hafa-code-run-active-project'))
@@ -250,8 +250,10 @@ describe('RunnerPanel', () => {
       stderr: 'The browser runtime took too long to load. Check your connection, then try again.',
       durationMs: RUNNER_STARTUP_TIMEOUT_MS,
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Review Loops' }))
-    expect(onOpenGuideTopic).toHaveBeenCalledWith('python-loops')
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: 'python',
+      advice: expect.objectContaining({ guideTopicId: 'python-loops' }),
+    }))
   })
 
   it('reports an execution timeout with streamed output exactly once', () => {
@@ -323,8 +325,8 @@ describe('RunnerPanel', () => {
 
   it('reports an unexpected worker error exactly once and opens its guide topic', () => {
     const onRunComplete = vi.fn()
-    const onOpenGuideTopic = vi.fn()
-    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} onOpenGuideTopic={onOpenGuideTopic} />)
+    const onErrorAdviceChange = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} onErrorAdviceChange={onErrorAdviceChange} />)
 
     act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
     const worker = FakeWorker.instances.at(-1)!
@@ -339,10 +341,13 @@ describe('RunnerPanel', () => {
       stderr: 'Runtime broke',
       durationMs: expect.any(Number),
     })
-    expect(screen.getByRole('complementary', { name: 'Error coach' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Let’s decode this python error' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Review Output and comments' }))
-    expect(onOpenGuideTopic).toHaveBeenCalledWith('python-output-comments')
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: 'python',
+      advice: expect.objectContaining({
+        title: 'Let’s decode this python error',
+        guideTopicId: 'python-output-comments',
+      }),
+    }))
   })
 
   it('notifies the owner when an active run is cancelled by unmounting', () => {
