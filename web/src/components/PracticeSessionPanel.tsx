@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import { Check, ChevronDown, Circle, Dumbbell, Lightbulb, Loader2, RotateCcw, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Circle, Dumbbell, Lightbulb, Loader2, Sparkles } from 'lucide-react'
 import type { PracticeChallenge, PracticeCheckResult } from '../lib/practiceLab'
 
 interface PracticeSessionPanelProps {
   challenge: PracticeChallenge
   checking: boolean
   completed: boolean
+  nextChallenge: PracticeChallenge | null
   result: PracticeCheckResult | null
   onCheck: () => void
   onOpenLab: () => void
+  onStartNext: () => void
 }
 
 /** Keeps challenge instructions and feedback beside the editable project. */
-export function PracticeSessionPanel({ challenge, checking, completed, result, onCheck, onOpenLab }: PracticeSessionPanelProps) {
+export function PracticeSessionPanel({ challenge, checking, completed, nextChallenge, result, onCheck, onOpenLab, onStartNext }: PracticeSessionPanelProps) {
   const [expanded, setExpanded] = useState(true)
   const [visibleHintCount, setVisibleHintCount] = useState(0)
 
@@ -27,7 +29,7 @@ export function PracticeSessionPanel({ challenge, checking, completed, result, o
           </div>
         </div>
         <div className="practice-session-actions">
-          <button className="ghost compact" type="button" onClick={onOpenLab}><RotateCcw size={14} /> Choose another</button>
+          <button className="ghost compact" type="button" onClick={onOpenLab}><ArrowLeft size={14} /> Practice Lab</button>
           <button className="ghost icon-button" type="button" aria-expanded={expanded} aria-label={expanded ? 'Collapse challenge instructions' : 'Expand challenge instructions'} onClick={() => setExpanded((current) => !current)}>
             <ChevronDown className={expanded ? 'practice-chevron expanded' : 'practice-chevron'} size={18} />
           </button>
@@ -68,6 +70,18 @@ export function PracticeSessionPanel({ challenge, checking, completed, result, o
                 <div className="practice-output-comparison">
                   <span>Expected <code>{result.expectedOutput.replace(/\n/g, ' ↵ ')}</code></span>
                   {result.actualOutput !== undefined && <span>Received <code>{result.actualOutput.trim() || '(no output)'}</code></span>}
+                </div>
+              )}
+              {result.passed && (
+                <div className="practice-next-step">
+                  <div>
+                    <span>{nextChallenge ? `Up next · ${nextChallenge.difficulty}` : 'Language complete'}</span>
+                    <strong>{nextChallenge?.title ?? `You finished every ${challenge.kind} challenge.`}</strong>
+                  </div>
+                  <div className="practice-next-actions">
+                    {nextChallenge && <button type="button" onClick={onStartNext}>Next challenge <ArrowRight size={16} /></button>}
+                    <button className="secondary" type="button" onClick={onOpenLab}>{nextChallenge ? 'Back to Practice Lab' : 'Explore Practice Lab'}</button>
+                  </div>
                 </div>
               )}
             </div>

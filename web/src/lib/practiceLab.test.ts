@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
-import { evaluatePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
+import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -27,6 +27,17 @@ describe('practice challenge catalog', () => {
         expect(challenge.hints.length).toBeGreaterThanOrEqual(2)
       })
     })
+  })
+
+  it('recommends the next unfinished challenge in the same language', () => {
+    const first = practiceChallengeById('java-variables-greeting')!
+    const second = practiceChallengeById('java-loop-stops')!
+    const last = practiceChallengeById('java-method-condition')!
+
+    expect(nextIncompletePracticeChallenge(first, [first.id])).toBe(second)
+    expect(nextIncompletePracticeChallenge(first, [first.id, second.id])).toBe(last)
+    expect(nextIncompletePracticeChallenge(last, [last.id])).toBe(first)
+    expect(nextIncompletePracticeChallenge(last, [first.id, second.id, last.id])).toBeNull()
   })
 
   it('checks both Java syntax requirements and normalized runtime output', () => {

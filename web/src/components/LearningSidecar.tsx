@@ -18,6 +18,7 @@ interface LearningSidecarProps {
   activeTab: LearningTab
   coachContext: ErrorCoachContext
   completedChallengeIds: string[]
+  focusChallengeId?: string | null
   guideKind: ProjectKind
   guideNavigationRevision: number
   guideTopicId: string | null
@@ -52,6 +53,7 @@ export function LearningSidecar({
   activeTab,
   coachContext,
   completedChallengeIds,
+  focusChallengeId,
   guideKind,
   guideNavigationRevision,
   guideTopicId,
@@ -166,6 +168,7 @@ export function LearningSidecar({
         <section id="learning-practice-panel" role="tabpanel" aria-label="Practice lab" hidden={activeTab !== 'practice'}>
           <PracticeLabContent
             completedChallengeIds={completedChallengeIds}
+            focusChallengeId={focusChallengeId}
             initialKind={kind}
             onStartChallenge={onStartChallenge}
           />

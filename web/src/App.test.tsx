@@ -212,6 +212,31 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('heading', { name: challenge.title })).toBeTruthy()
   })
 
+  it('starts the next unfinished challenge directly after a passing result', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.change(screen.getByLabelText('Code editor'), {
+      target: { value: 'name = "Lina"\nlessons = 4\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success',
+      stdout: 'Hafa adai, Lina!\nLessons: 4\n',
+      stderr: '',
+      durationMs: 12,
+    }))
+
+    expect(screen.getByText('Up next · Builder')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Next challenge' }))
+
+    await waitFor(() => expect(storedLibrary().projects).toHaveLength(3))
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Practice · Ruby Loop')
+    expect(screen.getByRole('heading', { name: 'Count the stops' })).toBeTruthy()
+  })
+
   it('ignores a delayed practice result after the learner switches projects', async () => {
     const user = userEvent.setup()
     render(<App />)

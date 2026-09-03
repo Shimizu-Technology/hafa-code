@@ -3,6 +3,8 @@ import type { RunnerOutcome } from './runnerOutcome'
 
 export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 
+export const PRACTICE_DIFFICULTIES = Object.freeze(['Starter', 'Builder', 'Stretch'] as const)
+
 export interface PracticeFileCheck {
   filePath: string
   label: string
@@ -250,6 +252,17 @@ export function practiceChallengesFor(kind: ProjectKind) {
 /** Resolves a persisted challenge id without trusting stale local data. */
 export function practiceChallengeById(id: string | null | undefined) {
   return id ? PRACTICE_CHALLENGES.find((challenge) => challenge.id === id) ?? null : null
+}
+
+/** Finds the next unfinished challenge in the same language, wrapping to an earlier gap when needed. */
+export function nextIncompletePracticeChallenge(currentChallenge: PracticeChallenge, completedChallengeIds: Iterable<string>) {
+  const challenges = practiceChallengesFor(currentChallenge.kind)
+  const currentIndex = challenges.findIndex((challenge) => challenge.id === currentChallenge.id)
+  if (currentIndex < 0) return null
+
+  const completed = new Set(completedChallengeIds)
+  const orderedCandidates = [...challenges.slice(currentIndex + 1), ...challenges.slice(0, currentIndex)]
+  return orderedCandidates.find((challenge) => !completed.has(challenge.id)) ?? null
 }
 
 function sourceWithoutComments(file: ProjectFile) {
