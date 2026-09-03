@@ -158,7 +158,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · JavaScript Priority Count', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\n\n// Count the high-priority requests.\n\nconsole.log(`High priority: ${highCount}`)\n' }] },
     checks: [
       { filePath: 'main.js', label: 'Loop over priorities', pattern: /\bfor\s*\([^)]*\bof\s+priorities\s*\)/, ignoreStrings: true },
-      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===?\s*["']high["'][\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/ },
+      { filePath: 'main.js', label: 'Count only high priorities', pattern: /\bpriority\s*===\s*["']high["'][\s\S]*\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/ },
     ],
     expectedOutput: 'High priority: 2',
   },

@@ -185,6 +185,17 @@ describe('practice challenge catalog', () => {
     })
   })
 
+  it('requires strict equality when counting JavaScript priorities', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (priority == "high") highCount++; } console.log(`High priority: ${highCount}`);'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
   it('requires the multi-column layout to be inside the Web breakpoint', () => {
     const challenge = practiceChallengeById('web-responsive-breakpoint')!
     const result = evaluatePracticeChallenge(challenge, [{
