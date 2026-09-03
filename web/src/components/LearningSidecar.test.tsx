@@ -9,6 +9,7 @@ const baseProps = {
   activeTab: 'guide' as const,
   coachContext: null,
   completedChallengeIds: [],
+  guideNavigationRevision: 0,
   guideTopicId: null,
   kind: 'java' as const,
   open: true,
@@ -57,6 +58,25 @@ describe('LearningSidecar', () => {
     expect(screen.getByText('Main.java · line 4')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Review Variables and types' }))
     expect(onOpenGuideTopic).toHaveBeenCalledWith('java-variables-types')
+  })
+
+  it('returns to a requested guide topic even after local guide navigation', async () => {
+    const user = userEvent.setup()
+    const view = render(<LearningSidecar
+      {...baseProps}
+      guideNavigationRevision={1}
+      guideTopicId="java-output-comments"
+    />)
+
+    await user.click(screen.getByRole('button', { name: /Strings/ }))
+    expect(screen.getByRole('heading', { name: 'Strings' })).toBeTruthy()
+
+    view.rerender(<LearningSidecar
+      {...baseProps}
+      guideNavigationRevision={2}
+      guideTopicId="java-output-comments"
+    />)
+    expect(screen.getByRole('heading', { name: 'Output and comments' })).toBeTruthy()
   })
 
   it('becomes a dismissible modal drawer at compact widths', async () => {

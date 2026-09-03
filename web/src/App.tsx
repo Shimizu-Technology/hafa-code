@@ -53,7 +53,11 @@ import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember
 import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
 import { ProjectFeedback } from './components/ProjectFeedback'
-import { LearningSidecar, type LearningTab } from './components/LearningSidecar'
+import {
+  LEARNING_SIDECAR_OVERLAY_QUERY,
+  LearningSidecar,
+  type LearningTab,
+} from './components/LearningSidecar'
 import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
@@ -163,6 +167,7 @@ export default function App() {
   const [learningSidecarOpen, setLearningSidecarOpen] = useState(false)
   const [learningTab, setLearningTab] = useState<LearningTab>('guide')
   const [languageGuideTopicId, setLanguageGuideTopicId] = useState<string | null>(null)
+  const [guideNavigationRevision, setGuideNavigationRevision] = useState(0)
   const [learningCoachContext, setLearningCoachContext] = useState<ErrorCoachContext>(null)
   const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
   const [practiceChecking, setPracticeChecking] = useState(false)
@@ -199,6 +204,7 @@ export default function App() {
   }, [clearPracticeCheckWatchdog])
   const openLanguageGuide = useCallback((topicId: string | null = null) => {
     setLanguageGuideTopicId(topicId)
+    setGuideNavigationRevision((revision) => revision + 1)
     setLearningTab('guide')
     setLearningSidecarOpen(true)
   }, [])
@@ -208,7 +214,7 @@ export default function App() {
   }, [])
   const handleErrorAdviceChange = useCallback((context: ErrorCoachContext) => {
     setLearningCoachContext(context)
-    if (context && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1101px)').matches) {
+    if (context && typeof window.matchMedia === 'function' && !window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY).matches) {
       setLearningTab('coach')
       setLearningSidecarOpen(true)
     }
@@ -1965,6 +1971,7 @@ export default function App() {
           activeTab={learningTab}
           coachContext={learningCoachContext}
           completedChallengeIds={completedPracticeIds}
+          guideNavigationRevision={guideNavigationRevision}
           guideTopicId={languageGuideTopicId}
           kind={project.kind}
           open={learningSidecarOpen}

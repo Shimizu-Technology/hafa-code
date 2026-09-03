@@ -12,11 +12,13 @@ import { PracticeLabContent } from './PracticeLab'
 export type LearningTab = 'guide' | 'practice' | 'coach'
 
 const LEARNING_TABS: LearningTab[] = ['guide', 'practice', 'coach']
+export const LEARNING_SIDECAR_OVERLAY_QUERY = '(max-width: 1100px)'
 
 interface LearningSidecarProps {
   activeTab: LearningTab
   coachContext: ErrorCoachContext
   completedChallengeIds: string[]
+  guideNavigationRevision: number
   guideTopicId: string | null
   kind: ProjectKind
   open: boolean
@@ -29,12 +31,12 @@ interface LearningSidecarProps {
 
 function useOverlaySidecar() {
   const [overlay, setOverlay] = useState(() => (
-    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1100px)').matches
+    typeof window.matchMedia === 'function' && window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY).matches
   ))
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(max-width: 1100px)')
+    const query = window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY)
     const update = () => setOverlay(query.matches)
     update()
     query.addEventListener('change', update)
@@ -49,6 +51,7 @@ export function LearningSidecar({
   activeTab,
   coachContext,
   completedChallengeIds,
+  guideNavigationRevision,
   guideTopicId,
   kind,
   open,
@@ -149,7 +152,7 @@ export function LearningSidecar({
       <div className="learning-sidecar-body">
         <section id="learning-guide-panel" role="tabpanel" aria-label={`${guide.label} guide`} hidden={activeTab !== 'guide'}>
           <LanguageGuideContent
-            key={`${kind}:${guideTopicId ?? 'default'}`}
+            key={`${kind}:${guideTopicId ?? 'default'}:${guideNavigationRevision}`}
             kind={kind}
             initialTopicId={guideTopicId}
             onOpenPractice={() => onActiveTabChange('practice')}

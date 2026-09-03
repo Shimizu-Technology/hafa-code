@@ -114,6 +114,9 @@ it('validates source metadata against the latest files after the port connects',
     advice: expect.objectContaining({ location: 'new.js' }),
   }))
 
+  act(() => screen.getByRole('button', { name: 'Clear' }).click())
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(null)
+
   act(() => receiveMessage?.({
     data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: old is not defined', path: 'old.js', line: 3 },
   } as MessageEvent))
