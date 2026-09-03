@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Check, Copy, Lightbulb, Play, Search, Terminal, TriangleAlert, X } from 'lucide-react'
+import { BookOpen, Check, Copy, Dumbbell, Lightbulb, Play, Search, Terminal, TriangleAlert, X } from 'lucide-react'
 import { useModalFocus } from '../hooks/useModalFocus'
+import { projectKindDefinition } from '../lib/codeRunner'
 import { filterGuideTopics, languageGuideFor, type LanguageGuideTopic } from '../lib/languageGuides'
 import type { ProjectKind } from '../lib/projectTypes'
 import { writeClipboardText } from '../lib/workspace'
@@ -9,6 +10,7 @@ interface LanguageGuideProps {
   kind: ProjectKind
   open: boolean
   onClose: () => void
+  onOpenPractice: () => void
   onTryExample: (topic: LanguageGuideTopic) => void
 }
 
@@ -25,7 +27,7 @@ function inlineCode(text: string) {
   ))
 }
 
-export function LanguageGuide({ kind, open, onClose, onTryExample }: LanguageGuideProps) {
+export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExample }: LanguageGuideProps) {
   const guide = languageGuideFor(kind)
   const [query, setQuery] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState(guide.topics[0].id)
@@ -159,9 +161,14 @@ export function LanguageGuide({ kind, open, onClose, onTryExample }: LanguageGui
 
                 <footer className="guide-page-footer">
                   <p><strong>Your current code stays untouched.</strong> Trying this creates a separate practice project with a complete example.</p>
-                  <button type="button" onClick={() => onTryExample(selectedTopic)}>
-                    <Play size={16} /> Try example
-                  </button>
+                  <div className="guide-footer-actions">
+                    <button className="secondary" type="button" onClick={onOpenPractice}>
+                      <Dumbbell size={16} /> Practice {projectKindDefinition(kind).shortLabel}
+                    </button>
+                    <button type="button" onClick={() => onTryExample(selectedTopic)}>
+                      <Play size={16} /> Try example
+                    </button>
+                  </div>
                 </footer>
               </>
             ) : (

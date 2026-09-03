@@ -21,6 +21,7 @@ Create a small, open-source coding playground for students and alumni to practic
 - I can create an HTML/CSS/JS page and see it update live.
 - I can look up common syntax without leaving my project.
 - I can open an example in a separate practice project without replacing my code.
+- I can choose a short challenge for any supported language, reveal hints as needed, and check my work without enrolling in a curriculum.
 - I can save my work and come back later.
 - I can share a link with an instructor or friend.
 - I can fork a starter exercise and make it my own.
@@ -79,6 +80,15 @@ Create a small, open-source coding playground for students and alumni to practic
 - Responsive presentation: a topic index beside the reference on desktop and a full-screen, touch-friendly guide on mobile
 - Stable topic IDs that later curriculum lessons can link to without making the guide itself sequential or graded
 
+### Practice Lab
+
+- Three progressive challenges for every supported project kind: Ruby, JavaScript, Python, Java, and HTML/CSS/JS
+- Separate private practice projects so a learner's current work is never overwritten
+- Plain-language steps, concept labels, and progressive hints that stay available while coding
+- Deterministic checks for required syntax and runtime output, or HTML/CSS/JS file requirements for Web projects
+- Unlimited attempts and local completion tracking without scores, deadlines, or a required sequence
+- Responsive browsing and in-workspace feedback designed for both desktop and mobile use
+
 ### Saving
 
 Phase 1:
@@ -103,7 +113,7 @@ Phase 2:
 - Multiplayer editing
 - Full terminal/linux containers
 - AI assistant
-- Autograding
+- Course-style grading, scores, and gradebook workflows
 
 These can come later, but only after the simple learning loop is excellent.
 

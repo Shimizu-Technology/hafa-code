@@ -5,6 +5,7 @@ import {
   Cloud,
   Copy,
   Download,
+  Dumbbell,
   Files,
   Globe,
   Import,
@@ -22,6 +23,8 @@ import {
 import './App.css'
 import {
   PROJECT_KINDS,
+  RUNNER_STARTUP_TIMEOUT_MS,
+  RUNNER_TIMEOUT_MS,
   defaultEntryPath,
   inferFileLanguage,
   projectKindDefinition,
@@ -50,12 +53,27 @@ import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
 import { ProjectFeedback } from './components/ProjectFeedback'
 import { LanguageGuide } from './components/LanguageGuide'
+import { PracticeLab } from './components/PracticeLab'
+import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
 import type { LanguageGuideTopic } from './lib/languageGuides'
+import { evaluatePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
+import {
+  completePracticeChallenge,
+  completedPracticeChallengeIds,
+  linkPracticeProject,
+  practiceChallengeIdForProject,
+  pendingPracticeCheckMatches,
+  preservePracticeConflictLinks,
+  remapPendingPracticeCheck,
+  replacePracticeProjectId,
+  type PendingPracticeCheck,
+} from './lib/practiceProgress'
+import type { RunnerOutcome } from './lib/runnerOutcome'
 import {
   clearProjectPendingCloudSync,
   markProjectPendingCloudSync,
@@ -142,6 +160,10 @@ export default function App() {
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [languageGuideOpen, setLanguageGuideOpen] = useState(false)
+  const [practiceLabOpen, setPracticeLabOpen] = useState(false)
+  const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
+  const [practiceChecking, setPracticeChecking] = useState(false)
+  const [completedPracticeIds, setCompletedPracticeIds] = useState(() => completedPracticeChallengeIds())
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
@@ -156,10 +178,22 @@ export default function App() {
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
+  const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
+  const practiceCheckWatchdogRef = useRef<number | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const clearPracticeCheckWatchdog = useCallback(() => {
+    if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
+    practiceCheckWatchdogRef.current = null
+  }, [])
+  const clearPendingPracticeCheck = useCallback(() => {
+    clearPracticeCheckWatchdog()
+    pendingPracticeCheckRef.current = null
+    setPracticeChecking(false)
+    setPracticeResult(null)
+  }, [clearPracticeCheckWatchdog])
   const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
     setFileDialog(null)
     setFileDialogError('')
@@ -173,6 +207,10 @@ export default function App() {
   })
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
+  const currentPracticeChallenge = useMemo(
+    () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
+    [project.id],
+  )
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
@@ -271,6 +309,8 @@ export default function App() {
         if (serverProject) {
           const conflictCopy = createConflictCopy(projectToSave)
           const currentLibrary = libraryRef.current
+          preservePracticeConflictLinks(projectId, conflictCopy.id, serverProject.id)
+          if (currentLibrary.activeProjectId === projectId) clearPendingPracticeCheck()
           const nextLibrary = {
             activeProjectId: currentLibrary.activeProjectId === projectId ? conflictCopy.id : currentLibrary.activeProjectId,
             projects: [
@@ -339,6 +379,8 @@ export default function App() {
 
     syncedProjectVersionsRef.current.set(savedProject.id, savedProject.updatedAt)
     if (savedProject.id !== projectId) {
+      replacePracticeProjectId(projectId, savedProject.id)
+      pendingPracticeCheckRef.current = remapPendingPracticeCheck(pendingPracticeCheckRef.current, projectId, savedProject.id)
       clearProjectPendingCloudSync(projectId)
       if (changedWhileSaving || projectNeedingAnotherSave) {
         replacePendingCloudProjectId(projectId, savedProject.id, (projectNeedingAnotherSave ?? latestProject ?? savedProject).updatedAt)
@@ -359,18 +401,20 @@ export default function App() {
       clearProjectPendingCloudSync(savedProject.id)
       updateCloudSaveStatus(savedProject.id, 'saved')
     }
-  }, [hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
+  }, [clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
   useEffect(() => {
     syncCloudProjectRef.current = syncCloudProject
   }, [syncCloudProject])
 
   const activateProject = (nextProject: SavedProject) => {
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
     setActivePath(nextProject.files[0].path)
     setCheckpointMenuOpen(false)
   }
 
   const activateFallbackProject = (projects: SavedProject[], archivedView = showArchived) => {
+    clearPendingPracticeCheck()
     const preferred = projects.find((candidate) => (archivedView ? isArchived(candidate) : !isArchived(candidate))) ?? projects[0]
     if (preferred) {
       setLibrary({ activeProjectId: preferred.id, projects })
@@ -387,6 +431,11 @@ export default function App() {
     libraryRef.current = library
     saveProjectLibrary(library)
   }, [library])
+
+  useEffect(() => () => {
+    clearPracticeCheckWatchdog()
+    pendingPracticeCheckRef.current = null
+  }, [clearPracticeCheckWatchdog])
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themePreference)
@@ -425,6 +474,7 @@ export default function App() {
 
     api.getShare(shareToken).then((res) => {
       if (res.data) {
+        clearPendingPracticeCheck()
         setLibrary((current) => ({ activeProjectId: res.data!.id, projects: [res.data!, ...current.projects] }))
         setActivePath(res.data.files[0].path)
         setShowArchived(false)
@@ -435,7 +485,7 @@ export default function App() {
       }
       setHasImportedServerShare(true)
     })
-  }, [hasImportedServerShare])
+  }, [clearPendingPracticeCheck, hasImportedServerShare])
 
   useEffect(() => {
     if (!pendingInvitationToken) return
@@ -548,6 +598,7 @@ export default function App() {
         })
         const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current, activeOrganizationId)
         const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
+        if (libraryRef.current.activeProjectId !== merged.activeProjectId) clearPendingPracticeCheck()
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
@@ -563,6 +614,7 @@ export default function App() {
               organization: activeOrganization,
               visibility: 'private' as ProjectVisibility,
             }
+            clearPendingPracticeCheck()
             setLibrary((current) => ({ activeProjectId: orgProject.id, projects: [orgProject, ...current.projects] }))
             setActivePath(orgProject.files[0].path)
           }
@@ -572,7 +624,7 @@ export default function App() {
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [activeOrganization, activeOrganizationId, hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
@@ -630,6 +682,7 @@ export default function App() {
       organization: activeOrganization,
       visibility: 'private' as ProjectVisibility,
     }
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
@@ -652,12 +705,110 @@ export default function App() {
       entryPath: topic.practiceProject.entryPath,
       files: topic.practiceProject.files.map((file) => ({ ...file })),
     }
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
     setMobileTab('code')
     setLanguageGuideOpen(false)
     setNotice(`${topic.title} opened in a new practice project. Your previous project is unchanged.`)
+  }
+
+  const startPracticeChallenge = (challenge: PracticeChallenge) => {
+    if (workspaceArchived) {
+      setNotice('Restore this classroom before creating a practice project.')
+      return
+    }
+
+    const starter = createProject(challenge.kind, challenge.project.title)
+    const practiceProject: SavedProject = {
+      ...starter,
+      organizationId: activeOrganizationId,
+      organization: activeOrganization,
+      visibility: 'private',
+      entryPath: challenge.project.entryPath,
+      files: challenge.project.files.map((file) => ({ ...file })),
+    }
+    const progressSaved = linkPracticeProject(practiceProject.id, challenge.id)
+    clearPendingPracticeCheck()
+    setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
+    setActivePath(practiceProject.entryPath)
+    setShowArchived(false)
+    setMobileTab('code')
+    setPracticeLabOpen(false)
+    setLanguageGuideOpen(false)
+    setNotice(progressSaved
+      ? `${challenge.title} is ready. Your previous project is unchanged.`
+      : `${challenge.title} is ready and your previous project is unchanged. This browser could not save challenge progress.`)
+  }
+
+  const recordPracticeResult = (challenge: PracticeChallenge, result: PracticeCheckResult) => {
+    setPracticeChecking(false)
+    setPracticeResult(result)
+    if (result.passed) {
+      const progressSaved = completePracticeChallenge(challenge.id)
+      setCompletedPracticeIds(completedPracticeChallengeIds())
+      setNotice(progressSaved
+        ? `${challenge.title} complete. Nice work — you can keep experimenting or choose another challenge.`
+        : `${challenge.title} complete. This browser could not save the completion, but you can keep practicing.`)
+    }
+  }
+
+  const checkPracticeWork = () => {
+    if (!currentPracticeChallenge || practiceChecking) return
+    setPracticeResult(null)
+
+    if (currentPracticeChallenge.kind === 'web') {
+      recordPracticeResult(currentPracticeChallenge, evaluatePracticeChallenge(currentPracticeChallenge, project.files))
+      return
+    }
+
+    window.dispatchEvent(new Event('hafa-code-cancel-active-run'))
+    const checkToken = crypto.randomUUID()
+    pendingPracticeCheckRef.current = {
+      token: checkToken,
+      projectId: project.id,
+      challengeId: currentPracticeChallenge.id,
+      files: project.files.map((file) => ({ ...file })),
+    }
+    const runner = projectKindDefinition(project.kind).runner
+    const maximumRunMs = (runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS)
+      + (runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS)
+      + 2_000
+    clearPracticeCheckWatchdog()
+    practiceCheckWatchdogRef.current = window.setTimeout(() => {
+      if (!pendingPracticeCheckMatches(pendingPracticeCheckRef.current, checkToken)) return
+      pendingPracticeCheckRef.current = null
+      practiceCheckWatchdogRef.current = null
+      setPracticeChecking(false)
+      setPracticeResult(null)
+      setNotice('The practice check ended before a result arrived. Your code is safe — try checking again.')
+    }, maximumRunMs)
+    setPracticeChecking(true)
+    setMobileTab('output')
+    window.dispatchEvent(new Event('hafa-code-run-active-project'))
+  }
+
+  const handlePracticeRunComplete = (outcome: RunnerOutcome) => {
+    clearPracticeCheckWatchdog()
+    const pending = pendingPracticeCheckRef.current
+    if (!pending) return
+    pendingPracticeCheckRef.current = null
+    if (libraryRef.current.activeProjectId !== pending.projectId) {
+      setPracticeChecking(false)
+      return
+    }
+    if (outcome.status === 'stopped') {
+      setPracticeChecking(false)
+      setPracticeResult(null)
+      return
+    }
+    const challenge = practiceChallengeById(pending.challengeId)
+    if (!challenge) {
+      setPracticeChecking(false)
+      return
+    }
+    recordPracticeResult(challenge, evaluatePracticeChallenge(challenge, pending.files, outcome))
   }
 
   const updateProjectVisibility = (visibility: ProjectVisibility) => {
@@ -956,6 +1107,7 @@ export default function App() {
         return
       }
 
+      clearPendingPracticeCheck()
       setLibrary((current) => ({
         activeProjectId: res.data!.id,
         projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
@@ -970,6 +1122,7 @@ export default function App() {
     const projects = library.projects.map((candidate) => candidate.id === projectToRestore.id
       ? { ...candidate, archivedAt: null, updatedAt: restoredAt }
       : candidate)
+    clearPendingPracticeCheck()
     setLibrary({ activeProjectId: projectToRestore.id, projects })
     setActivePath(projectToRestore.files[0].path)
     setShowArchived(false)
@@ -983,6 +1136,7 @@ export default function App() {
     }
     setProjectActionsOpen(false)
     const copy = duplicateProject(project)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: copy.id, projects: [copy, ...current.projects] }))
     setActivePath(copy.files[0].path)
     setShowArchived(false)
@@ -1200,6 +1354,7 @@ export default function App() {
     if (isSignedIn && isCloudProjectId(project.id) && isCloudProjectId(checkpoint.id)) {
       const res = await api.restoreCheckpoint(project.id, checkpoint.id)
       if (res.data) {
+        clearPendingPracticeCheck()
         setLibrary((current) => ({
           activeProjectId: res.data!.id,
           projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
@@ -1220,6 +1375,7 @@ export default function App() {
     }
 
     const restored = snapshotToProject(project, checkpoint.snapshot)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id ? restored : candidate),
@@ -1260,6 +1416,7 @@ export default function App() {
     if (!file) return
     try {
       const imported = parseImportedProject(await file.text())
+      clearPendingPracticeCheck()
       setLibrary((current) => ({ activeProjectId: imported.id, projects: [imported, ...current.projects] }))
       setActivePath(imported.files[0].path)
       setShowArchived(false)
@@ -1685,6 +1842,7 @@ export default function App() {
         </div>
         <div className="mobile-home-actions">
           <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
+          <button className="secondary" type="button" onClick={() => setPracticeLabOpen(true)}><Dumbbell size={16} /> Practice lab</button>
           <button className="secondary" type="button" onClick={() => setLanguageGuideOpen(true)}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
@@ -1731,6 +1889,7 @@ export default function App() {
             onDelete={requestDeleteProject}
             onDuplicate={cloneProject}
             onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenPractice={() => setPracticeLabOpen(true)}
             onOpenProjectActions={() => setProjectActionsOpen(true)}
             onRename={renameProject}
             onRestore={restoreProject}
@@ -1746,6 +1905,18 @@ export default function App() {
             <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
           )}
 
+          {currentPracticeChallenge && (
+            <PracticeSessionPanel
+              key={`${project.id}:${currentPracticeChallenge.id}`}
+              challenge={currentPracticeChallenge}
+              checking={practiceChecking}
+              completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
+              result={practiceResult}
+              onCheck={checkPracticeWork}
+              onOpenLab={() => setPracticeLabOpen(true)}
+            />
+          )}
+
           <EditorWorkspace
             activeFile={activeFile}
             canEditProject={canEditProject}
@@ -1758,7 +1929,10 @@ export default function App() {
             onDuplicateFile={openDuplicateFileDialog}
             onEditorExpandedChange={setEditorExpanded}
             onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenPractice={() => setPracticeLabOpen(true)}
             onRenameFile={openRenameFileDialog}
+            onRunnerCancel={clearPendingPracticeCheck}
+            onRunnerComplete={handlePracticeRunComplete}
             onRunFromMobileCode={runFromMobileCode}
             onSelectFile={setActivePath}
             onSetEntryPath={setEntryPath}
@@ -1774,7 +1948,19 @@ export default function App() {
         kind={project.kind}
         open={languageGuideOpen}
         onClose={() => setLanguageGuideOpen(false)}
+        onOpenPractice={() => {
+          setLanguageGuideOpen(false)
+          setPracticeLabOpen(true)
+        }}
         onTryExample={tryGuideExample}
+      />
+
+      <PracticeLab
+        completedChallengeIds={completedPracticeIds}
+        initialKind={project.kind}
+        open={practiceLabOpen}
+        onClose={() => setPracticeLabOpen(false)}
+        onStartChallenge={startPracticeChallenge}
       />
 
       <WorkspaceDialogs

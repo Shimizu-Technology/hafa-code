@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import type { RunnerOutcome, RunnerStatus } from '../lib/runnerOutcome'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 
-type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 type RunPhase = 'idle' | 'loading' | 'executing' | 'input'
 
 interface RunState {
-  status: RunStatus
+  status: RunnerStatus
   stdout: string
   stderr: string
   durationMs: number | null
@@ -21,7 +21,14 @@ type TerminalLine = {
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 
-export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
+interface RunnerPanelProps {
+  project: SavedProject
+  entryFile: ProjectFile
+  onRunCancel?: () => void
+  onRunComplete?: (outcome: RunnerOutcome) => void
+}
+
+export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: RunnerPanelProps) {
   const runner = projectKindDefinition(project.kind).runner
   const startupTimeoutMs = runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS
   const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
@@ -35,9 +42,19 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
   const runIdRef = useRef<string | null>(null)
   const runRef = useRef<() => void>(() => {})
   const armExecutionTimeoutRef = useRef<() => void>(() => {})
-  const outputEmittedRef = useRef(false)
+  const streamedOutputSeenRef = useRef({ stdout: false, stderr: false })
+  const startedAtRef = useRef<number | null>(null)
+  const streamedOutputRef = useRef({ stdout: '', stderr: '' })
+  const detachWorkerListenersRef = useRef<() => void>(() => {})
+  const onRunCancelRef = useRef(onRunCancel)
+  const onRunCompleteRef = useRef(onRunComplete)
   const terminalScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    onRunCancelRef.current = onRunCancel
+    onRunCompleteRef.current = onRunComplete
+  }, [onRunCancel, onRunComplete])
 
   const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
     setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
@@ -50,6 +67,7 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
   const stopWorker = useCallback(() => {
     clearRunTimer()
+    detachWorkerListenersRef.current()
     const worker = workerRef.current
     const runId = runIdRef.current
     if (worker && runId) worker.postMessage({ id: runId, type: 'abort' })
@@ -60,7 +78,11 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     setRunPhase('idle')
   }, [clearRunTimer])
 
-  useEffect(() => stopWorker, [stopWorker])
+  useEffect(() => () => {
+    const cancelledActiveRun = runIdRef.current !== null
+    stopWorker()
+    if (cancelledActiveRun) onRunCancelRef.current?.()
+  }, [stopWorker])
 
   useEffect(() => {
     terminalScrollRef.current?.scrollTo({ top: terminalScrollRef.current.scrollHeight })
@@ -72,7 +94,10 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
   const run = () => {
     if (!runner) return
-    if (runIdRef.current) stopWorker()
+    if (runIdRef.current) {
+      onRunCancelRef.current?.()
+      stopWorker()
+    }
     else clearRunTimer()
 
     const runId = crypto.randomUUID()
@@ -81,7 +106,9 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
 
     workerRef.current = worker
     runIdRef.current = runId
-    outputEmittedRef.current = false
+    startedAtRef.current = startedAt
+    streamedOutputRef.current = { stdout: '', stderr: '' }
+    streamedOutputSeenRef.current = { stdout: false, stderr: false }
     setAwaitingInput(false)
     setRunPhase('loading')
     setTerminalInput('')
@@ -99,7 +126,15 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       stopWorker()
       const message = 'The browser runtime took too long to load. Check your connection, then try again.'
       appendTerminalLine({ kind: 'system', text: message })
-      setRunState({ status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
+      const outcome: RunnerOutcome = {
+        status: 'timeout',
+        stdout: streamedOutputRef.current.stdout,
+        stderr: streamedOutputRef.current.stderr || message,
+        durationMs: Math.round(performance.now() - startedAt),
+      }
+      setRunState(outcome)
+      onRunCompleteRef.current?.(outcome)
+      startedAtRef.current = null
     }, startupTimeoutMs)
 
     const armExecutionTimeout = () => {
@@ -107,8 +142,17 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       timeoutRef.current = window.setTimeout(() => {
         if (runIdRef.current !== runId) return
         stopWorker()
-        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${executionTimeoutMs}ms.` })
-        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${executionTimeoutMs}ms.`, durationMs: Math.round(performance.now() - startedAt) })
+        const message = `Execution stopped after ${executionTimeoutMs}ms.`
+        const outcome: RunnerOutcome = {
+          status: 'timeout',
+          stdout: streamedOutputRef.current.stdout,
+          stderr: streamedOutputRef.current.stderr || message,
+          durationMs: Math.round(performance.now() - startedAt),
+        }
+        appendTerminalLine({ kind: 'system', text: message })
+        setRunState(outcome)
+        onRunCompleteRef.current?.(outcome)
+        startedAtRef.current = null
       }, executionTimeoutMs + 250)
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
@@ -116,6 +160,9 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     const detachWorkerListeners = () => {
       worker.removeEventListener('message', handleWorkerMessage)
       worker.removeEventListener('error', handleWorkerError)
+      if (detachWorkerListenersRef.current === detachWorkerListeners) {
+        detachWorkerListenersRef.current = () => {}
+      }
     }
 
     const handleWorkerMessage = (event: MessageEvent<RunnerResponse>) => {
@@ -128,8 +175,11 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       }
 
       if (event.data.type === 'output') {
-        outputEmittedRef.current = true
-        appendTerminalLine({ kind: event.data.stream === 'stderr' ? 'stderr' : 'stdout', text: event.data.text ?? '' })
+        const stream = event.data.stream === 'stderr' ? 'stderr' : 'stdout'
+        const text = event.data.text ?? ''
+        streamedOutputSeenRef.current[stream] = true
+        streamedOutputRef.current[stream] += text
+        appendTerminalLine({ kind: stream, text })
         return
       }
 
@@ -146,36 +196,48 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       setAwaitingInput(false)
       setRunPhase('idle')
 
-      if (!outputEmittedRef.current) {
-        if (event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
-        if (event.data.stderr) appendTerminalLine({ kind: 'stderr', text: event.data.stderr })
-      }
+      if (!streamedOutputSeenRef.current.stdout && event.data.stdout) appendTerminalLine({ kind: 'stdout', text: event.data.stdout })
+      if (!streamedOutputSeenRef.current.stderr && event.data.stderr) appendTerminalLine({ kind: 'stderr', text: event.data.stderr })
 
-      const stderr = event.data.stderr ?? ''
-      const status: RunStatus = event.data.exitCode === undefined
+      const stdout = streamedOutputSeenRef.current.stdout ? streamedOutputRef.current.stdout : (event.data.stdout ?? '')
+      const stderr = streamedOutputSeenRef.current.stderr ? streamedOutputRef.current.stderr : (event.data.stderr ?? '')
+      const status: RunnerOutcome['status'] = event.data.exitCode === undefined
         ? (stderr.trim() ? 'error' : 'success')
         : (event.data.exitCode === 0 ? 'success' : 'error')
-      setRunState({
+      const outcome: RunnerOutcome = {
         status,
-        stdout: event.data.stdout ?? '',
+        stdout,
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
-      })
+      }
+      setRunState(outcome)
+      onRunCompleteRef.current?.(outcome)
+      startedAtRef.current = null
     }
 
     const handleWorkerError = (event: ErrorEvent) => {
+      if (runIdRef.current !== runId) return
       detachWorkerListeners()
       stopWorker()
       const details = event.message || 'The browser runner stopped unexpectedly.'
       const message = /fetch|network|load/i.test(details)
         ? `The browser runtime could not load. Check your connection and try again.\n${details}`
         : details
+      const outcome: RunnerOutcome = {
+        status: 'error',
+        stdout: streamedOutputRef.current.stdout,
+        stderr: streamedOutputRef.current.stderr || message,
+        durationMs: Math.round(performance.now() - startedAt),
+      }
       appendTerminalLine({ kind: 'stderr', text: message })
-      setRunState({ status: 'error', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
+      setRunState(outcome)
+      onRunCompleteRef.current?.(outcome)
+      startedAtRef.current = null
     }
 
     worker.addEventListener('message', handleWorkerMessage)
     worker.addEventListener('error', handleWorkerError)
+    detachWorkerListenersRef.current = detachWorkerListeners
 
     worker.postMessage({
       id: runId,
@@ -210,12 +272,15 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
   const stopRun = () => {
     stopWorker()
     appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
-    setRunState((current) => ({
-      status: 'timeout',
-      stdout: current.stdout,
-      stderr: current.stderr || 'Execution stopped.',
-      durationMs: current.durationMs,
-    }))
+    const outcome: RunnerOutcome = {
+      status: 'stopped',
+      stdout: streamedOutputRef.current.stdout,
+      stderr: streamedOutputRef.current.stderr || 'Execution stopped.',
+      durationMs: startedAtRef.current === null ? runState.durationMs : Math.round(performance.now() - startedAtRef.current),
+    }
+    setRunState(outcome)
+    onRunCompleteRef.current?.(outcome)
+    startedAtRef.current = null
   }
 
   const runStatusLabel = awaitingInput
@@ -229,6 +294,16 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
     window.addEventListener('hafa-code-run-active-project', handleRunRequest)
     return () => window.removeEventListener('hafa-code-run-active-project', handleRunRequest)
   }, [])
+
+  useEffect(() => {
+    const handleCancelRequest = () => {
+      if (!runIdRef.current) return
+      onRunCancelRef.current?.()
+      stopWorker()
+    }
+    window.addEventListener('hafa-code-cancel-active-run', handleCancelRequest)
+    return () => window.removeEventListener('hafa-code-cancel-active-run', handleCancelRequest)
+  }, [stopWorker])
 
   return (
     <section className="panel output-panel surface-grid">

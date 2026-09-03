@@ -10,10 +10,11 @@ describe('LanguageGuide', () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
     const onTryExample = vi.fn()
+    const onOpenPractice = vi.fn()
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 
-    render(<LanguageGuide kind="java" open onClose={onClose} onTryExample={onTryExample} />)
+    render(<LanguageGuide kind="java" open onClose={onClose} onOpenPractice={onOpenPractice} onTryExample={onTryExample} />)
 
     expect(screen.getByRole('dialog', { name: 'Java Language Guide' })).toBeTruthy()
     expect(screen.getByText(/bridge toward Salesforce Apex/i)).toBeTruthy()
@@ -30,12 +31,14 @@ describe('LanguageGuide', () => {
 
     await user.click(screen.getByRole('button', { name: 'Try example' }))
     expect(onTryExample).toHaveBeenCalledWith(expect.objectContaining({ id: 'java-scanner-input' }))
+    await user.click(screen.getByRole('button', { name: /Practice Java/i }))
+    expect(onOpenPractice).toHaveBeenCalledOnce()
   })
 
   it('shows a useful empty search state and closes with Escape', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
-    render(<LanguageGuide kind="ruby" open onClose={onClose} onTryExample={vi.fn()} />)
+    render(<LanguageGuide kind="ruby" open onClose={onClose} onOpenPractice={vi.fn()} onTryExample={vi.fn()} />)
 
     const search = screen.getByRole('searchbox')
     await waitFor(() => expect(document.activeElement).toBe(search))
@@ -55,7 +58,7 @@ describe('LanguageGuide', () => {
       configurable: true,
     })
 
-    render(<LanguageGuide kind="python" open onClose={vi.fn()} onTryExample={vi.fn()} />)
+    render(<LanguageGuide kind="python" open onClose={vi.fn()} onOpenPractice={vi.fn()} onTryExample={vi.fn()} />)
     await user.click(screen.getByRole('button', { name: 'Copy' }))
 
     expect(screen.getByRole('button', { name: 'Copy failed' })).toBeTruthy()
