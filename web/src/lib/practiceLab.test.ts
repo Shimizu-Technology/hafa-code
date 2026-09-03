@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
+import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -16,11 +17,13 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('offers a three-step progression for every supported project kind', () => {
+  it('offers five Starter exercises before Builder and Stretch for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
-      expect(challenges).toHaveLength(3)
-      expect(challenges.map((challenge) => challenge.difficulty)).toEqual(['Starter', 'Builder', 'Stretch'])
+      expect(challenges).toHaveLength(7)
+      expect(challenges.map((challenge) => challenge.difficulty)).toEqual([
+        'Starter', 'Starter', 'Starter', 'Starter', 'Starter', 'Builder', 'Stretch',
+      ])
       challenges.forEach((challenge) => {
         expect(challenge.project.files.some((file) => file.path === challenge.project.entryPath)).toBe(true)
         expect(challenge.instructions.length).toBeGreaterThanOrEqual(2)
@@ -31,13 +34,64 @@ describe('practice challenge catalog', () => {
 
   it('recommends the next unfinished challenge in the same language', () => {
     const first = practiceChallengeById('java-variables-greeting')!
-    const second = practiceChallengeById('java-loop-stops')!
+    const second = practiceChallengeById('java-arithmetic-total')!
+    const third = practiceChallengeById('java-conditional-access')!
     const last = practiceChallengeById('java-method-condition')!
+    const everyJavaChallenge = practiceChallengesFor('java').map((challenge) => challenge.id)
 
     expect(nextIncompletePracticeChallenge(first, [first.id])).toBe(second)
-    expect(nextIncompletePracticeChallenge(first, [first.id, second.id])).toBe(last)
+    expect(nextIncompletePracticeChallenge(first, [first.id, second.id])).toBe(third)
     expect(nextIncompletePracticeChallenge(last, [last.id])).toBe(first)
-    expect(nextIncompletePracticeChallenge(last, [first.id, second.id, last.id])).toBeNull()
+    expect(nextIncompletePracticeChallenge(last, everyJavaChallenge)).toBeNull()
+  })
+
+  it('gives every additional Starter an unfinished scaffold and a valid reference solution', () => {
+    const runtimeSolutions: Record<string, string> = {
+      'ruby-arithmetic-total': 'price = 6\nquantity = 3\ntotal = price * quantity\nputs "Total: #{total}"\n',
+      'ruby-conditional-access': 'age = 18\nif age >= 18\n  puts "Access granted"\nelse\n  puts "Ask an adult"\nend\n',
+      'ruby-array-stops': 'stops = ["Hagåtña", "Tamuning", "Dededo"]\nputs "First stop: #{stops.first}"\nputs "Total stops: #{stops.length}"\n',
+      'ruby-method-welcome': 'def welcome(name)\n  "Welcome, #{name}!"\nend\nputs welcome("Mia")\n',
+      'javascript-arithmetic-total': 'const price = 6\nconst quantity = 3\nconst total = price * quantity\nconsole.log(`Total: ${total}`)\n',
+      'javascript-conditional-access': 'const age = 18\nif (age >= 18) {\n  console.log("Access granted")\n} else {\n  console.log("Ask an adult")\n}\n',
+      'javascript-array-stops': 'const stops = ["Hagåtña", "Tamuning", "Dededo"]\nconsole.log(`First stop: ${stops[0]}`)\nconsole.log(`Total stops: ${stops.length}`)\n',
+      'javascript-function-welcome': 'function welcome(name) {\n  return `Welcome, ${name}!`\n}\nconsole.log(welcome("Mia"))\n',
+      'python-arithmetic-total': 'price = 6\nquantity = 3\ntotal = price * quantity\nprint(f"Total: {total}")\n',
+      'python-conditional-access': 'age = 18\nif age >= 18:\n    print("Access granted")\nelse:\n    print("Ask an adult")\n',
+      'python-list-stops': 'stops = ["Hagåtña", "Tamuning", "Dededo"]\nprint(f"First stop: {stops[0]}")\nprint(f"Total stops: {len(stops)}")\n',
+      'python-function-welcome': 'def welcome(name):\n    return f"Welcome, {name}!"\nprint(welcome("Mia"))\n',
+      'java-arithmetic-total': 'class Main { public static void main(String[] args) {\nint price = 6;\nint quantity = 3;\nint total = price * quantity;\nSystem.out.println("Total: " + total);\n} }\n',
+      'java-conditional-access': 'class Main { public static void main(String[] args) {\nint age = 18;\nif (age >= 18) { System.out.println("Access granted"); } else { System.out.println("Ask an adult"); }\n} }\n',
+      'java-array-stops': 'class Main { public static void main(String[] args) {\nString[] stops = {"Hagåtña", "Tamuning", "Dededo"};\nSystem.out.println("First stop: " + stops[0]);\nSystem.out.println("Total stops: " + stops.length);\n} }\n',
+      'java-method-welcome': 'class Main {\nstatic String welcome(String name) { return "Welcome, " + name + "!"; }\npublic static void main(String[] args) { System.out.println(welcome("Mia")); }\n}\n',
+    }
+    const webSolutions: Record<string, Record<string, string>> = {
+      'web-page-landmarks': { 'index.html': '<header><h1>Community board</h1></header><nav><a href="#events">Events</a></nav><main id="events">Events</main><footer>Guam</footer>' },
+      'web-accessible-email': { 'index.html': '<form><label for="email">Email address</label><input id="email" name="email" type="email"></form>' },
+      'web-style-action': { 'style.css': '.action { background: #176b78; padding: 0.75rem 1rem; color: white; }' },
+      'web-responsive-image': { 'style.css': '.hero-image { max-width: 100%; height: auto; }' },
+    }
+
+    expect(ADDITIONAL_STARTER_CHALLENGES).toHaveLength(20)
+    ADDITIONAL_STARTER_CHALLENGES.forEach((challenge) => {
+      const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(unfinished.passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const source = runtimeSolutions[challenge.id]
+      const files = source
+        ? challenge.project.files.map((file) => file.path === challenge.project.entryPath ? { ...file, content: source } : file)
+        : challenge.project.files.map((file) => ({ ...file, content: webSolutions[challenge.id]?.[file.path] ?? file.content }))
+      const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(result.passed, `${challenge.id} should accept its reference solution`).toBe(true)
+    })
+  })
+
+  it('keeps every challenge id unique', () => {
+    const ids = PROJECT_KINDS.flatMap((kind) => practiceChallengesFor(kind).map((challenge) => challenge.id))
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('checks both Java syntax requirements and normalized runtime output', () => {

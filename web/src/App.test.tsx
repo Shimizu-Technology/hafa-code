@@ -6,7 +6,7 @@ import { LEARNING_SIDECAR_OVERLAY_QUERY } from './components/LearningSidecar'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
 import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
-import { practiceChallengeById } from './lib/practiceLab'
+import { practiceChallengeById, practiceChallengesFor } from './lib/practiceLab'
 import { completePracticeChallenge, completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
 import { createConflictCopy } from './lib/projectStorage'
 import type { ProjectLibrary } from './lib/projectStorage'
@@ -229,17 +229,17 @@ describe('App language guide practice projects', () => {
       durationMs: 12,
     }))
 
-    expect(screen.getByText('Up next · Builder')).toBeTruthy()
+    expect(screen.getByText('Up next · Starter')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Next challenge' }))
 
     await waitFor(() => expect(storedLibrary().projects).toHaveLength(3))
-    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Practice · Ruby Loop')
-    expect(screen.getByRole('heading', { name: 'Count the stops' })).toBeTruthy()
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Practice · Ruby Order Total')
+    expect(screen.getByRole('heading', { name: 'Calculate an order total' })).toBeTruthy()
   })
 
   it('skips completed challenges and returns to the highlighted recommendation in the lab', async () => {
     const user = userEvent.setup()
-    completePracticeChallenge('ruby-loop-stops')
+    completePracticeChallenge('ruby-arithmetic-total')
     const { container } = render(<App />)
 
     await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
@@ -252,14 +252,14 @@ describe('App language guide practice projects', () => {
       status: 'success', stdout: 'Hafa adai, Lina!\nLessons: 4\n', stderr: '', durationMs: 12,
     }))
 
-    expect(screen.getByText('Up next · Stretch')).toBeTruthy()
-    expect(screen.getByText('Make a launch check')).toBeTruthy()
+    expect(screen.getByText('Up next · Starter')).toBeTruthy()
+    expect(screen.getByText('Choose an access message')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
 
     const practicePanel = screen.getByRole('tabpanel', { name: 'Practice lab' })
-    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/3/ }).getAttribute('aria-current')).toBe('page')
+    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/7/ }).getAttribute('aria-current')).toBe('page')
     expect(within(practicePanel).getByText('Your place')).toBeTruthy()
-    expect(container.querySelector('[data-practice-challenge-id="ruby-method-condition"]')?.classList.contains('current')).toBe(true)
+    expect(container.querySelector('[data-practice-challenge-id="ruby-conditional-access"]')?.classList.contains('current')).toBe(true)
   })
 
   it('wraps from the last challenge to an unfinished earlier challenge', async () => {
@@ -267,7 +267,8 @@ describe('App language guide practice projects', () => {
     render(<App />)
 
     await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
-    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[2])
+    await user.click(within(screen.getByLabelText('Challenge filters')).getByRole('button', { name: 'Stretch' }))
+    await user.click(screen.getByRole('button', { name: 'Start challenge' }))
     fireEvent.change(screen.getByLabelText('Code editor'), {
       target: { value: 'def launch_status(tests_passing)\n  if tests_passing\n    "Ready to ship"\n  else\n    "Keep working"\n  end\nend\n\nputs launch_status(true)\n' },
     })
@@ -282,8 +283,7 @@ describe('App language guide practice projects', () => {
 
   it('shows the language-complete fallback after the final unfinished challenge', async () => {
     const user = userEvent.setup()
-    completePracticeChallenge('ruby-loop-stops')
-    completePracticeChallenge('ruby-method-condition')
+    practiceChallengesFor('ruby').slice(1).forEach((challenge) => completePracticeChallenge(challenge.id))
     render(<App />)
 
     await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])

@@ -21,12 +21,13 @@ describe('PracticeLab', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: /Java 1\/3/i }).getAttribute('aria-current')).toBe('page')
-    expect(screen.getByText('1 of 3 complete')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Java 1\/7/i }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByText('1 of 7 complete')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Python' }))
-    expect(screen.getByText('0 of 3 complete')).toBeTruthy()
-    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[1])
+    expect(screen.getByText('0 of 7 complete')).toBeTruthy()
+    await user.click(within(screen.getByLabelText('Challenge filters')).getByRole('button', { name: 'Builder' }))
+    await user.click(screen.getByRole('button', { name: 'Start challenge' }))
 
     expect(onStartChallenge).toHaveBeenCalledWith(practiceChallengeById('python-loop-stops'))
   })
@@ -44,7 +45,7 @@ describe('PracticeLab', () => {
     const user = userEvent.setup()
     render(<PracticeLab completedChallengeIds={['java-variables-greeting']} initialKind="java" open onClose={vi.fn()} onStartChallenge={vi.fn()} />)
 
-    expect(screen.getByRole('progressbar', { name: '1 of 1 Starter challenges complete' })).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: '1 of 5 Starter challenges complete' })).toBeTruthy()
     const filters = screen.getByLabelText('Challenge filters')
     await user.click(within(filters).getByRole('button', { name: 'Builder' }))
     expect(screen.getByRole('heading', { name: 'Count the stops' })).toBeTruthy()
@@ -74,7 +75,7 @@ describe('PracticeLab', () => {
         />,
       )
 
-      expect(screen.getByRole('button', { name: /Java 1\/3/i }).getAttribute('aria-current')).toBe('page')
+      expect(screen.getByRole('button', { name: /Java 1\/7/i }).getAttribute('aria-current')).toBe('page')
       expect(container.querySelector('[data-practice-challenge-id="java-loop-stops"]')?.classList.contains('current')).toBe(true)
       expect(screen.getByText('Your place')).toBeTruthy()
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
@@ -104,7 +105,7 @@ describe('PracticeLab', () => {
     await user.type(screen.getByRole('searchbox'), 'not-a-real-concept')
     expect(screen.getByRole('heading', { name: /no challenges match/i })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(7)
     await user.keyboard('{Escape}')
 
     expect(onClose).toHaveBeenCalledOnce()
@@ -166,7 +167,7 @@ describe('PracticeSessionPanel', () => {
         challenge={practiceChallengeById('java-variables-greeting')!}
         checking={false}
         completed
-        nextChallenge={practiceChallengeById('java-loop-stops')!}
+        nextChallenge={practiceChallengeById('java-arithmetic-total')!}
         result={{ passed: true, checks: [{ label: 'Set the name variable to Lina', passed: true }] }}
         onCheck={vi.fn()}
         onOpenLab={onOpenLab}
@@ -174,8 +175,8 @@ describe('PracticeSessionPanel', () => {
       />,
     )
 
-    expect(screen.getByText('Up next · Builder')).toBeTruthy()
-    expect(screen.getByText('Count the stops')).toBeTruthy()
+    expect(screen.getByText('Up next · Starter')).toBeTruthy()
+    expect(screen.getByText('Calculate an order total')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Next challenge' }))
     await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
     expect(onStartNext).toHaveBeenCalledOnce()
