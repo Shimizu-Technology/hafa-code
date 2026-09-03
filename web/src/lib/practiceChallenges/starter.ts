@@ -3,11 +3,12 @@ import type { PracticeChallenge } from '../practiceLab'
 function isObviouslyHidden(element: Element) {
   let current: Element | null = element
   while (current) {
-    const inlineStyle = current.getAttribute('style')?.toLowerCase() ?? ''
+    const inlineStyle = (current as HTMLElement).style
     if (
       current.hasAttribute('hidden')
       || current.getAttribute('aria-hidden')?.toLowerCase() === 'true'
-      || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important\s*)?(?:;|$)/.test(inlineStyle)
+      || inlineStyle?.display.toLowerCase() === 'none'
+      || inlineStyle?.visibility.toLowerCase() === 'hidden'
     ) return true
     current = current.parentElement
   }
