@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -13,6 +13,17 @@ vi.mock('@monaco-editor/react', () => ({
   ),
 }))
 
+const runnerHarness = vi.hoisted(() => ({
+  onRunComplete: undefined as undefined | ((outcome: { status: 'success'; stdout: string; stderr: string; durationMs: number }) => void),
+}))
+
+vi.mock('./components/RunnerPanel', () => ({
+  RunnerPanel: ({ onRunComplete }: { onRunComplete?: typeof runnerHarness.onRunComplete }) => {
+    runnerHarness.onRunComplete = onRunComplete
+    return <section aria-label="Test runner" />
+  },
+}))
+
 const STORAGE_KEY = 'hafa-code-projects-v2'
 
 function storedLibrary() {
@@ -22,6 +33,7 @@ function storedLibrary() {
 describe('App language guide practice projects', () => {
   beforeEach(() => {
     localStorage.clear()
+    runnerHarness.onRunComplete = undefined
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
       configurable: true,
       value: vi.fn(),
@@ -97,5 +109,26 @@ describe('App language guide practice projects', () => {
     })
     expect(practiceChallengeIdForProject(practiceProject.id)).toBe(challenge.id)
     expect(screen.getByRole('heading', { name: challenge.title })).toBeTruthy()
+  })
+
+  it('ignores a delayed practice result after the learner switches projects', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    await user.click(screen.getByRole('button', { name: 'Check my work' }))
+    expect(screen.getByRole('button', { name: 'Checking…' })).toBeTruthy()
+
+    await user.click(screen.getAllByRole('button', { name: 'Ruby Playground Ruby' })[0])
+    act(() => runnerHarness.onRunComplete?.({
+      status: 'success',
+      stdout: 'Hafa adai, Lina!\nLessons: 4\n',
+      stderr: '',
+      durationMs: 12,
+    }))
+
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Ruby Playground')
+    expect(screen.queryByText('Challenge complete')).toBeNull()
   })
 })

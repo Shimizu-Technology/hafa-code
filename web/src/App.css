@@ -3635,11 +3635,9 @@ button.context-chip.active,
   }
 
   .practice-session-actions .ghost.compact {
-    min-width: 44px;
     min-height: 44px;
-    aspect-ratio: 1;
-    padding: 0.45rem;
-    font-size: 0;
+    padding: 0.45rem 0.55rem;
+    font-size: 0.68rem;
   }
 
   .practice-session-body {

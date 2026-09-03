@@ -42,6 +42,9 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
   const runRef = useRef<() => void>(() => {})
   const armExecutionTimeoutRef = useRef<() => void>(() => {})
   const outputEmittedRef = useRef(false)
+  const startedAtRef = useRef<number | null>(null)
+  const streamedOutputRef = useRef({ stdout: '', stderr: '' })
+  const detachWorkerListenersRef = useRef<() => void>(() => {})
   const terminalScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -56,6 +59,7 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
 
   const stopWorker = useCallback(() => {
     clearRunTimer()
+    detachWorkerListenersRef.current()
     const worker = workerRef.current
     const runId = runIdRef.current
     if (worker && runId) worker.postMessage({ id: runId, type: 'abort' })
@@ -87,6 +91,8 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
 
     workerRef.current = worker
     runIdRef.current = runId
+    startedAtRef.current = startedAt
+    streamedOutputRef.current = { stdout: '', stderr: '' }
     outputEmittedRef.current = false
     setAwaitingInput(false)
     setRunPhase('loading')
@@ -105,9 +111,15 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
       stopWorker()
       const message = 'The browser runtime took too long to load. Check your connection, then try again.'
       appendTerminalLine({ kind: 'system', text: message })
-      const outcome: RunnerOutcome = { status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
+      const outcome: RunnerOutcome = {
+        status: 'timeout',
+        stdout: streamedOutputRef.current.stdout,
+        stderr: streamedOutputRef.current.stderr || message,
+        durationMs: Math.round(performance.now() - startedAt),
+      }
       setRunState(outcome)
       onRunComplete?.(outcome)
+      startedAtRef.current = null
     }, startupTimeoutMs)
 
     const armExecutionTimeout = () => {
@@ -116,10 +128,16 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
         if (runIdRef.current !== runId) return
         stopWorker()
         const message = `Execution stopped after ${executionTimeoutMs}ms.`
-        const outcome: RunnerOutcome = { status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
+        const outcome: RunnerOutcome = {
+          status: 'timeout',
+          stdout: streamedOutputRef.current.stdout,
+          stderr: streamedOutputRef.current.stderr || message,
+          durationMs: Math.round(performance.now() - startedAt),
+        }
         appendTerminalLine({ kind: 'system', text: message })
         setRunState(outcome)
         onRunComplete?.(outcome)
+        startedAtRef.current = null
       }, executionTimeoutMs + 250)
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
@@ -127,6 +145,9 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
     const detachWorkerListeners = () => {
       worker.removeEventListener('message', handleWorkerMessage)
       worker.removeEventListener('error', handleWorkerError)
+      if (detachWorkerListenersRef.current === detachWorkerListeners) {
+        detachWorkerListenersRef.current = () => {}
+      }
     }
 
     const handleWorkerMessage = (event: MessageEvent<RunnerResponse>) => {
@@ -140,7 +161,10 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
 
       if (event.data.type === 'output') {
         outputEmittedRef.current = true
-        appendTerminalLine({ kind: event.data.stream === 'stderr' ? 'stderr' : 'stdout', text: event.data.text ?? '' })
+        const stream = event.data.stream === 'stderr' ? 'stderr' : 'stdout'
+        const text = event.data.text ?? ''
+        streamedOutputRef.current[stream] += text
+        appendTerminalLine({ kind: stream, text })
         return
       }
 
@@ -174,23 +198,32 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
       }
       setRunState(outcome)
       onRunComplete?.(outcome)
+      startedAtRef.current = null
     }
 
     const handleWorkerError = (event: ErrorEvent) => {
+      if (runIdRef.current !== runId) return
       detachWorkerListeners()
       stopWorker()
       const details = event.message || 'The browser runner stopped unexpectedly.'
       const message = /fetch|network|load/i.test(details)
         ? `The browser runtime could not load. Check your connection and try again.\n${details}`
         : details
-      const outcome: RunnerOutcome = { status: 'error', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
+      const outcome: RunnerOutcome = {
+        status: 'error',
+        stdout: streamedOutputRef.current.stdout,
+        stderr: streamedOutputRef.current.stderr || message,
+        durationMs: Math.round(performance.now() - startedAt),
+      }
       appendTerminalLine({ kind: 'stderr', text: message })
       setRunState(outcome)
       onRunComplete?.(outcome)
+      startedAtRef.current = null
     }
 
     worker.addEventListener('message', handleWorkerMessage)
     worker.addEventListener('error', handleWorkerError)
+    detachWorkerListenersRef.current = detachWorkerListeners
 
     worker.postMessage({
       id: runId,
@@ -227,12 +260,13 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
     appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
     const outcome: RunnerOutcome = {
       status: 'timeout',
-      stdout: runState.stdout,
-      stderr: runState.stderr || 'Execution stopped.',
-      durationMs: runState.durationMs,
+      stdout: streamedOutputRef.current.stdout,
+      stderr: streamedOutputRef.current.stderr || 'Execution stopped.',
+      durationMs: startedAtRef.current === null ? runState.durationMs : Math.round(performance.now() - startedAtRef.current),
     }
     setRunState(outcome)
     onRunComplete?.(outcome)
+    startedAtRef.current = null
   }
 
   const runStatusLabel = awaitingInput

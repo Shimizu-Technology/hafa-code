@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import {
@@ -6,6 +6,7 @@ import {
   completedPracticeChallengeIds,
   linkPracticeProject,
   practiceChallengeIdForProject,
+  remapPendingPracticeCheck,
   replacePracticeProjectId,
 } from './practiceProgress'
 
@@ -28,7 +29,7 @@ describe('practice challenge catalog', () => {
     const files = [{
       path: 'Main.java',
       language: 'java' as const,
-      content: 'class Main { public static void main(String[] args) { String name = "Lina"; int lessons = 4; } }',
+      content: 'class Main {\n  public static void main(String[] args) {\n    String name = "Lina";\n    int lessons = 4;\n  }\n}',
     }]
     const result = evaluatePracticeChallenge(challenge, files, {
       status: 'success',
@@ -52,6 +53,41 @@ describe('practice challenge catalog', () => {
       { label: 'Add the View work link', passed: false },
     ])
   })
+
+  it('rejects a View work anchor without a destination', () => {
+    const challenge = practiceChallengeById('web-semantic-profile')!
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'index.html', language: 'html', content: '<main><h1>Lina</h1><a>View work</a></main>' }])
+
+    expect(result.checks.find((check) => check.label === 'Add the View work link')?.passed).toBe(false)
+  })
+
+  it('requires counter updates to happen inside the registered click handler', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const disconnectedSource = 'button.addEventListener("click", () => {})\ncount += 1\noutput.textContent = count\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: disconnectedSource }])
+
+    expect(result.passed).toBe(false)
+    expect(result.checks.map((check) => check.passed)).toEqual([true, false, false])
+  })
+
+  it('does not count syntax examples hidden in comments or string literals', () => {
+    const rubyChallenge = practiceChallengeById('ruby-loop-stops')!
+    const rubyResult = evaluatePracticeChallenge(rubyChallenge, [{
+      path: 'main.rb',
+      language: 'ruby',
+      content: '# (1..3).each do |stop|\nexample = "for stop in stops"\nputs "Stop 1"\n',
+    }], { status: 'success', stdout: 'Stop 1\nStop 2\nStop 3', stderr: '', durationMs: 1 })
+
+    const webChallenge = practiceChallengeById('web-semantic-profile')!
+    const webResult = evaluatePracticeChallenge(webChallenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<!-- <main><h1>Lina</h1><a href="/work">View work</a></main> -->',
+    }])
+
+    expect(rubyResult.checks[0].passed).toBe(false)
+    expect(webResult.checks.every((check) => !check.passed)).toBe(true)
+  })
 })
 
 describe('practice progress', () => {
@@ -65,5 +101,23 @@ describe('practice progress', () => {
     expect(practiceChallengeIdForProject('local-project')).toBeNull()
     expect(practiceChallengeIdForProject('42')).toBe('python-loop-stops')
     expect(completedPracticeChallengeIds()).toEqual(['python-loop-stops'])
+  })
+
+  it('remaps only the pending check that belongs to the saved local project', () => {
+    const pending = { projectId: 'local-project', challengeId: 'python-loop-stops' }
+
+    expect(remapPendingPracticeCheck(pending, 'local-project', '42')).toEqual({ projectId: '42', challengeId: 'python-loop-stops' })
+    expect(remapPendingPracticeCheck(pending, 'another-project', '42')).toBe(pending)
+  })
+
+  it('keeps practice usable when the browser blocks storage writes', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
+
+    expect(linkPracticeProject('local-project', 'python-loop-stops')).toBe(false)
+    expect(completePracticeChallenge('python-loop-stops')).toBe(false)
+    expect(practiceChallengeIdForProject('local-project')).toBe('python-loop-stops')
+    expect(completedPracticeChallengeIds()).toContain('python-loop-stops')
+
+    setItem.mockRestore()
   })
 })

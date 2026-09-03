@@ -7,6 +7,8 @@ export interface PracticeFileCheck {
   filePath: string
   label: string
   pattern: RegExp
+  withinPattern?: RegExp
+  ignoreStrings?: boolean
 }
 
 export interface PracticeChallenge {
@@ -43,8 +45,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Ruby assigns a variable with `name = value`.', 'Put `#{name}` inside a double-quoted string.'],
     project: { title: 'Practice · Ruby Greeting', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: 'name = "friend"\nlessons = 0\n\nputs "Hafa adai, #{name}!"\nputs "Lessons: #{lessons}"\n' }] },
     checks: [
-      { filePath: 'main.rb', label: 'Set the name variable to Lina', pattern: /\bname\s*=\s*["']Lina["']/ },
-      { filePath: 'main.rb', label: 'Set the lessons variable to 4', pattern: /\blessons\s*=\s*4\b/ },
+      { filePath: 'main.rb', label: 'Set the name variable to Lina', pattern: /^\s*name\s*=\s*["']Lina["']\s*$/m },
+      { filePath: 'main.rb', label: 'Set the lessons variable to 4', pattern: /^\s*lessons\s*=\s*4\s*$/m },
     ],
     expectedOutput: 'Hafa adai, Lina!\nLessons: 4',
   },
@@ -55,7 +57,7 @@ const runtimeChallenges: PracticeChallenge[] = [
     instructions: ['Loop from 1 through 3.', 'Print `Stop 1`, `Stop 2`, and `Stop 3` on separate lines.'],
     hints: ['An inclusive Ruby range looks like `1..3`.', 'Call `.each do |stop|` on the range.'],
     project: { title: 'Practice · Ruby Loop', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: '# Replace the repeated line with a loop.\nputs "Stop 1"\n' }] },
-    checks: [{ filePath: 'main.rb', label: 'Use a loop', pattern: /\b(?:each|times|for)\b/ }],
+    checks: [{ filePath: 'main.rb', label: 'Use a loop', pattern: /\b(?:each|times|for)\b/, ignoreStrings: true }],
     expectedOutput: 'Stop 1\nStop 2\nStop 3',
   },
   {
@@ -66,8 +68,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Define it with `def launch_status(tests_passing)`.', 'Use an `if` / `else` expression inside the method.'],
     project: { title: 'Practice · Ruby Launch Check', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: 'tests_passing = true\n\n# Define launch_status here.\n\nputs "Keep working"\n' }] },
     checks: [
-      { filePath: 'main.rb', label: 'Define launch_status', pattern: /\bdef\s+launch_status\s*\(/ },
-      { filePath: 'main.rb', label: 'Use a conditional', pattern: /\bif\b[\s\S]*\belse\b/ },
+      { filePath: 'main.rb', label: 'Define launch_status', pattern: /\bdef\s+launch_status\s*\(/, ignoreStrings: true },
+      { filePath: 'main.rb', label: 'Use a conditional', pattern: /\bif\b[\s\S]*\belse\b/, ignoreStrings: true },
     ],
     expectedOutput: 'Ready to ship',
   },
@@ -79,8 +81,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Declare an unchanged value with `const`.', 'Use backticks and `${name}` for interpolation.'],
     project: { title: 'Practice · JavaScript Greeting', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const name = "friend"\nconst lessons = 0\n\nconsole.log(`Hafa adai, ${name}!`)\nconsole.log(`Lessons: ${lessons}`)\n' }] },
     checks: [
-      { filePath: 'main.js', label: 'Set the name constant to Lina', pattern: /\b(?:const|let)\s+name\s*=\s*["']Lina["']/ },
-      { filePath: 'main.js', label: 'Set the lessons constant to 4', pattern: /\b(?:const|let)\s+lessons\s*=\s*4\b/ },
+      { filePath: 'main.js', label: 'Set the name constant to Lina', pattern: /^\s*(?:const|let)\s+name\s*=\s*["']Lina["']\s*;?\s*$/m },
+      { filePath: 'main.js', label: 'Set the lessons constant to 4', pattern: /^\s*(?:const|let)\s+lessons\s*=\s*4\s*;?\s*$/m },
     ],
     expectedOutput: 'Hafa adai, Lina!\nLessons: 4',
   },
@@ -91,7 +93,7 @@ const runtimeChallenges: PracticeChallenge[] = [
     instructions: ['Loop from 1 through 3.', 'Log `Stop 1`, `Stop 2`, and `Stop 3` on separate lines.'],
     hints: ['Start with `for (let stop = 1; ... )`.', 'Continue while `stop <= 3`, then increment `stop`.'],
     project: { title: 'Practice · JavaScript Loop', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: '// Replace the repeated line with a loop.\nconsole.log("Stop 1")\n' }] },
-    checks: [{ filePath: 'main.js', label: 'Use a loop', pattern: /\b(?:for|while)\s*\(/ }],
+    checks: [{ filePath: 'main.js', label: 'Use a loop', pattern: /\b(?:for|while)\s*\(/, ignoreStrings: true }],
     expectedOutput: 'Stop 1\nStop 2\nStop 3',
   },
   {
@@ -102,8 +104,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Start with `function launchStatus(testsPassing) {`.', 'Use `if` and `else`, then call the function inside `console.log`.'],
     project: { title: 'Practice · JavaScript Launch Check', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const testsPassing = true\n\n// Define launchStatus here.\n\nconsole.log("Keep working")\n' }] },
     checks: [
-      { filePath: 'main.js', label: 'Define launchStatus', pattern: /\bfunction\s+launchStatus\s*\(/ },
-      { filePath: 'main.js', label: 'Use a conditional', pattern: /\bif\s*\([\s\S]*\belse\b/ },
+      { filePath: 'main.js', label: 'Define launchStatus', pattern: /\bfunction\s+launchStatus\s*\(/, ignoreStrings: true },
+      { filePath: 'main.js', label: 'Use a conditional', pattern: /\bif\s*\([\s\S]*\belse\b/, ignoreStrings: true },
     ],
     expectedOutput: 'Ready to ship',
   },
@@ -115,8 +117,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Python assigns with `name = value`.', 'Prefix a string with `f` and place a variable inside `{}`.'],
     project: { title: 'Practice · Python Greeting', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: 'name = "friend"\nlessons = 0\n\nprint(f"Hafa adai, {name}!")\nprint(f"Lessons: {lessons}")\n' }] },
     checks: [
-      { filePath: 'main.py', label: 'Set the name variable to Lina', pattern: /\bname\s*=\s*["']Lina["']/ },
-      { filePath: 'main.py', label: 'Set the lessons variable to 4', pattern: /\blessons\s*=\s*4\b/ },
+      { filePath: 'main.py', label: 'Set the name variable to Lina', pattern: /^\s*name\s*=\s*["']Lina["']\s*$/m },
+      { filePath: 'main.py', label: 'Set the lessons variable to 4', pattern: /^\s*lessons\s*=\s*4\s*$/m },
     ],
     expectedOutput: 'Hafa adai, Lina!\nLessons: 4',
   },
@@ -127,7 +129,7 @@ const runtimeChallenges: PracticeChallenge[] = [
     instructions: ['Loop from 1 through 3.', 'Print `Stop 1`, `Stop 2`, and `Stop 3` on separate lines.'],
     hints: ['`range(1, 4)` produces 1, 2, and 3.', 'Begin the loop with `for stop in ...:` and indent its body.'],
     project: { title: 'Practice · Python Loop', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: '# Replace the repeated line with a loop.\nprint("Stop 1")\n' }] },
-    checks: [{ filePath: 'main.py', label: 'Use a loop with range', pattern: /\bfor\s+\w+\s+in\s+range\s*\(/ }],
+    checks: [{ filePath: 'main.py', label: 'Use a loop with range', pattern: /\bfor\s+\w+\s+in\s+range\s*\(/, ignoreStrings: true }],
     expectedOutput: 'Stop 1\nStop 2\nStop 3',
   },
   {
@@ -138,8 +140,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Start with `def launch_status(tests_passing):`.', 'Use an indented `if` / `else`, then call the function.'],
     project: { title: 'Practice · Python Launch Check', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: 'tests_passing = True\n\n# Define launch_status here.\n\nprint("Keep working")\n' }] },
     checks: [
-      { filePath: 'main.py', label: 'Define launch_status', pattern: /\bdef\s+launch_status\s*\(/ },
-      { filePath: 'main.py', label: 'Use a conditional', pattern: /\bif\b[\s\S]*\belse\s*:/ },
+      { filePath: 'main.py', label: 'Define launch_status', pattern: /\bdef\s+launch_status\s*\(/, ignoreStrings: true },
+      { filePath: 'main.py', label: 'Use a conditional', pattern: /\bif\b[\s\S]*\belse\s*:/, ignoreStrings: true },
     ],
     expectedOutput: 'Ready to ship',
   },
@@ -151,8 +153,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Declare text with `String name = ...;`.', 'Declare a whole number with `int lessons = ...;`.'],
     project: { title: 'Practice · Java Greeting', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    String name = "friend";\n    int lessons = 0;\n\n    System.out.println("Hafa adai, " + name + "!");\n    System.out.println("Lessons: " + lessons);\n  }\n}\n' }] },
     checks: [
-      { filePath: 'Main.java', label: 'Set the name variable to Lina', pattern: /\bString\s+name\s*=\s*"Lina"\s*;/ },
-      { filePath: 'Main.java', label: 'Set the lessons variable to 4', pattern: /\bint\s+lessons\s*=\s*4\s*;/ },
+      { filePath: 'Main.java', label: 'Set the name variable to Lina', pattern: /^\s*String\s+name\s*=\s*"Lina"\s*;\s*$/m },
+      { filePath: 'Main.java', label: 'Set the lessons variable to 4', pattern: /^\s*int\s+lessons\s*=\s*4\s*;\s*$/m },
     ],
     expectedOutput: 'Hafa adai, Lina!\nLessons: 4',
   },
@@ -163,7 +165,7 @@ const runtimeChallenges: PracticeChallenge[] = [
     instructions: ['Loop from 1 through 3.', 'Print `Stop 1`, `Stop 2`, and `Stop 3` on separate lines.'],
     hints: ['Start with `for (int stop = 1; ... )`.', 'Continue while `stop <= 3`, then use `stop++`.'],
     project: { title: 'Practice · Java Loop', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    // Replace the repeated line with a loop.\n    System.out.println("Stop 1");\n  }\n}\n' }] },
-    checks: [{ filePath: 'Main.java', label: 'Use a for loop', pattern: /\bfor\s*\(/ }],
+    checks: [{ filePath: 'Main.java', label: 'Use a for loop', pattern: /\bfor\s*\(/, ignoreStrings: true }],
     expectedOutput: 'Stop 1\nStop 2\nStop 3',
   },
   {
@@ -174,8 +176,8 @@ const runtimeChallenges: PracticeChallenge[] = [
     hints: ['Place the method inside `Main`, but outside `main`.', 'Use `if (testsPassing)` and an `else` branch.'],
     project: { title: 'Practice · Java Launch Check', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    boolean testsPassing = true;\n    System.out.println("Keep working");\n  }\n\n  // Define launchStatus here.\n}\n' }] },
     checks: [
-      { filePath: 'Main.java', label: 'Define launchStatus', pattern: /\bstatic\s+String\s+launchStatus\s*\(\s*boolean\s+testsPassing\s*\)/ },
-      { filePath: 'Main.java', label: 'Use a conditional', pattern: /\bif\s*\([\s\S]*\belse\b/ },
+      { filePath: 'Main.java', label: 'Define launchStatus', pattern: /\bstatic\s+String\s+launchStatus\s*\(\s*boolean\s+testsPassing\s*\)/, ignoreStrings: true },
+      { filePath: 'Main.java', label: 'Use a conditional', pattern: /\bif\s*\([\s\S]*\belse\b/, ignoreStrings: true },
     ],
     expectedOutput: 'Ready to ship',
   },
@@ -195,7 +197,7 @@ const webChallenges: PracticeChallenge[] = [
     checks: [
       { filePath: 'index.html', label: 'Use a main element', pattern: /<main(?:\s|>)/i },
       { filePath: 'index.html', label: 'Add Lina as the main heading', pattern: /<h1(?:\s[^>]*)?>[^<]*Lina[^<]*<\/h1>/i },
-      { filePath: 'index.html', label: 'Add the View work link', pattern: /<a(?:\s[^>]*)?>[^<]*View work[^<]*<\/a>/i },
+      { filePath: 'index.html', label: 'Add the View work link', pattern: /<a(?=[^>]*\bhref\s*=\s*["'][^"']+["'])[^>]*>[^<]*View work[^<]*<\/a>/i },
     ],
   },
   {
@@ -226,8 +228,8 @@ const webChallenges: PracticeChallenge[] = [
     ] },
     checks: [
       { filePath: 'script.js', label: 'Listen for button clicks', pattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']/ },
-      { filePath: 'script.js', label: 'Increase the count', pattern: /(?:\+\+count|count\+\+|count\s*\+=\s*1|count\s*=\s*count\s*\+\s*1)/ },
-      { filePath: 'script.js', label: 'Update the output element', pattern: /\boutput\s*\.\s*(?:textContent|innerText)\s*=\s*count\b/ },
+      { filePath: 'script.js', label: 'Increase the count inside the click handler', pattern: /(?:\+\+count|count\+\+|count\s*\+=\s*1|count\s*=\s*count\s*\+\s*1)/, withinPattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*\)/, ignoreStrings: true },
+      { filePath: 'script.js', label: 'Update the output inside the click handler', pattern: /\boutput\s*\.\s*(?:textContent|innerText)\s*=\s*count\b/, withinPattern: /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*\)/, ignoreStrings: true },
     ],
   },
 ]
@@ -244,6 +246,109 @@ export function practiceChallengeById(id: string | null | undefined) {
   return id ? PRACTICE_CHALLENGES.find((challenge) => challenge.id === id) ?? null : null
 }
 
+function sourceWithoutComments(file: ProjectFile) {
+  if (file.language === 'html') {
+    return file.content
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+  }
+
+  const lineComment = file.language === 'ruby' || file.language === 'python' ? '#' : '//'
+  const hasLineComments = ['ruby', 'python', 'javascript', 'java'].includes(file.language)
+  const hasBlockComments = ['javascript', 'java', 'css'].includes(file.language)
+  let result = ''
+  let quote: string | null = null
+  let escaped = false
+
+  for (let index = 0; index < file.content.length; index += 1) {
+    const char = file.content[index]
+    const pair = file.content.slice(index, index + 2)
+
+    if (quote) {
+      result += char
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === quote) quote = null
+      continue
+    }
+
+    if (char === '"' || char === "'" || (file.language === 'javascript' && char === '`')) {
+      quote = char
+      result += char
+      continue
+    }
+
+    if (hasLineComments && file.content.startsWith(lineComment, index)) {
+      while (index < file.content.length && file.content[index] !== '\n') {
+        result += ' '
+        index += 1
+      }
+      if (index < file.content.length) result += '\n'
+      continue
+    }
+
+    if (hasBlockComments && pair === '/*') {
+      result += '  '
+      index += 2
+      while (index < file.content.length && file.content.slice(index, index + 2) !== '*/') {
+        result += file.content[index] === '\n' ? '\n' : ' '
+        index += 1
+      }
+      if (index < file.content.length) result += '  '
+      else index -= 1
+      continue
+    }
+
+    result += char
+  }
+
+  return result
+}
+
+function sourceWithoutStringContents(source: string) {
+  let result = ''
+  let quote: string | null = null
+  let tripleQuote = false
+  let escaped = false
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (!quote && (char === '"' || char === "'" || char === '`')) {
+      quote = char
+      tripleQuote = source.slice(index, index + 3) === char.repeat(3)
+      result += tripleQuote ? char.repeat(3) : char
+      if (tripleQuote) index += 2
+      continue
+    }
+
+    if (!quote) {
+      result += char
+      continue
+    }
+
+    if (tripleQuote && source.slice(index, index + 3) === quote.repeat(3)) {
+      result += quote.repeat(3)
+      index += 2
+      quote = null
+      tripleQuote = false
+      continue
+    }
+
+    if (!tripleQuote && !escaped && char === quote) {
+      result += char
+      quote = null
+      continue
+    }
+
+    result += char === '\n' ? '\n' : ' '
+    if (escaped) escaped = false
+    else if (char === '\\') escaped = true
+  }
+
+  return result
+}
+
 function normalizeOutput(output: string) {
   return output.replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n').trim()
 }
@@ -252,7 +357,11 @@ function normalizeOutput(output: string) {
 export function evaluatePracticeChallenge(challenge: PracticeChallenge, files: ProjectFile[], outcome?: RunnerOutcome): PracticeCheckResult {
   const checks = challenge.checks.map((check) => {
     const file = files.find((candidate) => candidate.path === check.filePath)
-    return { label: check.label, passed: Boolean(file && check.pattern.test(file.content)) }
+    const commentFreeSource = file ? sourceWithoutComments(file) : ''
+    const scopedMatch = check.withinPattern ? commentFreeSource.match(check.withinPattern) : null
+    const scopedSource = check.withinPattern ? (scopedMatch?.[1] ?? '') : commentFreeSource
+    const source = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
+    return { label: check.label, passed: Boolean(file && check.pattern.test(source)) }
   })
 
   if (challenge.expectedOutput !== undefined) {

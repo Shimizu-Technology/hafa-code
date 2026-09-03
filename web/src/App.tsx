@@ -65,7 +65,9 @@ import {
   completedPracticeChallengeIds,
   linkPracticeProject,
   practiceChallengeIdForProject,
+  remapPendingPracticeCheck,
   replacePracticeProjectId,
+  type PendingPracticeCheck,
 } from './lib/practiceProgress'
 import type { RunnerOutcome } from './lib/runnerOutcome'
 import {
@@ -172,11 +174,16 @@ export default function App() {
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
-  const pendingPracticeCheckRef = useRef<{ projectId: string; challengeId: string } | null>(null)
+  const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const clearPendingPracticeCheck = useCallback(() => {
+    pendingPracticeCheckRef.current = null
+    setPracticeChecking(false)
+    setPracticeResult(null)
+  }, [])
   const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
     setFileDialog(null)
     setFileDialogError('')
@@ -190,7 +197,10 @@ export default function App() {
   })
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
-  const currentPracticeChallenge = practiceChallengeById(practiceChallengeIdForProject(project.id))
+  const currentPracticeChallenge = useMemo(
+    () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
+    [project.id],
+  )
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
@@ -289,6 +299,7 @@ export default function App() {
         if (serverProject) {
           const conflictCopy = createConflictCopy(projectToSave)
           const currentLibrary = libraryRef.current
+          if (currentLibrary.activeProjectId === projectId) clearPendingPracticeCheck()
           const nextLibrary = {
             activeProjectId: currentLibrary.activeProjectId === projectId ? conflictCopy.id : currentLibrary.activeProjectId,
             projects: [
@@ -358,6 +369,7 @@ export default function App() {
     syncedProjectVersionsRef.current.set(savedProject.id, savedProject.updatedAt)
     if (savedProject.id !== projectId) {
       replacePracticeProjectId(projectId, savedProject.id)
+      pendingPracticeCheckRef.current = remapPendingPracticeCheck(pendingPracticeCheckRef.current, projectId, savedProject.id)
       clearProjectPendingCloudSync(projectId)
       if (changedWhileSaving || projectNeedingAnotherSave) {
         replacePendingCloudProjectId(projectId, savedProject.id, (projectNeedingAnotherSave ?? latestProject ?? savedProject).updatedAt)
@@ -378,21 +390,20 @@ export default function App() {
       clearProjectPendingCloudSync(savedProject.id)
       updateCloudSaveStatus(savedProject.id, 'saved')
     }
-  }, [hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
+  }, [clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
   useEffect(() => {
     syncCloudProjectRef.current = syncCloudProject
   }, [syncCloudProject])
 
   const activateProject = (nextProject: SavedProject) => {
-    pendingPracticeCheckRef.current = null
-    setPracticeChecking(false)
-    setPracticeResult(null)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
     setActivePath(nextProject.files[0].path)
     setCheckpointMenuOpen(false)
   }
 
   const activateFallbackProject = (projects: SavedProject[], archivedView = showArchived) => {
+    clearPendingPracticeCheck()
     const preferred = projects.find((candidate) => (archivedView ? isArchived(candidate) : !isArchived(candidate))) ?? projects[0]
     if (preferred) {
       setLibrary({ activeProjectId: preferred.id, projects })
@@ -447,6 +458,7 @@ export default function App() {
 
     api.getShare(shareToken).then((res) => {
       if (res.data) {
+        clearPendingPracticeCheck()
         setLibrary((current) => ({ activeProjectId: res.data!.id, projects: [res.data!, ...current.projects] }))
         setActivePath(res.data.files[0].path)
         setShowArchived(false)
@@ -457,7 +469,7 @@ export default function App() {
       }
       setHasImportedServerShare(true)
     })
-  }, [hasImportedServerShare])
+  }, [clearPendingPracticeCheck, hasImportedServerShare])
 
   useEffect(() => {
     if (!pendingInvitationToken) return
@@ -570,6 +582,7 @@ export default function App() {
         })
         const merged = mergeCloudAndLocalProjects(res.data, libraryRef.current, activeOrganizationId)
         const nextProject = merged.projects.find((candidate) => candidate.id === merged.activeProjectId) ?? merged.projects[0]
+        if (libraryRef.current.activeProjectId !== merged.activeProjectId) clearPendingPracticeCheck()
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
@@ -585,6 +598,7 @@ export default function App() {
               organization: activeOrganization,
               visibility: 'private' as ProjectVisibility,
             }
+            clearPendingPracticeCheck()
             setLibrary((current) => ({ activeProjectId: orgProject.id, projects: [orgProject, ...current.projects] }))
             setActivePath(orgProject.files[0].path)
           }
@@ -594,7 +608,7 @@ export default function App() {
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [activeOrganization, activeOrganizationId, hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
@@ -652,6 +666,7 @@ export default function App() {
       organization: activeOrganization,
       visibility: 'private' as ProjectVisibility,
     }
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
@@ -674,6 +689,7 @@ export default function App() {
       entryPath: topic.practiceProject.entryPath,
       files: topic.practiceProject.files.map((file) => ({ ...file })),
     }
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
@@ -697,26 +713,28 @@ export default function App() {
       entryPath: challenge.project.entryPath,
       files: challenge.project.files.map((file) => ({ ...file })),
     }
-    linkPracticeProject(practiceProject.id, challenge.id)
-    pendingPracticeCheckRef.current = null
-    setPracticeChecking(false)
-    setPracticeResult(null)
+    const progressSaved = linkPracticeProject(practiceProject.id, challenge.id)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
     setMobileTab('code')
     setPracticeLabOpen(false)
     setLanguageGuideOpen(false)
-    setNotice(`${challenge.title} is ready. Your previous project is unchanged.`)
+    setNotice(progressSaved
+      ? `${challenge.title} is ready. Your previous project is unchanged.`
+      : `${challenge.title} is ready and your previous project is unchanged. This browser could not save challenge progress.`)
   }
 
   const recordPracticeResult = (challenge: PracticeChallenge, result: PracticeCheckResult) => {
     setPracticeChecking(false)
     setPracticeResult(result)
     if (result.passed) {
-      completePracticeChallenge(challenge.id)
+      const progressSaved = completePracticeChallenge(challenge.id)
       setCompletedPracticeIds(completedPracticeChallengeIds())
-      setNotice(`${challenge.title} complete. Nice work — you can keep experimenting or choose another challenge.`)
+      setNotice(progressSaved
+        ? `${challenge.title} complete. Nice work — you can keep experimenting or choose another challenge.`
+        : `${challenge.title} complete. This browser could not save the completion, but you can keep practicing.`)
     }
   }
 
@@ -739,6 +757,10 @@ export default function App() {
     const pending = pendingPracticeCheckRef.current
     if (!pending) return
     pendingPracticeCheckRef.current = null
+    if (libraryRef.current.activeProjectId !== pending.projectId) {
+      setPracticeChecking(false)
+      return
+    }
     const checkedProject = libraryRef.current.projects.find((candidate) => candidate.id === pending.projectId)
     const challenge = practiceChallengeById(pending.challengeId)
     if (!checkedProject || !challenge) {
@@ -1044,6 +1066,7 @@ export default function App() {
         return
       }
 
+      clearPendingPracticeCheck()
       setLibrary((current) => ({
         activeProjectId: res.data!.id,
         projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
@@ -1058,6 +1081,7 @@ export default function App() {
     const projects = library.projects.map((candidate) => candidate.id === projectToRestore.id
       ? { ...candidate, archivedAt: null, updatedAt: restoredAt }
       : candidate)
+    clearPendingPracticeCheck()
     setLibrary({ activeProjectId: projectToRestore.id, projects })
     setActivePath(projectToRestore.files[0].path)
     setShowArchived(false)
@@ -1071,6 +1095,7 @@ export default function App() {
     }
     setProjectActionsOpen(false)
     const copy = duplicateProject(project)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({ activeProjectId: copy.id, projects: [copy, ...current.projects] }))
     setActivePath(copy.files[0].path)
     setShowArchived(false)
@@ -1288,6 +1313,7 @@ export default function App() {
     if (isSignedIn && isCloudProjectId(project.id) && isCloudProjectId(checkpoint.id)) {
       const res = await api.restoreCheckpoint(project.id, checkpoint.id)
       if (res.data) {
+        clearPendingPracticeCheck()
         setLibrary((current) => ({
           activeProjectId: res.data!.id,
           projects: current.projects.map((candidate) => candidate.id === res.data!.id ? res.data! : candidate),
@@ -1308,6 +1334,7 @@ export default function App() {
     }
 
     const restored = snapshotToProject(project, checkpoint.snapshot)
+    clearPendingPracticeCheck()
     setLibrary((current) => ({
       ...current,
       projects: current.projects.map((candidate) => candidate.id === project.id ? restored : candidate),
@@ -1348,6 +1375,7 @@ export default function App() {
     if (!file) return
     try {
       const imported = parseImportedProject(await file.text())
+      clearPendingPracticeCheck()
       setLibrary((current) => ({ activeProjectId: imported.id, projects: [imported, ...current.projects] }))
       setActivePath(imported.files[0].path)
       setShowArchived(false)
@@ -1838,7 +1866,7 @@ export default function App() {
 
           {currentPracticeChallenge && (
             <PracticeSessionPanel
-              key={currentPracticeChallenge.id}
+              key={`${project.id}:${currentPracticeChallenge.id}`}
               challenge={currentPracticeChallenge}
               checking={practiceChecking}
               completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
