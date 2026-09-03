@@ -58,20 +58,33 @@ describe('PracticeLab', () => {
   })
 
   it('returns to a highlighted challenge in its language', () => {
-    const { container } = render(
-      <PracticeLab
-        completedChallengeIds={['java-variables-greeting']}
-        focusChallengeId="java-loop-stops"
-        initialKind="ruby"
-        open
-        onClose={vi.fn()}
-        onStartChallenge={vi.fn()}
-      />,
-    )
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
 
-    expect(screen.getByRole('button', { name: /Java 1\/3/i }).getAttribute('aria-current')).toBe('page')
-    expect(container.querySelector('[data-practice-challenge-id="java-loop-stops"]')?.classList.contains('current')).toBe(true)
-    expect(screen.getByText('Your place')).toBeTruthy()
+    try {
+      const { container } = render(
+        <PracticeLab
+          completedChallengeIds={['java-variables-greeting']}
+          focusChallengeId="java-loop-stops"
+          initialKind="ruby"
+          open
+          onClose={vi.fn()}
+          onStartChallenge={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByRole('button', { name: /Java 1\/3/i }).getAttribute('aria-current')).toBe('page')
+      expect(container.querySelector('[data-practice-challenge-id="java-loop-stops"]')?.classList.contains('current')).toBe(true)
+      expect(screen.getByText('Your place')).toBeTruthy()
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: originalScrollIntoView })
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+      }
+    }
   })
 
   it('follows a changed initial language without requiring a remount', () => {
