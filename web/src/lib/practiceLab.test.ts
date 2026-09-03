@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
+import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -17,12 +18,14 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('offers five Starter exercises before Builder and Stretch for every supported project kind', () => {
+  it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
-      expect(challenges).toHaveLength(7)
+      expect(challenges).toHaveLength(11)
       expect(challenges.map((challenge) => challenge.difficulty)).toEqual([
-        'Starter', 'Starter', 'Starter', 'Starter', 'Starter', 'Builder', 'Stretch',
+        'Starter', 'Starter', 'Starter', 'Starter', 'Starter',
+        'Builder', 'Builder', 'Builder', 'Builder', 'Builder',
+        'Stretch',
       ])
       challenges.forEach((challenge) => {
         expect(challenge.project.files.some((file) => file.path === challenge.project.entryPath)).toBe(true)
@@ -85,8 +88,87 @@ describe('practice challenge catalog', () => {
       const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
         status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
       } : undefined)
-      expect(result.passed, `${challenge.id} should accept its reference solution`).toBe(true)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
     })
+  })
+
+  it('gives every additional Builder an unfinished scaffold and a valid reference solution', () => {
+    const runtimeSolutions: Record<string, string> = {
+      'ruby-filter-scores': 'scores = [88, 72, 95, 61]\npassing = scores.select { |score| score >= 80 }\nputs "Passing: #{passing.join(", ")}"\n',
+      'ruby-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n',
+      'ruby-hash-district': 'districts = { "H" => "Hagåtña", "T" => "Tamuning", "D" => "Dededo" }\nputs "District T: #{districts["T"]}"\n',
+      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nnames = ["Ana", "Ben"]\nputs "Roster: #{names.map { |name| format_name(name) }.join(", ")}"\n',
+      'javascript-filter-scores': 'const scores = [88, 72, 95, 61]\nconst passing = scores.filter((score) => score >= 80)\nconsole.log(`Passing: ${passing.join(", ")}`)\n',
+      'javascript-count-priorities': 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\nfor (const priority of priorities) {\n  if (priority === "high") highCount++\n}\nconsole.log(`High priority: ${highCount}`)\n',
+      'javascript-object-district': 'const districts = { H: "Hagåtña", T: "Tamuning", D: "Dededo" }\nconsole.log(`District T: ${districts.T}`)\n',
+      'javascript-format-roster': 'function formatName(name) {\n  return name.toUpperCase()\n}\nconst names = ["Ana", "Ben"]\nconsole.log(`Roster: ${names.map(formatName).join(", ")}`)\n',
+      'python-filter-scores': 'scores = [88, 72, 95, 61]\npassing = [score for score in scores if score >= 80]\nprint(f"Passing: {\', \'.join(str(score) for score in passing)}")\n',
+      'python-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\nfor priority in priorities:\n    if priority == "high":\n        high_count += 1\nprint(f"High priority: {high_count}")\n',
+      'python-dict-district': 'districts = { "H": "Hagåtña", "T": "Tamuning", "D": "Dededo" }\nprint(f"District T: {districts[\'T\']}")\n',
+      'python-format-roster': 'def format_name(name):\n    return name.upper()\nnames = ["Ana", "Ben"]\nprint(f"Roster: {\', \'.join(format_name(name) for name in names)}")\n',
+      'java-filter-scores': 'import java.util.ArrayList;\nimport java.util.List;\nclass Main { public static void main(String[] args) {\nint[] scores = {88, 72, 95, 61};\nList<Integer> passing = new ArrayList<>();\nfor (int score : scores) { if (score >= 80) passing.add(score); }\nSystem.out.println("Passing: " + passing);\n} }\n',
+      'java-count-priorities': 'class Main { public static void main(String[] args) {\nString[] priorities = {"high", "low", "high", "medium"};\nint highCount = 0;\nfor (String priority : priorities) { if ("high".equals(priority)) highCount++; }\nSystem.out.println("High priority: " + highCount);\n} }\n',
+      'java-map-district': 'import java.util.HashMap;\nimport java.util.Map;\nclass Main { public static void main(String[] args) {\nMap<String, String> districts = new HashMap<>();\ndistricts.put("H", "Hagåtña");\ndistricts.put("T", "Tamuning");\ndistricts.put("D", "Dededo");\nSystem.out.println("District T: " + districts.get("T"));\n} }\n',
+      'java-format-roster': 'class Main {\nstatic String formatName(String name) { return name.toUpperCase(); }\npublic static void main(String[] args) {\nString[] names = {"Ana", "Ben"};\nSystem.out.println("Roster: " + formatName(names[0]) + ", " + formatName(names[1]));\n}\n}\n',
+    }
+    const webSolutions: Record<string, Record<string, string>> = {
+      'web-group-contact-options': { 'index.html': '<main><form><fieldset><legend>Preferred contact</legend><input id="email" type="radio" name="contact"><label for="email">Email</label><input id="phone" type="radio" name="contact"><label for="phone">Phone</label></fieldset></form></main>' },
+      'web-flexible-navigation': { 'style.css': '.site-nav { display: flex; flex-wrap: wrap; gap: 0.75rem; }' },
+      'web-native-disclosure': { 'index.html': '<main><details><summary>What should I bring?</summary><p>Bring water and sun protection.</p></details></main>' },
+      'web-responsive-breakpoint': { 'style.css': '.card-grid { display: grid; grid-template-columns: 1fr; } @media (min-width: 40rem) { .card-grid { grid-template-columns: repeat(2, 1fr); } }' },
+    }
+
+    expect(ADDITIONAL_BUILDER_CHALLENGES).toHaveLength(20)
+    ADDITIONAL_BUILDER_CHALLENGES.forEach((challenge) => {
+      const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(unfinished.passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const source = runtimeSolutions[challenge.id]
+      const files = source
+        ? challenge.project.files.map((file) => file.path === challenge.project.entryPath ? { ...file, content: source } : file)
+        : challenge.project.files.map((file) => ({ ...file, content: webSolutions[challenge.id]?.[file.path] ?? file.content }))
+      const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
+    })
+  })
+
+  it('accepts district mappings in any order', () => {
+    const challenge = practiceChallengeById('java-map-district')!
+    const source = 'import java.util.*; class Main { public static void main(String[] args) { Map<String, String> districts = new HashMap<>(); districts.put("D", "Dededo"); districts.put("H", "Hagåtña"); districts.put("T", "Tamuning"); System.out.println("District T: " + districts.get("T")); } }'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'District T: Tamuning', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('requires visible labels for grouped Web contact choices', () => {
+    const challenge = practiceChallengeById('web-group-contact-options')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<fieldset><legend hidden>Preferred contact</legend><input id="email" type="radio" name="contact"><label hidden for="email">Email</label><input id="phone" type="radio" name="contact"><label hidden for="phone">Phone</label></fieldset>',
+    }])
+
+    expect(result.checks.every((check) => !check.passed)).toBe(true)
+  })
+
+  it('requires the multi-column layout to be inside the Web breakpoint', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '@media screen and (min-width: 40rem) {}\n.card-grid { grid-template-columns: repeat(2, 1fr); }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Add a min-width media query', passed: true },
+      { label: 'Create multiple columns inside the breakpoint', passed: false },
+    ])
   })
 
   it('keeps every challenge id unique', () => {

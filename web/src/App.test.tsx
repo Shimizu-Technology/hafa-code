@@ -257,7 +257,7 @@ describe('App language guide practice projects', () => {
     await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
 
     const practicePanel = screen.getByRole('tabpanel', { name: 'Practice lab' })
-    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/7/ }).getAttribute('aria-current')).toBe('page')
+    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/11/ }).getAttribute('aria-current')).toBe('page')
     expect(within(practicePanel).getByText('Your place')).toBeTruthy()
     expect(container.querySelector('[data-practice-challenge-id="ruby-conditional-access"]')?.classList.contains('current')).toBe(true)
   })
