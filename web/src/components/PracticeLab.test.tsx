@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { practiceChallengeById } from '../lib/practiceLab'
@@ -38,6 +38,40 @@ describe('PracticeLab', () => {
     await user.type(screen.getByRole('searchbox'), 'responsive')
     expect(screen.getByRole('heading', { name: 'Make a responsive grid' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Build a profile card' })).toBeNull()
+  })
+
+  it('follows a changed initial language without requiring a remount', () => {
+    const props = { completedChallengeIds: [], open: true, onClose: vi.fn(), onStartChallenge: vi.fn() }
+    const { rerender } = render(<PracticeLab {...props} initialKind="ruby" />)
+
+    rerender(<PracticeLab {...props} initialKind="java" />)
+
+    expect(screen.getByRole('button', { name: 'Java' }).getAttribute('aria-current')).toBe('page')
+  })
+
+  it('shows and clears an empty search, then closes with Escape', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<PracticeLab completedChallengeIds={[]} initialKind="ruby" open onClose={onClose} onStartChallenge={vi.fn()} />)
+
+    await user.type(screen.getByRole('searchbox'), 'not-a-real-concept')
+    expect(screen.getByRole('heading', { name: /no challenges match/i })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(3)
+    await user.keyboard('{Escape}')
+
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('closes from both the close button and backdrop', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const { container } = render(<PracticeLab completedChallengeIds={[]} initialKind="web" open onClose={onClose} onStartChallenge={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Close practice lab' }))
+    expect(onClose).toHaveBeenCalledOnce()
+    fireEvent.click(container.querySelector('.guide-backdrop')!)
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 })
 

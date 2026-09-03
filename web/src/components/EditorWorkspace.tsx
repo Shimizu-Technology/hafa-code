@@ -38,6 +38,7 @@ type EditorWorkspaceProps = {
   onSelectFile: (path: string) => void
   onSetEntryPath: (file: ProjectFile) => void
   onUpdateActiveFile: (content: string) => void
+  onRunnerCancel?: () => void
   onRunnerComplete?: (outcome: RunnerOutcome) => void
 }
 
@@ -60,6 +61,7 @@ export function EditorWorkspace({
   onSelectFile,
   onSetEntryPath,
   onUpdateActiveFile,
+  onRunnerCancel,
   onRunnerComplete,
 }: EditorWorkspaceProps) {
   return (
@@ -159,7 +161,7 @@ export function EditorWorkspace({
 
       {project.kind === 'web'
         ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} />
-        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunComplete={onRunnerComplete} />}
+        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} />}
     </div>
   )
 }

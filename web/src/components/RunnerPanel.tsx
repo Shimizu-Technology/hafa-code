@@ -24,10 +24,11 @@ const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durati
 interface RunnerPanelProps {
   project: SavedProject
   entryFile: ProjectFile
+  onRunCancel?: () => void
   onRunComplete?: (outcome: RunnerOutcome) => void
 }
 
-export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelProps) {
+export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: RunnerPanelProps) {
   const runner = projectKindDefinition(project.kind).runner
   const startupTimeoutMs = runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS
   const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
@@ -45,8 +46,13 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
   const startedAtRef = useRef<number | null>(null)
   const streamedOutputRef = useRef({ stdout: '', stderr: '' })
   const detachWorkerListenersRef = useRef<() => void>(() => {})
+  const onRunCancelRef = useRef(onRunCancel)
   const terminalScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    onRunCancelRef.current = onRunCancel
+  }, [onRunCancel])
 
   const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
     setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
@@ -70,7 +76,11 @@ export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelPr
     setRunPhase('idle')
   }, [clearRunTimer])
 
-  useEffect(() => stopWorker, [stopWorker])
+  useEffect(() => () => {
+    const cancelledActiveRun = runIdRef.current !== null
+    stopWorker()
+    if (cancelledActiveRun) onRunCancelRef.current?.()
+  }, [stopWorker])
 
   useEffect(() => {
     terminalScrollRef.current?.scrollTo({ top: terminalScrollRef.current.scrollHeight })

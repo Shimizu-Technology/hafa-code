@@ -7,6 +7,7 @@ import {
   linkPracticeProject,
   practiceChallengeIdForProject,
   preservePracticeConflictLinks,
+  resetPracticeProgressCache,
   remapPendingPracticeCheck,
   replacePracticeProjectId,
 } from './practiceProgress'
@@ -115,10 +116,24 @@ describe('practice challenge catalog', () => {
     expect(counterResult.checks.every((check) => check.passed)).toBe(true)
     expect(cssResult.checks.every((check) => check.passed)).toBe(true)
   })
+
+  it('does not accept a zero-sized responsive grid gap', () => {
+    const challenge = practiceChallengeById('web-responsive-grid')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0rem; }',
+    }])
+
+    expect(result.checks.find((check) => check.label === 'Add space between cards')?.passed).toBe(false)
+  })
 })
 
 describe('practice progress', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    resetPracticeProgressCache()
+  })
 
   it('persists completion and keeps a challenge linked when a local project receives a cloud id', () => {
     linkPracticeProject('local-project', 'python-loop-stops')

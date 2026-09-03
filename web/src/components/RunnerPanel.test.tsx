@@ -266,4 +266,14 @@ describe('RunnerPanel', () => {
       durationMs: expect.any(Number),
     })
   })
+
+  it('notifies the owner when an active run is cancelled by unmounting', () => {
+    const onRunCancel = vi.fn()
+    const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} onRunCancel={onRunCancel} />)
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+
+    unmount()
+
+    expect(onRunCancel).toHaveBeenCalledOnce()
+  })
 })

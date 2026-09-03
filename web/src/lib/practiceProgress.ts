@@ -16,6 +16,11 @@ export interface PendingPracticeCheck {
 
 const emptyProgress = (): PracticeProgress => ({ completedChallengeIds: [], projectChallenges: {} })
 
+/** Clears session-only progress, primarily when browser storage is reset. */
+export function resetPracticeProgressCache() {
+  memoryFallback = null
+}
+
 function loadProgress(): PracticeProgress {
   if (memoryFallback) {
     return {

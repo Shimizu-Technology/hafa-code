@@ -23,6 +23,8 @@ import {
 import './App.css'
 import {
   PROJECT_KINDS,
+  RUNNER_STARTUP_TIMEOUT_MS,
+  RUNNER_TIMEOUT_MS,
   defaultEntryPath,
   inferFileLanguage,
   projectKindDefinition,
@@ -176,15 +178,21 @@ export default function App() {
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
+  const practiceCheckWatchdogRef = useRef<number | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const clearPracticeCheckWatchdog = useCallback(() => {
+    if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
+    practiceCheckWatchdogRef.current = null
+  }, [])
   const clearPendingPracticeCheck = useCallback(() => {
+    clearPracticeCheckWatchdog()
     pendingPracticeCheckRef.current = null
     setPracticeChecking(false)
     setPracticeResult(null)
-  }, [])
+  }, [clearPracticeCheckWatchdog])
   const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
     setFileDialog(null)
     setFileDialogError('')
@@ -422,6 +430,11 @@ export default function App() {
     libraryRef.current = library
     saveProjectLibrary(library)
   }, [library])
+
+  useEffect(() => () => {
+    clearPracticeCheckWatchdog()
+    pendingPracticeCheckRef.current = null
+  }, [clearPracticeCheckWatchdog])
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themePreference)
@@ -754,12 +767,26 @@ export default function App() {
       challengeId: currentPracticeChallenge.id,
       files: project.files.map((file) => ({ ...file })),
     }
+    const runner = projectKindDefinition(project.kind).runner
+    const maximumRunMs = (runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS)
+      + (runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS)
+      + 2_000
+    clearPracticeCheckWatchdog()
+    practiceCheckWatchdogRef.current = window.setTimeout(() => {
+      if (pendingPracticeCheckRef.current?.projectId !== project.id) return
+      pendingPracticeCheckRef.current = null
+      practiceCheckWatchdogRef.current = null
+      setPracticeChecking(false)
+      setPracticeResult(null)
+      setNotice('The practice check ended before a result arrived. Your code is safe — try checking again.')
+    }, maximumRunMs)
     setPracticeChecking(true)
     setMobileTab('output')
     window.dispatchEvent(new Event('hafa-code-run-active-project'))
   }
 
   const handlePracticeRunComplete = (outcome: RunnerOutcome) => {
+    clearPracticeCheckWatchdog()
     const pending = pendingPracticeCheckRef.current
     if (!pending) return
     pendingPracticeCheckRef.current = null
@@ -1900,6 +1927,7 @@ export default function App() {
             onOpenGuide={() => setLanguageGuideOpen(true)}
             onOpenPractice={() => setPracticeLabOpen(true)}
             onRenameFile={openRenameFileDialog}
+            onRunnerCancel={clearPendingPracticeCheck}
             onRunnerComplete={handlePracticeRunComplete}
             onRunFromMobileCode={runFromMobileCode}
             onSelectFile={setActivePath}
@@ -1924,7 +1952,6 @@ export default function App() {
       />
 
       <PracticeLab
-        key={`practice-${project.kind}`}
         completedChallengeIds={completedPracticeIds}
         initialKind={project.kind}
         open={practiceLabOpen}

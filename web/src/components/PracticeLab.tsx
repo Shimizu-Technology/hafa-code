@@ -14,8 +14,11 @@ interface PracticeLabProps {
 
 /** Lets learners browse short, language-specific exercises without committing to a curriculum. */
 export function PracticeLab({ completedChallengeIds, initialKind, open, onClose, onStartChallenge }: PracticeLabProps) {
-  const [selectedKind, setSelectedKind] = useState<ProjectKind>(initialKind)
-  const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState({ initialKind, selectedKind: initialKind, query: '' })
+  if (filters.initialKind !== initialKind) {
+    setFilters({ initialKind, selectedKind: initialKind, query: '' })
+  }
+  const { selectedKind, query } = filters
   const dialogRef = useModalFocus<HTMLElement>(open, onClose)
   const completed = useMemo(() => new Set(completedChallengeIds), [completedChallengeIds])
   const visibleChallenges = useMemo(() => {
@@ -30,7 +33,7 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previousOverflow }
-  }, [initialKind, open])
+  }, [open])
 
   if (!open) return null
 
@@ -55,7 +58,7 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
             <h2 id="practice-lab-title">Practice Lab</h2>
             <p>Choose a small challenge, work in a private project, and check your answer when you are ready.</p>
           </div>
-          <button className="ghost icon-button" type="button" onClick={onClose} aria-label="Close practice lab">
+          <button className="ghost icon-button guide-close-button" type="button" onClick={onClose} aria-label="Close practice lab">
             <X size={19} />
           </button>
         </header>
@@ -63,7 +66,8 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
         <div className="practice-lab-body">
           <nav className="practice-language-tabs" aria-label="Practice languages">
             {PROJECT_KINDS.map((kind) => {
-              const count = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === kind && completed.has(challenge.id)).length
+              const kindChallenges = PRACTICE_CHALLENGES.filter((challenge) => challenge.kind === kind)
+              const count = kindChallenges.filter((challenge) => completed.has(challenge.id)).length
               return (
                 <button
                   key={kind}
@@ -71,12 +75,11 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
                   type="button"
                   aria-current={selectedKind === kind ? 'page' : undefined}
                   onClick={() => {
-                    setSelectedKind(kind)
-                    setQuery('')
+                    setFilters((current) => ({ ...current, selectedKind: kind, query: '' }))
                   }}
                 >
                   {projectKindDefinition(kind).shortLabel}
-                  {count > 0 && <small>{count}/3</small>}
+                  {count > 0 && <small>{count}/{kindChallenges.length}</small>}
                 </button>
               )
             })}
@@ -93,7 +96,7 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
                 id="practice-search-input"
                 type="search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
                 placeholder="Search challenges"
                 autoComplete="off"
                 data-modal-initial-focus
@@ -127,7 +130,7 @@ export function PracticeLab({ completedChallengeIds, initialKind, open, onClose,
               <div className="practice-empty">
                 <Search size={25} />
                 <h3>No challenges match “{query}”</h3>
-                <button className="secondary" type="button" onClick={() => setQuery('')}>Clear search</button>
+                <button className="secondary" type="button" onClick={() => setFilters((current) => ({ ...current, query: '' }))}>Clear search</button>
               </div>
             )}
           </div>

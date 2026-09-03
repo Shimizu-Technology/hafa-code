@@ -215,7 +215,7 @@ const webChallenges: PracticeChallenge[] = [
     checks: [
       { filePath: 'style.css', label: 'Use CSS Grid', pattern: /\.project-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i },
       { filePath: 'style.css', label: 'Create flexible columns', pattern: /\.project-grid\s*\{[^}]*grid-template-columns\s*:\s*repeat\s*\(\s*auto-fit\s*,\s*minmax\s*\(/i },
-      { filePath: 'style.css', label: 'Add space between cards', pattern: /\.project-grid\s*\{[^}]*\bgap\s*:\s*(?!0(?:[;}\s]|$))[^;}]+[;}]/i },
+      { filePath: 'style.css', label: 'Add space between cards', pattern: /\.project-grid\s*\{[^}]*\bgap\s*:\s*(?!\s*0(?:\.0+)?(?:px|rem|em|%|vw|vh|ch)?(?:[;}\s]|$))[^;}]+[;}]/i },
     ],
   },
   {

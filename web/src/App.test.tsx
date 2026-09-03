@@ -2,9 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
 import { languageGuideFor } from './lib/languageGuides'
 import { practiceChallengeById } from './lib/practiceLab'
-import { practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
+import { completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
 import { createConflictCopy } from './lib/projectStorage'
 import type { ProjectLibrary } from './lib/projectStorage'
 import type { RunnerOutcome } from './lib/runnerOutcome'
@@ -55,7 +56,10 @@ describe('App language guide practice projects', () => {
     })
   })
 
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
 
   it('opens a complete example in a new private project without changing the original', async () => {
     const user = userEvent.setup()
@@ -132,6 +136,7 @@ describe('App language guide practice projects', () => {
 
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Ruby Playground')
     expect(screen.queryByText('Challenge complete')).toBeNull()
+    expect(completedPracticeChallengeIds()).toEqual([])
   })
 
   it('checks the code snapshot that was sent to the runner', async () => {
@@ -195,5 +200,18 @@ describe('App language guide practice projects', () => {
 
     expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
     expect(screen.queryByText(/almost there/i)).toBeNull()
+  })
+
+  it('recovers if a practice runner never reports an outcome', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Check my work' }))
+
+    act(() => vi.advanceTimersByTime(RUNNER_STARTUP_TIMEOUT_MS + RUNNER_TIMEOUT_MS + 2_000))
+
+    expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toMatch(/ended before a result arrived/i)
   })
 })
