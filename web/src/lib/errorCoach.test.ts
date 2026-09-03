@@ -29,6 +29,11 @@ describe('contextual error coach', () => {
     expect(advice?.location).toBe('index.html · line 12')
   })
 
+  it('preserves a trusted source path when no line is available', () => {
+    const advice = coachRunnerError('web', 'index.html', failure('ReferenceError: helper is not defined'), { path: 'helpers.js' })
+    expect(advice?.location).toBe('helpers.js')
+  })
+
   it('stays out of the way after successful or manually stopped runs', () => {
     expect(coachRunnerError('python', 'main.py', { status: 'success', stdout: 'ok', stderr: '', durationMs: 1 })).toBeNull()
     expect(coachRunnerError('python', 'main.py', { status: 'stopped', stdout: '', stderr: 'Execution stopped.', durationMs: 1 })).toBeNull()

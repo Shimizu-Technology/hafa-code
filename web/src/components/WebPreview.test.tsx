@@ -74,3 +74,40 @@ it('uses neutral entry-file context when a project with multiple scripts reports
   expect(screen.queryByText('first.js')).toBeNull()
   expect(screen.queryByText('second.js')).toBeNull()
 })
+
+it('validates source metadata against the latest files after the port connects', () => {
+  let receiveMessage: ((event: MessageEvent) => void) | null = null
+  const port = {
+    close: vi.fn(),
+    postMessage: vi.fn(),
+    start: vi.fn(),
+    get onmessage() { return receiveMessage },
+    set onmessage(listener) { receiveMessage = listener },
+  } as unknown as MessagePort
+  const indexFile = { path: 'index.html', language: 'html' as const, content: '<h1>Test</h1>' }
+  const view = render(<WebPreview
+    entryPath="index.html"
+    files={[indexFile, { path: 'old.js', language: 'javascript', content: 'old()' }]}
+  />)
+  const frame = screen.getByTitle('Web preview') as HTMLIFrameElement
+  act(() => window.dispatchEvent(new MessageEvent('message', {
+    data: { source: 'hafa-code-preview-connect' },
+    source: frame.contentWindow,
+    ports: [port],
+  })))
+
+  view.rerender(<WebPreview
+    entryPath="index.html"
+    files={[indexFile, { path: 'new.js', language: 'javascript', content: 'newName()' }]}
+  />)
+  act(() => receiveMessage?.({
+    data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: newName is not defined', path: 'new.js' },
+  } as MessageEvent))
+  expect(screen.getByText('new.js')).toBeTruthy()
+
+  act(() => receiveMessage?.({
+    data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: old is not defined', path: 'old.js', line: 3 },
+  } as MessageEvent))
+  expect(screen.getByText('index.html')).toBeTruthy()
+  expect(screen.queryByText('old.js · line 3')).toBeNull()
+})

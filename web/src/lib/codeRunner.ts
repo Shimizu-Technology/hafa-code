@@ -175,6 +175,10 @@ function mimeTypeForFile(file: ProjectFile) {
 }
 
 function dataUrlForFile(file: ProjectFile, files: ProjectFile[], seen = new Set<string>()): string {
+  if (file.language === 'javascript') {
+    return dataUrl(mimeTypeForFile(file), file.content)
+      .replace(';base64,', `;hafa-code-path=${encodeURIComponent(file.path)};base64,`)
+  }
   if (file.language !== 'css') return dataUrl(mimeTypeForFile(file), file.content)
   if (seen.has(file.path)) return dataUrl('text/css', file.content)
 

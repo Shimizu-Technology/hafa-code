@@ -9,6 +9,11 @@ export interface ErrorCoachAdvice {
   guideTopicId: string
 }
 
+export interface ErrorSourceLocation {
+  path: string
+  line?: number
+}
+
 type ErrorRule = {
   pattern: RegExp
   title: string
@@ -84,7 +89,7 @@ function errorLocation(message: string, entryPath: string) {
   return entryPath || null
 }
 
-export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: RunnerOutcome): ErrorCoachAdvice | null {
+export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: RunnerOutcome, source?: ErrorSourceLocation): ErrorCoachAdvice | null {
   if (outcome.status !== 'error' && outcome.status !== 'timeout') return null
   if (outcome.status === 'timeout') {
     const topic = kind === 'web' ? 'web-dom-events' : loopsTopic[kind]
@@ -97,7 +102,7 @@ export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: 
   return {
     title: rule?.title ?? `Let’s decode this ${kind === 'web' ? 'browser' : kind} error`,
     explanation: rule?.explanation ?? 'Start with the first error and the first line that points into your own file; later messages are often side effects.',
-    location: errorLocation(message, entryPath),
+    location: source ? `${source.path}${source.line ? ` · line ${source.line}` : ''}` : errorLocation(message, entryPath),
     steps: rule?.steps ?? ['Read the final error line for the immediate cause.', 'Open the first referenced line in your file.', 'Make one focused change, then run again.'],
     guideTopicId: rule?.topic ?? basicsTopic[kind],
   }

@@ -21,16 +21,18 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
   const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const previewPortRef = useRef<MessagePort | null>(null)
+  const filesRef = useRef(files)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
   const previewIsStale = draftPreview !== renderedPreview
   const latestError = [...consoleMessages].reverse().find((message) => message.level === 'error')
-  const errorDetail = latestError?.path
-    ? `${latestError.message}\n${latestError.path}${latestError.line ? `:${latestError.line}` : ''}`
-    : latestError?.message ?? ''
   const errorAdvice = latestError ? coachRunnerError('web', entryPath, {
-    status: 'error', stdout: '', stderr: errorDetail, durationMs: 0,
-  }) : null
+    status: 'error', stdout: '', stderr: latestError.message, durationMs: 0,
+  }, latestError.path ? { path: latestError.path, ...(latestError.line ? { line: latestError.line } : {}) } : undefined) : null
+
+  useEffect(() => {
+    filesRef.current = files
+  }, [files])
 
   const sendPreviewToFrame = useCallback((html: string) => {
     previewPortRef.current?.postMessage({
@@ -59,7 +61,7 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
         source: 'hafa-code-preview-console',
         level,
         message: String(message.message),
-        ...(typeof message.path === 'string' && files.some((file) => file.path === message.path)
+        ...(typeof message.path === 'string' && filesRef.current.some((file) => file.path === message.path)
           ? { path: message.path, ...(Number.isInteger(message.line) && Number(message.line) > 0 ? { line: Number(message.line) } : {}) }
           : {}),
       }
@@ -74,7 +76,7 @@ export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { 
       source: 'hafa-code-preview-update',
       html: renderedPreview,
     })
-  }, [files, renderedPreview])
+  }, [renderedPreview])
 
   useEffect(() => {
     const handlePreviewConnect = (event: MessageEvent) => {
