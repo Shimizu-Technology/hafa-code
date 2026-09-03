@@ -13,6 +13,8 @@ web/src/
     EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
     MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
+    PracticeLab.tsx           All-language challenge browser and progress overview
+    PracticeSessionPanel.tsx  Active challenge instructions, hints, and check results
     ProjectSidebar.tsx        Desktop and mobile project navigation
     ProjectToolbar.tsx        Project metadata, visibility, history, and primary actions
     RunnerPanel.tsx           Ruby/JavaScript/Python/Java terminal runner UI
@@ -28,8 +30,11 @@ web/src/
     codeRunner.ts             Starter-project and web-preview helpers
     languageGuides.ts         Guide topics and complete practice projects for every project kind
     languageRegistry.ts       Supported languages, starters, editor and runner metadata
+    practiceLab.ts            Challenge catalog and deterministic source/output checks
+    practiceProgress.ts       Local challenge completion and project-to-challenge links
     projectTypes.ts           Shared project, file, and language types
     projectStorage.ts         localStorage, import/export, checkpoints
+    runnerOutcome.ts          Shared runner completion contract for learning tools
     workspace.ts              Workspace labels, guards, formatting, path helpers
   workers/
     runnerProtocol.ts         Typed worker request/response contract
@@ -45,6 +50,7 @@ web/src/
 
 - Add project kinds and file-language behavior through `lib/languageRegistry.ts`; do not add parallel language switches in components.
 - Add syntax-reference content through `lib/languageGuides.ts`; every topic needs a stable ID and a complete practice project.
+- Add short exercises through `lib/practiceLab.ts`; each supported project kind should keep a Starter, Builder, and Stretch progression.
 - Keep pure project rules in `lib/workspace.ts` or `lib/codeRunner.ts`.
 - Keep Rails request/response mapping in `lib/api.ts`; UI components should not know API payload casing.
 - Keep browser storage and import/export behavior in `lib/projectStorage.ts`.

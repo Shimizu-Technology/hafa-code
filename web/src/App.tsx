@@ -5,6 +5,7 @@ import {
   Cloud,
   Copy,
   Download,
+  Dumbbell,
   Files,
   Globe,
   Import,
@@ -50,12 +51,23 @@ import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
 import { ProjectFeedback } from './components/ProjectFeedback'
 import { LanguageGuide } from './components/LanguageGuide'
+import { PracticeLab } from './components/PracticeLab'
+import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
 import type { LanguageGuideTopic } from './lib/languageGuides'
+import { evaluatePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
+import {
+  completePracticeChallenge,
+  completedPracticeChallengeIds,
+  linkPracticeProject,
+  practiceChallengeIdForProject,
+  replacePracticeProjectId,
+} from './lib/practiceProgress'
+import type { RunnerOutcome } from './lib/runnerOutcome'
 import {
   clearProjectPendingCloudSync,
   markProjectPendingCloudSync,
@@ -142,6 +154,10 @@ export default function App() {
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [languageGuideOpen, setLanguageGuideOpen] = useState(false)
+  const [practiceLabOpen, setPracticeLabOpen] = useState(false)
+  const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
+  const [practiceChecking, setPracticeChecking] = useState(false)
+  const [completedPracticeIds, setCompletedPracticeIds] = useState(() => completedPracticeChallengeIds())
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
@@ -156,6 +172,7 @@ export default function App() {
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
+  const pendingPracticeCheckRef = useRef<{ projectId: string; challengeId: string } | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
@@ -173,6 +190,7 @@ export default function App() {
   })
 
   const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
+  const currentPracticeChallenge = practiceChallengeById(practiceChallengeIdForProject(project.id))
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
   const activeProjects = library.projects.filter((candidate) => !isArchived(candidate))
@@ -339,6 +357,7 @@ export default function App() {
 
     syncedProjectVersionsRef.current.set(savedProject.id, savedProject.updatedAt)
     if (savedProject.id !== projectId) {
+      replacePracticeProjectId(projectId, savedProject.id)
       clearProjectPendingCloudSync(projectId)
       if (changedWhileSaving || projectNeedingAnotherSave) {
         replacePendingCloudProjectId(projectId, savedProject.id, (projectNeedingAnotherSave ?? latestProject ?? savedProject).updatedAt)
@@ -365,6 +384,9 @@ export default function App() {
   }, [syncCloudProject])
 
   const activateProject = (nextProject: SavedProject) => {
+    pendingPracticeCheckRef.current = null
+    setPracticeChecking(false)
+    setPracticeResult(null)
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
     setActivePath(nextProject.files[0].path)
     setCheckpointMenuOpen(false)
@@ -658,6 +680,72 @@ export default function App() {
     setMobileTab('code')
     setLanguageGuideOpen(false)
     setNotice(`${topic.title} opened in a new practice project. Your previous project is unchanged.`)
+  }
+
+  const startPracticeChallenge = (challenge: PracticeChallenge) => {
+    if (workspaceArchived) {
+      setNotice('Restore this classroom before creating a practice project.')
+      return
+    }
+
+    const starter = createProject(challenge.kind, challenge.project.title)
+    const practiceProject: SavedProject = {
+      ...starter,
+      organizationId: activeOrganizationId,
+      organization: activeOrganization,
+      visibility: 'private',
+      entryPath: challenge.project.entryPath,
+      files: challenge.project.files.map((file) => ({ ...file })),
+    }
+    linkPracticeProject(practiceProject.id, challenge.id)
+    pendingPracticeCheckRef.current = null
+    setPracticeChecking(false)
+    setPracticeResult(null)
+    setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
+    setActivePath(practiceProject.entryPath)
+    setShowArchived(false)
+    setMobileTab('code')
+    setPracticeLabOpen(false)
+    setLanguageGuideOpen(false)
+    setNotice(`${challenge.title} is ready. Your previous project is unchanged.`)
+  }
+
+  const recordPracticeResult = (challenge: PracticeChallenge, result: PracticeCheckResult) => {
+    setPracticeChecking(false)
+    setPracticeResult(result)
+    if (result.passed) {
+      completePracticeChallenge(challenge.id)
+      setCompletedPracticeIds(completedPracticeChallengeIds())
+      setNotice(`${challenge.title} complete. Nice work — you can keep experimenting or choose another challenge.`)
+    }
+  }
+
+  const checkPracticeWork = () => {
+    if (!currentPracticeChallenge || practiceChecking) return
+    setPracticeResult(null)
+
+    if (currentPracticeChallenge.kind === 'web') {
+      recordPracticeResult(currentPracticeChallenge, evaluatePracticeChallenge(currentPracticeChallenge, project.files))
+      return
+    }
+
+    pendingPracticeCheckRef.current = { projectId: project.id, challengeId: currentPracticeChallenge.id }
+    setPracticeChecking(true)
+    setMobileTab('output')
+    window.dispatchEvent(new Event('hafa-code-run-active-project'))
+  }
+
+  const handlePracticeRunComplete = (outcome: RunnerOutcome) => {
+    const pending = pendingPracticeCheckRef.current
+    if (!pending) return
+    pendingPracticeCheckRef.current = null
+    const checkedProject = libraryRef.current.projects.find((candidate) => candidate.id === pending.projectId)
+    const challenge = practiceChallengeById(pending.challengeId)
+    if (!checkedProject || !challenge) {
+      setPracticeChecking(false)
+      return
+    }
+    recordPracticeResult(challenge, evaluatePracticeChallenge(challenge, checkedProject.files, outcome))
   }
 
   const updateProjectVisibility = (visibility: ProjectVisibility) => {
@@ -1685,6 +1773,7 @@ export default function App() {
         </div>
         <div className="mobile-home-actions">
           <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
+          <button className="secondary" type="button" onClick={() => setPracticeLabOpen(true)}><Dumbbell size={16} /> Practice lab</button>
           <button className="secondary" type="button" onClick={() => setLanguageGuideOpen(true)}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
@@ -1731,6 +1820,7 @@ export default function App() {
             onDelete={requestDeleteProject}
             onDuplicate={cloneProject}
             onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenPractice={() => setPracticeLabOpen(true)}
             onOpenProjectActions={() => setProjectActionsOpen(true)}
             onRename={renameProject}
             onRestore={restoreProject}
@@ -1746,6 +1836,18 @@ export default function App() {
             <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
           )}
 
+          {currentPracticeChallenge && (
+            <PracticeSessionPanel
+              key={currentPracticeChallenge.id}
+              challenge={currentPracticeChallenge}
+              checking={practiceChecking}
+              completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
+              result={practiceResult}
+              onCheck={checkPracticeWork}
+              onOpenLab={() => setPracticeLabOpen(true)}
+            />
+          )}
+
           <EditorWorkspace
             activeFile={activeFile}
             canEditProject={canEditProject}
@@ -1758,7 +1860,9 @@ export default function App() {
             onDuplicateFile={openDuplicateFileDialog}
             onEditorExpandedChange={setEditorExpanded}
             onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenPractice={() => setPracticeLabOpen(true)}
             onRenameFile={openRenameFileDialog}
+            onRunnerComplete={handlePracticeRunComplete}
             onRunFromMobileCode={runFromMobileCode}
             onSelectFile={setActivePath}
             onSetEntryPath={setEntryPath}
@@ -1774,7 +1878,20 @@ export default function App() {
         kind={project.kind}
         open={languageGuideOpen}
         onClose={() => setLanguageGuideOpen(false)}
+        onOpenPractice={() => {
+          setLanguageGuideOpen(false)
+          setPracticeLabOpen(true)
+        }}
         onTryExample={tryGuideExample}
+      />
+
+      <PracticeLab
+        key={`practice-${project.kind}`}
+        completedChallengeIds={completedPracticeIds}
+        initialKind={project.kind}
+        open={practiceLabOpen}
+        onClose={() => setPracticeLabOpen(false)}
+        onStartChallenge={startPracticeChallenge}
       />
 
       <WorkspaceDialogs

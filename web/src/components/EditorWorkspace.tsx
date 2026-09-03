@@ -3,6 +3,7 @@ import {
   BookOpen,
   Check,
   Copy,
+  Dumbbell,
   FilePlus2,
   Files,
   Globe,
@@ -14,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import type { RunnerOutcome } from '../lib/runnerOutcome'
 import { formatFileLanguage, languageForFile } from '../lib/workspace'
 import { RunnerPanel } from './RunnerPanel'
 import { WebPreview } from './WebPreview'
@@ -30,11 +32,13 @@ type EditorWorkspaceProps = {
   onDuplicateFile: (file: ProjectFile) => void
   onEditorExpandedChange: (expanded: boolean) => void
   onOpenGuide: () => void
+  onOpenPractice: () => void
   onRenameFile: (file: ProjectFile) => void
   onRunFromMobileCode: () => void
   onSelectFile: (path: string) => void
   onSetEntryPath: (file: ProjectFile) => void
   onUpdateActiveFile: (content: string) => void
+  onRunnerComplete?: (outcome: RunnerOutcome) => void
 }
 
 /** Renders file navigation, Monaco, and the matching output pane without owning project state. */
@@ -50,11 +54,13 @@ export function EditorWorkspace({
   onDuplicateFile,
   onEditorExpandedChange,
   onOpenGuide,
+  onOpenPractice,
   onRenameFile,
   onRunFromMobileCode,
   onSelectFile,
   onSetEntryPath,
   onUpdateActiveFile,
+  onRunnerComplete,
 }: EditorWorkspaceProps) {
   return (
     <div className="workspace">
@@ -122,6 +128,9 @@ export function EditorWorkspace({
           </div>
         </details>
         <div className="mobile-code-runbar">
+          <button className="secondary" type="button" onClick={onOpenPractice} aria-label={`Open ${projectKindDefinition(project.kind).label} practice lab`}>
+            <Dumbbell size={16} /> Practice
+          </button>
           <button type="button" onClick={onRunFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : `Run ${projectKindDefinition(project.kind).shortLabel}`}
@@ -150,7 +159,7 @@ export function EditorWorkspace({
 
       {project.kind === 'web'
         ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} />
-        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} />}
+        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunComplete={onRunnerComplete} />}
     </div>
   )
 }

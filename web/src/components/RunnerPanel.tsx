@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import type { RunnerOutcome, RunnerStatus } from '../lib/runnerOutcome'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 
-type RunStatus = 'idle' | 'running' | 'success' | 'error' | 'timeout'
 type RunPhase = 'idle' | 'loading' | 'executing' | 'input'
 
 interface RunState {
-  status: RunStatus
+  status: RunnerStatus
   stdout: string
   stderr: string
   durationMs: number | null
@@ -21,7 +21,13 @@ type TerminalLine = {
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 
-export function RunnerPanel({ project, entryFile }: { project: SavedProject; entryFile: ProjectFile }) {
+interface RunnerPanelProps {
+  project: SavedProject
+  entryFile: ProjectFile
+  onRunComplete?: (outcome: RunnerOutcome) => void
+}
+
+export function RunnerPanel({ project, entryFile, onRunComplete }: RunnerPanelProps) {
   const runner = projectKindDefinition(project.kind).runner
   const startupTimeoutMs = runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS
   const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
@@ -99,7 +105,9 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       stopWorker()
       const message = 'The browser runtime took too long to load. Check your connection, then try again.'
       appendTerminalLine({ kind: 'system', text: message })
-      setRunState({ status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
+      const outcome: RunnerOutcome = { status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
+      setRunState(outcome)
+      onRunComplete?.(outcome)
     }, startupTimeoutMs)
 
     const armExecutionTimeout = () => {
@@ -107,8 +115,11 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       timeoutRef.current = window.setTimeout(() => {
         if (runIdRef.current !== runId) return
         stopWorker()
-        appendTerminalLine({ kind: 'system', text: `Execution stopped after ${executionTimeoutMs}ms.` })
-        setRunState({ status: 'timeout', stdout: '', stderr: `Execution stopped after ${executionTimeoutMs}ms.`, durationMs: Math.round(performance.now() - startedAt) })
+        const message = `Execution stopped after ${executionTimeoutMs}ms.`
+        const outcome: RunnerOutcome = { status: 'timeout', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
+        appendTerminalLine({ kind: 'system', text: message })
+        setRunState(outcome)
+        onRunComplete?.(outcome)
       }, executionTimeoutMs + 250)
     }
     armExecutionTimeoutRef.current = armExecutionTimeout
@@ -152,15 +163,17 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       }
 
       const stderr = event.data.stderr ?? ''
-      const status: RunStatus = event.data.exitCode === undefined
+      const status: RunnerOutcome['status'] = event.data.exitCode === undefined
         ? (stderr.trim() ? 'error' : 'success')
         : (event.data.exitCode === 0 ? 'success' : 'error')
-      setRunState({
+      const outcome: RunnerOutcome = {
         status,
         stdout: event.data.stdout ?? '',
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
-      })
+      }
+      setRunState(outcome)
+      onRunComplete?.(outcome)
     }
 
     const handleWorkerError = (event: ErrorEvent) => {
@@ -170,8 +183,10 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
       const message = /fetch|network|load/i.test(details)
         ? `The browser runtime could not load. Check your connection and try again.\n${details}`
         : details
+      const outcome: RunnerOutcome = { status: 'error', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) }
       appendTerminalLine({ kind: 'stderr', text: message })
-      setRunState({ status: 'error', stdout: '', stderr: message, durationMs: Math.round(performance.now() - startedAt) })
+      setRunState(outcome)
+      onRunComplete?.(outcome)
     }
 
     worker.addEventListener('message', handleWorkerMessage)
@@ -210,12 +225,14 @@ export function RunnerPanel({ project, entryFile }: { project: SavedProject; ent
   const stopRun = () => {
     stopWorker()
     appendTerminalLine({ kind: 'system', text: 'Execution stopped.' })
-    setRunState((current) => ({
+    const outcome: RunnerOutcome = {
       status: 'timeout',
-      stdout: current.stdout,
-      stderr: current.stderr || 'Execution stopped.',
-      durationMs: current.durationMs,
-    }))
+      stdout: runState.stdout,
+      stderr: runState.stderr || 'Execution stopped.',
+      durationMs: runState.durationMs,
+    }
+    setRunState(outcome)
+    onRunComplete?.(outcome)
   }
 
   const runStatusLabel = awaitingInput

@@ -1,4 +1,4 @@
-import { Archive, BookOpen, Copy, History, MoreHorizontal, RotateCcw, Save, Trash2 } from 'lucide-react'
+import { Archive, BookOpen, Copy, Dumbbell, History, MoreHorizontal, RotateCcw, Save, Trash2 } from 'lucide-react'
 import type { RefObject } from 'react'
 import { projectKindDefinition, type ProjectCheckpoint, type ProjectVisibility, type SavedProject } from '../lib/codeRunner'
 import {
@@ -26,6 +26,7 @@ type ProjectToolbarProps = {
   onDelete: () => void
   onDuplicate: () => void
   onOpenGuide: () => void
+  onOpenPractice: () => void
   onOpenProjectActions: () => void
   onRename: (title: string) => void
   onRestore: () => void
@@ -51,6 +52,7 @@ export function ProjectToolbar({
   onDelete,
   onDuplicate,
   onOpenGuide,
+  onOpenPractice,
   onOpenProjectActions,
   onRename,
   onRestore,
@@ -93,6 +95,9 @@ export function ProjectToolbar({
         </div>
       </div>
       <div className="toolbar-actions">
+        <button className="secondary practice-toolbar-button" type="button" onClick={onOpenPractice}>
+          <Dumbbell size={16} /> Practice
+        </button>
         <button className="secondary guide-toolbar-button" type="button" onClick={onOpenGuide}>
           <BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide
         </button>

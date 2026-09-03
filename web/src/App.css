@@ -2115,6 +2115,391 @@ button.context-chip.active,
   background: rgba(255, 255, 255, 0.055);
 }
 
+.guide-footer-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.55rem;
+}
+
+.practice-lab {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, 100%);
+  max-height: min(820px, calc(100dvh - 2rem));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--lagoon) 40%, var(--line));
+  border-radius: 1.3rem 0.35rem 1.3rem 0.35rem;
+  outline: 0;
+  background: color-mix(in srgb, var(--paper) 97%, transparent);
+  box-shadow: 0 36px 110px rgba(20, 17, 15, 0.4);
+}
+
+.practice-lab-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.1rem 1.2rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--lagoon) 12%, transparent), transparent 42%),
+    color-mix(in srgb, var(--paper) 96%, transparent);
+}
+
+.practice-lab-header h2 {
+  font-size: clamp(1.25rem, 2.1vw, 1.75rem);
+}
+
+.practice-lab-header p:not(.eyebrow) {
+  max-width: 68ch;
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.practice-lab-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.15rem;
+  scrollbar-width: thin;
+}
+
+.practice-language-tabs {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.1rem 0.1rem 0.45rem;
+  scrollbar-width: thin;
+}
+
+.practice-language-tabs button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0.55rem 0.78rem;
+  border-radius: 0.75rem 0.2rem 0.75rem 0.2rem;
+}
+
+.practice-language-tabs button.active {
+  background: #14110f;
+  color: #fffaf1;
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--gold) 72%, transparent);
+}
+
+.practice-language-tabs small {
+  opacity: 0.7;
+  font-size: 0.62rem;
+}
+
+.practice-lab-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.practice-lab-toolbar h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', Outfit, sans-serif;
+  font-size: 1.35rem;
+}
+
+.practice-lab-toolbar .guide-search {
+  width: min(320px, 100%);
+}
+
+.practice-challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.practice-challenge-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem 1rem 0.35rem 1rem;
+  background:
+    linear-gradient(rgba(56, 41, 28, 0.03) 1px, transparent 1px),
+    color-mix(in srgb, var(--paper) 92%, white);
+  background-size: 100% 1.75rem;
+}
+
+.practice-challenge-card.complete {
+  border-color: color-mix(in srgb, var(--lagoon) 52%, var(--line));
+  box-shadow: inset 0 4px 0 color-mix(in srgb, var(--lagoon) 70%, transparent);
+}
+
+.practice-card-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.practice-number {
+  color: var(--brand);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.practice-difficulty,
+.practice-complete {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.23rem 0.45rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.practice-complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+  border-color: color-mix(in srgb, var(--lagoon) 45%, var(--line));
+  color: var(--lagoon);
+}
+
+.practice-challenge-card h3 {
+  margin: 1.25rem 0 0;
+  font-family: 'Space Grotesk', Outfit, sans-serif;
+  font-size: 1.45rem;
+  line-height: 1.05;
+}
+
+.practice-challenge-card > p {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.practice-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.practice-concepts span {
+  padding: 0.27rem 0.42rem;
+  border: 1px dashed color-mix(in srgb, var(--brand) 40%, var(--line));
+  color: var(--brand);
+  font-size: 0.67rem;
+  font-weight: 800;
+}
+
+.practice-challenge-card > button {
+  width: 100%;
+  margin-top: auto;
+}
+
+.practice-empty {
+  grid-column: 1 / -1;
+  min-height: 260px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+}
+
+.practice-empty h3 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.practice-session {
+  margin-bottom: 1rem;
+  border-color: color-mix(in srgb, var(--lagoon) 40%, var(--line));
+}
+
+.practice-session.passed {
+  border-color: var(--lagoon);
+}
+
+.practice-session-heading {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.practice-session-title,
+.practice-session-actions,
+.practice-session-mark {
+  display: flex;
+  align-items: center;
+}
+
+.practice-session-title,
+.practice-session-actions {
+  gap: 0.65rem;
+}
+
+.practice-session-mark {
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 auto;
+  justify-content: center;
+  border-radius: 0.3rem 0.8rem 0.3rem 0.8rem;
+  background: var(--lagoon);
+  color: white;
+}
+
+.practice-session-title .eyebrow {
+  margin-bottom: 0.2rem;
+  color: var(--lagoon);
+  font-size: 0.61rem;
+}
+
+.practice-chevron {
+  transition: transform 180ms ease;
+}
+
+.practice-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.practice-session-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+  gap: 0.75rem 1rem;
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.practice-instructions {
+  margin: 0;
+  padding: 0.9rem 0 0 1.45rem;
+  color: var(--ink);
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.practice-instructions li + li {
+  margin-top: 0.3rem;
+}
+
+.practice-hints {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  padding-top: 0.75rem;
+}
+
+.practice-hints p {
+  display: flex;
+  align-items: start;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.practice-hints p svg {
+  flex: 0 0 auto;
+  color: var(--gold);
+}
+
+.practice-hints button {
+  justify-self: start;
+}
+
+.practice-result {
+  grid-column: 1 / -1;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  border-radius: 0.8rem 0.2rem 0.8rem 0.2rem;
+  background: color-mix(in srgb, var(--brand) 7%, var(--paper));
+}
+
+.practice-result.success {
+  border-color: color-mix(in srgb, var(--lagoon) 46%, var(--line));
+  background: color-mix(in srgb, var(--lagoon) 8%, var(--paper));
+}
+
+.practice-result-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--brand);
+}
+
+.practice-result.success .practice-result-heading {
+  color: var(--lagoon);
+}
+
+.practice-result ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-result li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.practice-result li.passed {
+  color: var(--lagoon);
+  font-weight: 800;
+}
+
+.practice-output-comparison {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.practice-output-comparison code {
+  color: var(--ink);
+}
+
+.practice-check-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--line);
+}
+
+.practice-check-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.app-shell[data-theme="dark"] .practice-lab,
+.app-shell[data-theme="dark"] .practice-lab-header,
+.app-shell[data-theme="dark"] .practice-challenge-card {
+  background-color: #181512;
+}
+
+.app-shell[data-theme="dark"] .practice-language-tabs button.active {
+  background: #f5efe7;
+  color: #14110f;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -2732,13 +3117,20 @@ button.context-chip.active,
     background: #14110f;
     border-bottom: 1px solid #2a2521;
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    gap: 0.45rem;
     padding: 0 0.55rem 0.55rem;
   }
 
   .mobile-code-runbar button {
     min-width: 0;
     padding: 0.56rem 0.85rem;
+  }
+
+  .mobile-code-runbar button.secondary {
+    border-color: rgba(248, 184, 78, 0.42);
+    background: rgba(248, 184, 78, 0.12);
+    color: #ffe0a6;
   }
 
   .title-field {
@@ -3156,7 +3548,111 @@ button.context-chip.active,
     flex-direction: column;
   }
 
-  .guide-page-footer button {
+  .guide-footer-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .guide-page-footer button,
+  .guide-footer-actions {
+    width: 100%;
+  }
+
+  .practice-lab {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .practice-lab-header {
+    min-height: 86px;
+    padding: max(0.7rem, env(safe-area-inset-top)) 0.75rem 0.7rem;
+  }
+
+  .practice-lab-header .guide-heading-mark {
+    width: 2.45rem;
+    height: 2.45rem;
+  }
+
+  .practice-lab-header h2 {
+    font-size: 1.08rem;
+  }
+
+  .practice-lab-header p:not(.eyebrow) {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.7rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .practice-lab-body {
+    padding: 0.7rem 0.7rem calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  .practice-language-tabs {
+    position: sticky;
+    z-index: 2;
+    top: -0.7rem;
+    margin: -0.1rem -0.7rem 0;
+    padding: 0.7rem 0.7rem 0.55rem;
+    background: color-mix(in srgb, var(--paper) 96%, transparent);
+  }
+
+  .practice-lab-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    margin-top: 0.55rem;
+  }
+
+  .practice-lab-toolbar .guide-search {
+    width: 100%;
+  }
+
+  .practice-challenge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-challenge-card {
+    min-height: 270px;
+  }
+
+  .practice-session {
+    margin-bottom: 0.65rem;
+  }
+
+  .practice-session-heading {
+    align-items: flex-start;
+    padding: 0.7rem;
+  }
+
+  .practice-session-title {
+    align-items: flex-start;
+  }
+
+  .practice-session-actions .ghost.compact {
+    min-width: 44px;
+    min-height: 44px;
+    aspect-ratio: 1;
+    padding: 0.45rem;
+    font-size: 0;
+  }
+
+  .practice-session-body {
+    grid-template-columns: 1fr;
+    padding: 0 0.7rem 0.7rem;
+  }
+
+  .practice-check-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .practice-check-row button {
     width: 100%;
   }
 }

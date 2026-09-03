@@ -1,8 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { languageGuideFor } from './lib/languageGuides'
+import { practiceChallengeById } from './lib/practiceLab'
+import { practiceChallengeIdForProject } from './lib/practiceProgress'
 import type { ProjectLibrary } from './lib/projectStorage'
 
 vi.mock('@monaco-editor/react', () => ({
@@ -19,6 +21,7 @@ function storedLibrary() {
 
 describe('App language guide practice projects', () => {
   beforeEach(() => {
+    localStorage.clear()
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
       configurable: true,
       value: vi.fn(),
@@ -68,5 +71,31 @@ describe('App language guide practice projects', () => {
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', topic.practiceProject.title)
     expect(screen.getByLabelText('Code editor')).toHaveProperty('value', topic.practiceProject.files[0].content)
     expect(screen.getByRole('status').textContent).toMatch(/previous project is unchanged/i)
+  })
+
+  it('starts an all-language lab challenge as a separate private project', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const originalProject = storedLibrary().projects[0]
+    const challenge = practiceChallengeById('java-variables-greeting')!
+    await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
+    await user.click(within(screen.getByRole('navigation', { name: 'Practice languages' })).getByRole('button', { name: 'Java' }))
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' })[0])
+
+    await waitFor(() => expect(storedLibrary().projects).toHaveLength(2))
+    const updatedLibrary = storedLibrary()
+    const practiceProject = updatedLibrary.projects.find((candidate) => candidate.id === updatedLibrary.activeProjectId)!
+
+    expect(updatedLibrary.projects.find((candidate) => candidate.id === originalProject.id)).toEqual(originalProject)
+    expect(practiceProject).toMatchObject({
+      title: challenge.project.title,
+      kind: 'java',
+      visibility: 'private',
+      entryPath: challenge.project.entryPath,
+      files: challenge.project.files,
+    })
+    expect(practiceChallengeIdForProject(practiceProject.id)).toBe(challenge.id)
+    expect(screen.getByRole('heading', { name: challenge.title })).toBeTruthy()
   })
 })

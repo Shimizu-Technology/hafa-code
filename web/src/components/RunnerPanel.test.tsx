@@ -74,7 +74,8 @@ describe('RunnerPanel', () => {
 
   it('reuses a warm worker and offers a touch-friendly input submit action', async () => {
     const user = userEvent.setup()
-    const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+    const onRunComplete = vi.fn()
+    const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
 
     await user.click(screen.getByRole('button', { name: 'Run Python' }))
     expect(screen.getByText('Preparing Python…')).toBeTruthy()
@@ -94,6 +95,7 @@ describe('RunnerPanel', () => {
     expect(worker.messages.at(-1)).toEqual({ id: firstRun.id, type: 'stdin', value: 'Leon' })
 
     act(() => worker.respond({ id: firstRun.id, type: 'result', stdout: 'Hello Leon\n', stderr: '', durationMs: 25 }))
+    expect(onRunComplete).toHaveBeenCalledWith({ status: 'success', stdout: 'Hello Leon\n', stderr: '', durationMs: 25 })
     await user.click(await screen.findByRole('button', { name: 'Run again' }))
 
     expect(FakeWorker.instances).toHaveLength(1)
