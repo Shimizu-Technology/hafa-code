@@ -118,11 +118,12 @@ describe('workspace presentation components', () => {
       />,
     )
 
-    await user.clear(screen.getByLabelText('Project name'))
-    await user.type(screen.getByLabelText('Project name'), 'Site')
-    expect(onRename).toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Site' } })
+    expect(onRename).toHaveBeenLastCalledWith('Site')
 
     rerender(<MobileWorkspaceNav activeTab="code" projectKind="web" onChange={onMobileChange} />)
+    expect(screen.getByRole('button', { name: 'Code' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('button', { name: /preview/i }).getAttribute('aria-current')).toBeNull()
     await user.click(screen.getByRole('button', { name: /preview/i }))
     expect(onMobileChange).toHaveBeenCalledWith('output')
   })
