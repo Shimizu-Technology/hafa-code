@@ -97,15 +97,15 @@ describe('practice challenge catalog', () => {
       'ruby-filter-scores': 'scores = [88, 72, 95, 61]\npassing = scores.select { |score| score >= 80 }\nputs "Passing: #{passing.join(", ")}"\n',
       'ruby-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n',
       'ruby-hash-district': 'districts = { "H" => "Hagåtña", "T" => "Tamuning", "D" => "Dededo" }\nputs "District T: #{districts["T"]}"\n',
-      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nnames = ["Ana", "Ben"]\nputs "Roster: #{names.map { |name| format_name(name) }.join(", ")}"\n',
+      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nnames = ["Ana", "Ben"]\nformatted = names.map { |name| format_name(name) }\nputs "Roster: #{formatted.join(", ")}"\n',
       'javascript-filter-scores': 'const scores = [88, 72, 95, 61]\nconst passing = scores.filter((score) => score >= 80)\nconsole.log(`Passing: ${passing.join(", ")}`)\n',
       'javascript-count-priorities': 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\nfor (const priority of priorities) {\n  if (priority === "high") highCount++\n}\nconsole.log(`High priority: ${highCount}`)\n',
       'javascript-object-district': 'const districts = { H: "Hagåtña", T: "Tamuning", D: "Dededo" }\nconsole.log(`District T: ${districts.T}`)\n',
-      'javascript-format-roster': 'function formatName(name) {\n  return name.toUpperCase()\n}\nconst names = ["Ana", "Ben"]\nconsole.log(`Roster: ${names.map(formatName).join(", ")}`)\n',
+      'javascript-format-roster': 'function formatName(name) {\n  return name.toUpperCase()\n}\nconst names = ["Ana", "Ben"]\nconst formatted = names.map(formatName)\nconsole.log(`Roster: ${formatted.join(", ")}`)\n',
       'python-filter-scores': 'scores = [88, 72, 95, 61]\npassing = [score for score in scores if score >= 80]\nprint(f"Passing: {\', \'.join(str(score) for score in passing)}")\n',
       'python-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\nfor priority in priorities:\n    if priority == "high":\n        high_count += 1\nprint(f"High priority: {high_count}")\n',
       'python-dict-district': 'districts = { "H": "Hagåtña", "T": "Tamuning", "D": "Dededo" }\nprint(f"District T: {districts[\'T\']}")\n',
-      'python-format-roster': 'def format_name(name):\n    return name.upper()\nnames = ["Ana", "Ben"]\nprint(f"Roster: {\', \'.join(format_name(name) for name in names)}")\n',
+      'python-format-roster': 'def format_name(name):\n    return name.upper()\nnames = ["Ana", "Ben"]\nformatted = [format_name(name) for name in names]\nprint(f"Roster: {\', \'.join(formatted)}")\n',
       'java-filter-scores': 'import java.util.ArrayList;\nimport java.util.List;\nclass Main { public static void main(String[] args) {\nint[] scores = {88, 72, 95, 61};\nList<Integer> passing = new ArrayList<>();\nfor (int score : scores) { if (score >= 80) passing.add(score); }\nSystem.out.println("Passing: " + passing);\n} }\n',
       'java-count-priorities': 'class Main { public static void main(String[] args) {\nString[] priorities = {"high", "low", "high", "medium"};\nint highCount = 0;\nfor (String priority : priorities) { if ("high".equals(priority)) highCount++; }\nSystem.out.println("High priority: " + highCount);\n} }\n',
       'java-map-district': 'import java.util.HashMap;\nimport java.util.Map;\nclass Main { public static void main(String[] args) {\nMap<String, String> districts = new HashMap<>();\ndistricts.put("H", "Hagåtña");\ndistricts.put("T", "Tamuning");\ndistricts.put("D", "Dededo");\nSystem.out.println("District T: " + districts.get("T"));\n} }\n',
@@ -155,6 +155,34 @@ describe('practice challenge catalog', () => {
     }])
 
     expect(result.checks.every((check) => !check.passed)).toBe(true)
+
+    const nonRenderedText = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<fieldset><legend><script>Preferred contact</script></legend><input id="email" type="radio" name="contact"><label for="email"><style>Email</style></label><input id="phone" type="radio" name="contact"><label for="phone"><template>Phone</template></label></fieldset>',
+    }])
+    expect(nonRenderedText.checks.every((check) => !check.passed)).toBe(true)
+  })
+
+  it('does not mistake roster formatter declarations for calls', () => {
+    const declarationOnly: Record<string, string> = {
+      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nputs "Roster: ANA, BEN"\n',
+      'javascript-format-roster': 'function formatName(name) { return name.toUpperCase() }\nconsole.log("Roster: ANA, BEN")\n',
+      'python-format-roster': 'def format_name(name):\n    return name.upper()\nprint("Roster: ANA, BEN")\n',
+      'java-format-roster': 'class Main { static String formatName(String name) { return name.toUpperCase(); } public static void main(String[] args) { System.out.println("Roster: ANA, BEN"); } }',
+    }
+
+    Object.entries(declarationOnly).forEach(([challengeId, content]) => {
+      const challenge = practiceChallengeById(challengeId)!
+      const result = evaluatePracticeChallenge(challenge, [{
+        path: challenge.project.entryPath,
+        language: challenge.project.files[0].language,
+        content,
+      }], { status: 'success', stdout: 'Roster: ANA, BEN', stderr: '', durationMs: 1 })
+
+      expect(result.checks.find((check) => check.label.includes('Call format'))?.passed, challengeId).toBe(false)
+      expect(result.passed).toBe(false)
+    })
   })
 
   it('requires the multi-column layout to be inside the Web breakpoint', () => {
@@ -166,9 +194,28 @@ describe('practice challenge catalog', () => {
     }])
 
     expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: false },
+      { label: 'Start with one column', passed: false },
       { label: 'Add a min-width media query', passed: true },
       { label: 'Create multiple columns inside the breakpoint', passed: false },
     ])
+  })
+
+  it('rejects a multi-column default even when the Web breakpoint is correct', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.card-grid { display: grid; grid-template-columns: repeat(2, 1fr); }\n@media (min-width: 40rem) { .card-grid { grid-template-columns: repeat(3, 1fr); } }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: true },
+      { label: 'Start with one column', passed: false },
+      { label: 'Add a min-width media query', passed: true },
+      { label: 'Create multiple columns inside the breakpoint', passed: true },
+    ])
+    expect(result.passed).toBe(false)
   })
 
   it('keeps every challenge id unique', () => {

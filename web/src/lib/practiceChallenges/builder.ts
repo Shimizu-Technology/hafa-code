@@ -18,12 +18,14 @@ function isObviouslyHidden(element: Element) {
 function visibleTextContent(element: Element): string {
   return Array.from(element.childNodes).map((node) => {
     if (node.nodeType === 3) return node.textContent ?? ''
-    if (node.nodeType !== 1 || isObviouslyHidden(node as Element)) return ''
-    return visibleTextContent(node as Element)
+    if (node.nodeType !== 1) return ''
+    const child = node as Element
+    if (isObviouslyHidden(child) || /^(SCRIPT|STYLE|TEMPLATE)$/.test(child.tagName)) return ''
+    return visibleTextContent(child)
   }).join('')
 }
 
-function extractBracedBody(source: string, openingBrace: number) {
+function closingBraceIndex(source: string, openingBrace: number) {
   let depth = 1
   let quote: string | null = null
   let escaped = false
@@ -38,16 +40,42 @@ function extractBracedBody(source: string, openingBrace: number) {
     if (char === '"' || char === "'") quote = char
     else if (char === '{') depth += 1
     else if (char === '}') depth -= 1
-    if (depth === 0) return source.slice(openingBrace + 1, index)
+    if (depth === 0) return index
   }
-  return ''
+  return -1
 }
 
+function extractBracedBody(source: string, openingBrace: number) {
+  const closingBrace = closingBraceIndex(source, openingBrace)
+  return closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
+}
+
+const MIN_WIDTH_MEDIA_START = /@media\b[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
+
 function minWidthMediaBodies(source: string) {
-  const mediaStart = /@media\b[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
+  const mediaStart = new RegExp(MIN_WIDTH_MEDIA_START)
   return Array.from(source.matchAll(mediaStart), (match) => (
     extractBracedBody(source, match.index + match[0].lastIndexOf('{'))
   )).join('\n')
+}
+
+function withoutMinWidthMediaBlocks(source: string) {
+  const mediaStart = new RegExp(MIN_WIDTH_MEDIA_START)
+  const ranges = Array.from(source.matchAll(mediaStart), (match) => {
+    const openingBrace = match.index + match[0].lastIndexOf('{')
+    return { start: match.index, end: closingBraceIndex(source, openingBrace) }
+  }).filter((range) => range.end !== -1)
+
+  return ranges.reverse().reduce((result, range) => (
+    result.slice(0, range.start) + result.slice(range.end + 1)
+  ), source)
+}
+
+function withoutFormatNameDeclaration(source: string) {
+  return source
+    .replace(/^\s*def\s+format_name\s*\(\s*name\s*\)\s*:?.*$/gm, '')
+    .replace(/\bfunction\s+formatName\s*\(\s*name\s*\)/g, '')
+    .replace(/\bstatic\s+String\s+formatName\s*\(\s*String\s+name\s*\)/g, '')
 }
 
 /** Additional intermediate exercises. The original loop/grid challenge remains first for every language. */
@@ -104,7 +132,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'main.rb', label: 'Define format_name with a parameter', pattern: /\bdef\s+format_name\s*\(\s*name\s*\)/, ignoreStrings: true },
       { filePath: 'main.rb', label: 'Uppercase the supplied name', pattern: /\bname\.upcase\b/, ignoreStrings: true },
-      { filePath: 'main.rb', label: 'Call format_name for the roster', pattern: /\bformat_name\s*\(/, ignoreStrings: true },
+      { filePath: 'main.rb', label: 'Call format_name for the roster', pattern: /\bformat_name\s*\(/, scope: withoutFormatNameDeclaration, ignoreStrings: true },
     ],
     expectedOutput: 'Roster: ANA, BEN',
   },
@@ -160,7 +188,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'main.js', label: 'Define formatName with a parameter', pattern: /\bfunction\s+formatName\s*\(\s*name\s*\)/, ignoreStrings: true },
       { filePath: 'main.js', label: 'Uppercase the supplied name', pattern: /\bname\.toUpperCase\s*\(\s*\)/, ignoreStrings: true },
-      { filePath: 'main.js', label: 'Call formatName for the roster', pattern: /\b(?:map\s*\(\s*formatName\s*\)|formatName\s*\()/, ignoreStrings: true },
+      { filePath: 'main.js', label: 'Call formatName for the roster', pattern: /\b(?:map\s*\(\s*formatName\s*\)|formatName\s*\()/, scope: withoutFormatNameDeclaration, ignoreStrings: true },
     ],
     expectedOutput: 'Roster: ANA, BEN',
   },
@@ -216,7 +244,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'main.py', label: 'Define format_name with a parameter', pattern: /\bdef\s+format_name\s*\(\s*name\s*\)\s*:/, ignoreStrings: true },
       { filePath: 'main.py', label: 'Uppercase the supplied name', pattern: /\bname\.upper\s*\(\s*\)/, ignoreStrings: true },
-      { filePath: 'main.py', label: 'Call format_name for the roster', pattern: /\bformat_name\s*\(/, ignoreStrings: true },
+      { filePath: 'main.py', label: 'Call format_name for the roster', pattern: /\bformat_name\s*\(/, scope: withoutFormatNameDeclaration, ignoreStrings: true },
     ],
     expectedOutput: 'Roster: ANA, BEN',
   },
@@ -274,7 +302,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'Main.java', label: 'Define the typed formatName method', pattern: /\bstatic\s+String\s+formatName\s*\(\s*String\s+name\s*\)/, ignoreStrings: true },
       { filePath: 'Main.java', label: 'Uppercase the supplied name', pattern: /\bname\.toUpperCase\s*\(\s*\)/, ignoreStrings: true },
-      { filePath: 'Main.java', label: 'Call formatName for the roster', pattern: /\bformatName\s*\(/, ignoreStrings: true },
+      { filePath: 'Main.java', label: 'Call formatName for the roster', pattern: /\bformatName\s*\(/, scope: withoutFormatNameDeclaration, ignoreStrings: true },
     ],
     expectedOutput: 'Roster: ANA, BEN',
   },
@@ -338,6 +366,8 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
       { path: 'style.css', language: 'css', content: '.card-grid {\n  display: grid;\n  grid-template-columns: 1fr;\n  gap: 1rem;\n}\n\n/* Add a wider-screen enhancement here. */\n' },
     ] },
     checks: [
+      { filePath: 'style.css', label: 'Use a grid by default', pattern: /\.card-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
+      { filePath: 'style.css', label: 'Start with one column', pattern: /\.card-grid\s*\{[^}]*grid-template-columns\s*:\s*1fr\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
       { filePath: 'style.css', label: 'Add a min-width media query', pattern: /@media\b[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/i },
       { filePath: 'style.css', label: 'Create multiple columns inside the breakpoint', pattern: /\.card-grid\s*\{[^}]*(?:grid-template-columns\s*:\s*repeat\s*\(\s*[2-9]\d*\s*,\s*1fr\s*\)|grid-template-columns\s*:\s*1fr\s+1fr(?:\s+1fr)*)\s*[;}][^}]*\}/i, scope: minWidthMediaBodies },
     ],
