@@ -1,13 +1,11 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WebPreview } from './WebPreview'
 
 afterEach(cleanup)
 
-it('coaches Web console errors and links to the relevant guide topic', async () => {
-  const user = userEvent.setup()
-  const onOpenGuideTopic = vi.fn()
+it('sends Web console errors to the learning coach with source context', () => {
+  const onErrorAdviceChange = vi.fn()
   let receiveMessage: ((event: MessageEvent) => void) | null = null
   const port = {
     close: vi.fn(),
@@ -24,7 +22,7 @@ it('coaches Web console errors and links to the relevant guide topic', async () 
       { path: 'script.js', language: 'javascript', content: 'console.log(button)' },
       { path: 'feature.js', language: 'javascript', content: 'console.log(feature)' },
     ]}
-    onOpenGuideTopic={onOpenGuideTopic}
+    onErrorAdviceChange={onErrorAdviceChange}
   />)
   const frame = screen.getByTitle('Web preview') as HTMLIFrameElement
   act(() => window.dispatchEvent(new MessageEvent('message', {
@@ -36,13 +34,18 @@ it('coaches Web console errors and links to the relevant guide topic', async () 
     data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: feature is not defined', path: 'feature.js', line: 7 },
   } as MessageEvent))
 
-  expect(screen.getByRole('heading', { name: 'The page script cannot find that name' })).toBeTruthy()
-  expect(screen.getByText('feature.js · line 7')).toBeTruthy()
-  await user.click(screen.getByRole('button', { name: 'Review DOM and events' }))
-  expect(onOpenGuideTopic).toHaveBeenCalledWith('web-dom-events')
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+    kind: 'web',
+    advice: expect.objectContaining({
+      title: 'The page script cannot find that name',
+      location: 'feature.js · line 7',
+      guideTopicId: 'web-dom-events',
+    }),
+  }))
 })
 
 it('uses neutral entry-file context when a project with multiple scripts reports no source', () => {
+  const onErrorAdviceChange = vi.fn()
   let receiveMessage: ((event: MessageEvent) => void) | null = null
   const port = {
     close: vi.fn(),
@@ -59,6 +62,7 @@ it('uses neutral entry-file context when a project with multiple scripts reports
       { path: 'first.js', language: 'javascript', content: 'console.log(first)' },
       { path: 'second.js', language: 'javascript', content: 'console.log(second)' },
     ]}
+    onErrorAdviceChange={onErrorAdviceChange}
   />)
   const frame = screen.getByTitle('Web preview') as HTMLIFrameElement
   act(() => window.dispatchEvent(new MessageEvent('message', {
@@ -70,12 +74,13 @@ it('uses neutral entry-file context when a project with multiple scripts reports
     data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: missing is not defined' },
   } as MessageEvent))
 
-  expect(screen.getByText('index.html')).toBeTruthy()
-  expect(screen.queryByText('first.js')).toBeNull()
-  expect(screen.queryByText('second.js')).toBeNull()
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+    advice: expect.objectContaining({ location: 'index.html' }),
+  }))
 })
 
 it('validates source metadata against the latest files after the port connects', () => {
+  const onErrorAdviceChange = vi.fn()
   let receiveMessage: ((event: MessageEvent) => void) | null = null
   const port = {
     close: vi.fn(),
@@ -88,6 +93,7 @@ it('validates source metadata against the latest files after the port connects',
   const view = render(<WebPreview
     entryPath="index.html"
     files={[indexFile, { path: 'old.js', language: 'javascript', content: 'old()' }]}
+    onErrorAdviceChange={onErrorAdviceChange}
   />)
   const frame = screen.getByTitle('Web preview') as HTMLIFrameElement
   act(() => window.dispatchEvent(new MessageEvent('message', {
@@ -99,15 +105,22 @@ it('validates source metadata against the latest files after the port connects',
   view.rerender(<WebPreview
     entryPath="index.html"
     files={[indexFile, { path: 'new.js', language: 'javascript', content: 'newName()' }]}
+    onErrorAdviceChange={onErrorAdviceChange}
   />)
   act(() => receiveMessage?.({
     data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: newName is not defined', path: 'new.js' },
   } as MessageEvent))
-  expect(screen.getByText('new.js')).toBeTruthy()
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+    advice: expect.objectContaining({ location: 'new.js' }),
+  }))
+
+  act(() => screen.getByRole('button', { name: 'Clear' }).click())
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(null)
 
   act(() => receiveMessage?.({
     data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: old is not defined', path: 'old.js', line: 3 },
   } as MessageEvent))
-  expect(screen.getByText('index.html')).toBeTruthy()
-  expect(screen.queryByText('old.js · line 3')).toBeNull()
+  expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
+    advice: expect.objectContaining({ location: 'index.html' }),
+  }))
 })

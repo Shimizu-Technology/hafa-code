@@ -98,6 +98,14 @@ Create a small, open-source coding playground for students and alumni to practic
 - No generated fixes or hidden code changes; the original terminal/console error remains visible
 - Responsive cards with full-width, touch-friendly guide actions on mobile
 
+### Learning Sidecar
+
+- One Guide, Practice, and Coach surface that follows the active project language
+- A docked desktop panel that keeps code and learning help visible together without covering the editor
+- A focus-managed, full-height drawer on compact screens so learning tools work from every mobile workspace tab
+- Desktop errors reveal the Coach beside the terminal; mobile errors show a non-disruptive action and badge instead of taking over the screen
+- Coach links open the exact matching guide topic inside the same panel
+
 ### Saving
 
 Phase 1:

@@ -2,7 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { LEARNING_SIDECAR_OVERLAY_QUERY } from './components/LearningSidecar'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
+import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
 import { practiceChallengeById } from './lib/practiceLab'
 import { completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
@@ -17,15 +19,18 @@ vi.mock('@monaco-editor/react', () => ({
 }))
 
 const runnerHarness = vi.hoisted(() => ({
+  onErrorAdviceChange: undefined as undefined | ((context: ErrorCoachContext) => void),
   onRunCancel: undefined as undefined | (() => void),
   onRunComplete: undefined as undefined | ((outcome: RunnerOutcome) => void),
 }))
 
 vi.mock('./components/RunnerPanel', () => ({
-  RunnerPanel: ({ onRunCancel, onRunComplete }: {
+  RunnerPanel: ({ onErrorAdviceChange, onRunCancel, onRunComplete }: {
+    onErrorAdviceChange?: typeof runnerHarness.onErrorAdviceChange
     onRunCancel?: typeof runnerHarness.onRunCancel
     onRunComplete?: typeof runnerHarness.onRunComplete
   }) => {
+    runnerHarness.onErrorAdviceChange = onErrorAdviceChange
     runnerHarness.onRunCancel = onRunCancel
     runnerHarness.onRunComplete = onRunComplete
     return <section aria-label="Test runner" />
@@ -41,6 +46,7 @@ function storedLibrary() {
 describe('App language guide practice projects', () => {
   beforeEach(() => {
     localStorage.clear()
+    runnerHarness.onErrorAdviceChange = undefined
     runnerHarness.onRunCancel = undefined
     runnerHarness.onRunComplete = undefined
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
@@ -76,6 +82,8 @@ describe('App language guide practice projects', () => {
     const topic = languageGuideFor('ruby').topics.find((candidate) => candidate.id === 'ruby-variables-types')!
 
     await user.click(screen.getAllByRole('button', { name: 'Ruby guide' })[0])
+    const learningSidecar = screen.getByRole('complementary', { name: 'Ruby learning' })
+    expect(document.querySelector('.layout-grid')?.contains(learningSidecar)).toBe(false)
     await user.type(screen.getByRole('searchbox'), 'variables')
     await user.click(screen.getByRole('button', { name: /variables and data types/i }))
     await user.click(screen.getByRole('button', { name: 'Try example' }))
@@ -95,6 +103,87 @@ describe('App language guide practice projects', () => {
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', topic.practiceProject.title)
     expect(screen.getByLabelText('Code editor')).toHaveProperty('value', topic.practiceProject.files[0].content)
     expect(screen.getByRole('status').textContent).toMatch(/previous project is unchanged/i)
+  })
+
+  it('opens desktop error advice directly in the docked Coach', () => {
+    render(<App />)
+
+    act(() => runnerHarness.onErrorAdviceChange?.({
+      kind: 'ruby',
+      advice: {
+        title: 'Ruby cannot find that name',
+        explanation: 'Ruby does not know this name yet.',
+        location: 'main.rb · line 2',
+        steps: ['Check spelling.', 'Assign the value.', 'Run again.'],
+        guideTopicId: 'ruby-variables-types',
+      },
+    }))
+
+    expect(screen.getByRole('complementary', { name: 'Ruby learning' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Coach/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('heading', { name: 'Ruby cannot find that name' })).toBeTruthy()
+  })
+
+  it('keeps compact error advice behind the non-disruptive Coach launcher', async () => {
+    const user = userEvent.setup()
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === LEARNING_SIDECAR_OVERLAY_QUERY,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    render(<App />)
+
+    act(() => runnerHarness.onErrorAdviceChange?.({
+      kind: 'ruby',
+      advice: {
+        title: 'Ruby cannot find that name',
+        explanation: 'Ruby does not know this name yet.',
+        location: 'main.rb · line 2',
+        steps: ['Check spelling.', 'Assign the value.', 'Run again.'],
+        guideTopicId: 'ruby-variables-types',
+      },
+    }))
+
+    expect(screen.queryByRole('dialog', { name: 'Ruby learning' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Fix this error' }))
+    expect(screen.getByRole('dialog', { name: 'Ruby learning' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Coach/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('creates a practice project with the retained Coach guide language', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    act(() => runnerHarness.onErrorAdviceChange?.({
+      kind: 'java',
+      advice: {
+        title: 'Java cannot find that name',
+        explanation: 'The compiler cannot see it.',
+        location: 'Main.java · line 4',
+        steps: ['Check spelling.', 'Declare the name.', 'Run again.'],
+        guideTopicId: 'java-variables-types',
+      },
+    }))
+    await user.click(screen.getByRole('button', { name: 'Review Variables and types' }))
+    await user.click(screen.getByRole('button', { name: 'Try example' }))
+
+    const updatedLibrary = storedLibrary()
+    const practiceProject = updatedLibrary.projects.find((candidate) => candidate.id === updatedLibrary.activeProjectId)!
+    const topic = languageGuideFor('java').topics.find((candidate) => candidate.id === 'java-variables-types')!
+    expect(practiceProject).toMatchObject({
+      kind: 'java',
+      entryPath: topic.practiceProject.entryPath,
+      files: topic.practiceProject.files,
+    })
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', topic.practiceProject.title)
   })
 
   it('starts an all-language lab challenge as a separate private project', async () => {

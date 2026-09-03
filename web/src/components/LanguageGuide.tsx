@@ -15,6 +15,8 @@ interface LanguageGuideProps {
   initialTopicId?: string | null
 }
 
+export type LanguageGuideContentProps = Pick<LanguageGuideProps, 'kind' | 'onOpenPractice' | 'onTryExample' | 'initialTopicId'>
+
 type CopyFeedback = {
   topicId: string
   status: 'copied' | 'failed'
@@ -28,14 +30,13 @@ function inlineCode(text: string) {
   ))
 }
 
-export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExample, initialTopicId }: LanguageGuideProps) {
+export function LanguageGuideContent({ kind, onOpenPractice, onTryExample, initialTopicId }: LanguageGuideContentProps) {
   const guide = languageGuideFor(kind)
   const [query, setQuery] = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState(
     guide.topics.some((topic) => topic.id === initialTopicId) ? initialTopicId! : guide.topics[0].id,
   )
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
-  const dialogRef = useModalFocus<HTMLElement>(open, onClose)
   const filteredTopics = useMemo(() => filterGuideTopics(guide, query), [guide, query])
   const selectedTopic = filteredTopics.find((topic) => topic.id === selectedTopicId) ?? filteredTopics[0] ?? null
 
@@ -45,46 +46,13 @@ export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExampl
     return () => window.clearTimeout(timer)
   }, [copyFeedback])
 
-  useEffect(() => {
-    if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [open])
-
-  if (!open) return null
-
   const copyCode = async (topic: LanguageGuideTopic) => {
     const copied = await writeClipboardText(topic.code)
     setCopyFeedback({ topicId: topic.id, status: copied ? 'copied' : 'failed' })
   }
 
   return (
-    <div className="guide-backdrop" role="presentation" onClick={onClose}>
-      <section
-        ref={dialogRef}
-        className="language-guide"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="language-guide-title"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="guide-header">
-          <div className="guide-heading-mark" aria-hidden="true"><BookOpen size={23} /></div>
-          <div>
-            <p className="eyebrow">Quick reference · follows your project</p>
-            <h2 id="language-guide-title">{guide.label} Language Guide</h2>
-            <p>{guide.introduction}</p>
-          </div>
-          <button className="ghost icon-button guide-close-button" type="button" onClick={onClose} aria-label="Close language guide">
-            <X size={19} />
-          </button>
-        </header>
-
-        <div className="guide-layout">
+        <div className="guide-layout guide-content">
           <aside className="guide-index" aria-label={`${guide.label} guide topics`}>
             <label className="guide-search" htmlFor="guide-search-input">
               <Search size={17} />
@@ -184,6 +152,52 @@ export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExampl
             )}
           </article>
         </div>
+  )
+}
+
+export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExample, initialTopicId }: LanguageGuideProps) {
+  const guide = languageGuideFor(kind)
+  const dialogRef = useModalFocus<HTMLElement>(open, onClose)
+
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="guide-backdrop" role="presentation" onClick={onClose}>
+      <section
+        ref={dialogRef}
+        className="language-guide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="language-guide-title"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="guide-header">
+          <div className="guide-heading-mark" aria-hidden="true"><BookOpen size={23} /></div>
+          <div>
+            <p className="eyebrow">Quick reference · follows your project</p>
+            <h2 id="language-guide-title">{guide.label} Language Guide</h2>
+            <p>{guide.introduction}</p>
+          </div>
+          <button className="ghost icon-button guide-close-button" type="button" onClick={onClose} aria-label="Close language guide">
+            <X size={19} />
+          </button>
+        </header>
+        <LanguageGuideContent
+          kind={kind}
+          initialTopicId={initialTopicId}
+          onOpenPractice={onOpenPractice}
+          onTryExample={onTryExample}
+        />
       </section>
     </div>
   )

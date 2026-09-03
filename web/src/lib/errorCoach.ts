@@ -9,6 +9,11 @@ export interface ErrorCoachAdvice {
   guideTopicId: string
 }
 
+export type ErrorCoachContext = {
+  advice: ErrorCoachAdvice
+  kind: ProjectKind
+} | null
+
 export interface ErrorSourceLocation {
   path: string
   line?: number

@@ -13,6 +13,7 @@ web/src/
     EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
     ErrorCoach.tsx            Plain-language error explanation and guide deep link
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
+    LearningSidecar.tsx       Docked Guide/Practice/Coach shell and responsive mobile drawer
     MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
     PracticeLab.tsx           All-language challenge browser and progress overview
     PracticeSessionPanel.tsx  Active challenge instructions, hints, and check results
@@ -54,6 +55,7 @@ web/src/
 - Add syntax-reference content through `lib/languageGuides.ts`; every topic needs a stable ID and a complete practice project.
 - Add short exercises through `lib/practiceLab.ts`; each supported project kind should keep a Starter, Builder, and Stretch progression.
 - Add error patterns through `lib/errorCoach.ts`; advice must remain deterministic, concise, and linked to a real guide topic.
+- Route learning entry points through `components/LearningSidecar.tsx`; keep the guide and lab content reusable instead of creating separate desktop and mobile implementations.
 - Keep pure project rules in `lib/workspace.ts` or `lib/codeRunner.ts`.
 - Keep Rails request/response mapping in `lib/api.ts`; UI components should not know API payload casing.
 - Keep browser storage and import/export behavior in `lib/projectStorage.ts`.

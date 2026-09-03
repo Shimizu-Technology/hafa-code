@@ -18,6 +18,7 @@ import {
   Send,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   UserPlus,
 } from 'lucide-react'
 import './App.css'
@@ -52,8 +53,11 @@ import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember
 import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
 import { ProjectFeedback } from './components/ProjectFeedback'
-import { LanguageGuide } from './components/LanguageGuide'
-import { PracticeLab } from './components/PracticeLab'
+import {
+  LEARNING_SIDECAR_OVERLAY_QUERY,
+  LearningSidecar,
+  type LearningTab,
+} from './components/LearningSidecar'
 import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
@@ -74,6 +78,7 @@ import {
   type PendingPracticeCheck,
 } from './lib/practiceProgress'
 import type { RunnerOutcome } from './lib/runnerOutcome'
+import type { ErrorCoachContext } from './lib/errorCoach'
 import {
   clearProjectPendingCloudSync,
   markProjectPendingCloudSync,
@@ -159,9 +164,12 @@ export default function App() {
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
-  const [languageGuideOpen, setLanguageGuideOpen] = useState(false)
+  const [learningSidecarOpen, setLearningSidecarOpen] = useState(false)
+  const [learningTab, setLearningTab] = useState<LearningTab>('guide')
+  const [languageGuideKind, setLanguageGuideKind] = useState<ProjectKind>(initialProject.kind)
   const [languageGuideTopicId, setLanguageGuideTopicId] = useState<string | null>(null)
-  const [practiceLabOpen, setPracticeLabOpen] = useState(false)
+  const [guideNavigationRevision, setGuideNavigationRevision] = useState(0)
+  const [learningCoachContext, setLearningCoachContext] = useState<ErrorCoachContext>(null)
   const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
   const [practiceChecking, setPracticeChecking] = useState(false)
   const [completedPracticeIds, setCompletedPracticeIds] = useState(() => completedPracticeChallengeIds())
@@ -185,6 +193,7 @@ export default function App() {
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const clearPracticeCheckWatchdog = useCallback(() => {
     if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
     practiceCheckWatchdogRef.current = null
@@ -195,9 +204,23 @@ export default function App() {
     setPracticeChecking(false)
     setPracticeResult(null)
   }, [clearPracticeCheckWatchdog])
-  const openLanguageGuide = useCallback((topicId: string | null = null) => {
+  const openLanguageGuide = useCallback((topicId: string | null = null, requestedKind: ProjectKind = project.kind) => {
+    setLanguageGuideKind(requestedKind)
     setLanguageGuideTopicId(topicId)
-    setLanguageGuideOpen(true)
+    setGuideNavigationRevision((revision) => revision + 1)
+    setLearningTab('guide')
+    setLearningSidecarOpen(true)
+  }, [project.kind])
+  const openPracticeLab = useCallback(() => {
+    setLearningTab('practice')
+    setLearningSidecarOpen(true)
+  }, [])
+  const handleErrorAdviceChange = useCallback((context: ErrorCoachContext) => {
+    setLearningCoachContext(context)
+    if (context && typeof window.matchMedia === 'function' && !window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY).matches) {
+      setLearningTab('coach')
+      setLearningSidecarOpen(true)
+    }
   }, [])
   const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
     setFileDialog(null)
@@ -211,7 +234,6 @@ export default function App() {
     setPendingCheckpoint(null)
   })
 
-  const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const currentPracticeChallenge = useMemo(
     () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
     [project.id],
@@ -695,13 +717,13 @@ export default function App() {
     setNotice(`${next.title} created.`)
   }
 
-  const tryGuideExample = (topic: LanguageGuideTopic) => {
+  const tryGuideExample = (topic: LanguageGuideTopic, kind: ProjectKind) => {
     if (workspaceArchived) {
       setNotice('Restore this classroom before creating a practice project.')
       return
     }
 
-    const starter = createProject(project.kind, topic.practiceProject.title)
+    const starter = createProject(kind, topic.practiceProject.title)
     const practiceProject: SavedProject = {
       ...starter,
       organizationId: activeOrganizationId,
@@ -715,7 +737,7 @@ export default function App() {
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
     setMobileTab('code')
-    setLanguageGuideOpen(false)
+    setLearningSidecarOpen(false)
     setNotice(`${topic.title} opened in a new practice project. Your previous project is unchanged.`)
   }
 
@@ -740,8 +762,7 @@ export default function App() {
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
     setMobileTab('code')
-    setPracticeLabOpen(false)
-    setLanguageGuideOpen(false)
+    setLearningSidecarOpen(false)
     setNotice(progressSaved
       ? `${challenge.title} is ready. Your previous project is unchanged.`
       : `${challenge.title} is ready and your previous project is unchanged. This browser could not save challenge progress.`)
@@ -1847,7 +1868,7 @@ export default function App() {
         </div>
         <div className="mobile-home-actions">
           <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
-          <button className="secondary" type="button" onClick={() => setPracticeLabOpen(true)}><Dumbbell size={16} /> Practice lab</button>
+          <button className="secondary" type="button" onClick={openPracticeLab}><Dumbbell size={16} /> Practice lab</button>
           <button className="secondary" type="button" onClick={() => openLanguageGuide()}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
@@ -1857,118 +1878,128 @@ export default function App() {
         </div>
       </section>
 
-      <div className="layout-grid">
-        <ProjectSidebar
-          activeOrganizationId={activeOrganizationId}
-          activeProjectCount={activeContextProjects.length}
-          archivedProjectCount={archivedContextProjects.length}
-          currentProjectId={project.id}
-          currentProjectTitle={project.title}
-          isSignedIn={isSignedIn}
-          mobileProjectsOpen={mobileTab === 'projects'}
-          projects={visibleProjects}
-          showArchived={showArchived}
-          userId={user?.id}
-          userName={user?.full_name}
-          onAddProject={addProject}
-          onCollapse={() => setSidebarCollapsed(true)}
-          onExpand={() => setSidebarCollapsed(false)}
-          onSelectProject={setActiveProject}
-          onShowArchivedChange={setShowArchived}
-        />
-
-        <section className="main-workspace">
-          <ProjectToolbar
+      <div className={`coding-stage${learningSidecarOpen ? ' learning-open' : ''}`}>
+        <div className="layout-grid">
+          <ProjectSidebar
             activeOrganizationId={activeOrganizationId}
-            canEditProject={canEditProject}
-            checkpointMenuIsOpen={checkpointMenuIsOpen}
-            checkpointMenuRef={checkpointMenuRef}
-            checkpoints={checkpoints}
-            cloudSaveLabel={isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
-            currentProjectOwnerLabel={currentProjectOwnerLabel}
-            mobileHistoryOpen={mobileTab === 'history'}
-            project={project}
-            projectCount={activeContextProjects.length}
-            onArchive={requestArchiveProject}
-            onCheckpointMenuChange={setCheckpointMenuOpen}
-            onDelete={requestDeleteProject}
-            onDuplicate={cloneProject}
-            onOpenGuide={() => openLanguageGuide()}
-            onOpenPractice={() => setPracticeLabOpen(true)}
-            onOpenProjectActions={() => setProjectActionsOpen(true)}
-            onRename={renameProject}
-            onRestore={restoreProject}
-            onRestoreCheckpoint={(checkpoint) => {
-              setCheckpointMenuOpen(false)
-              requestRestoreCheckpoint(checkpoint)
-            }}
-            onSaveCheckpoint={saveCheckpoint}
-            onVisibilityChange={updateProjectVisibility}
+            activeProjectCount={activeContextProjects.length}
+            archivedProjectCount={archivedContextProjects.length}
+            currentProjectId={project.id}
+            currentProjectTitle={project.title}
+            isSignedIn={isSignedIn}
+            mobileProjectsOpen={mobileTab === 'projects'}
+            projects={visibleProjects}
+            showArchived={showArchived}
+            userId={user?.id}
+            userName={user?.full_name}
+            onAddProject={addProject}
+            onCollapse={() => setSidebarCollapsed(true)}
+            onExpand={() => setSidebarCollapsed(false)}
+            onSelectProject={setActiveProject}
+            onShowArchivedChange={setShowArchived}
           />
 
-          {canAccessProjectFeedback && (
-            <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
-          )}
-
-          {currentPracticeChallenge && (
-            <PracticeSessionPanel
-              key={`${project.id}:${currentPracticeChallenge.id}`}
-              challenge={currentPracticeChallenge}
-              checking={practiceChecking}
-              completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
-              result={practiceResult}
-              onCheck={checkPracticeWork}
-              onOpenLab={() => setPracticeLabOpen(true)}
+          <section className="main-workspace">
+            <ProjectToolbar
+              activeOrganizationId={activeOrganizationId}
+              canEditProject={canEditProject}
+              checkpointMenuIsOpen={checkpointMenuIsOpen}
+              checkpointMenuRef={checkpointMenuRef}
+              checkpoints={checkpoints}
+              cloudSaveLabel={isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
+              currentProjectOwnerLabel={currentProjectOwnerLabel}
+              mobileHistoryOpen={mobileTab === 'history'}
+              project={project}
+              projectCount={activeContextProjects.length}
+              onArchive={requestArchiveProject}
+              onCheckpointMenuChange={setCheckpointMenuOpen}
+              onDelete={requestDeleteProject}
+              onDuplicate={cloneProject}
+              onOpenGuide={() => openLanguageGuide()}
+              onOpenPractice={openPracticeLab}
+              onOpenProjectActions={() => setProjectActionsOpen(true)}
+              onRename={renameProject}
+              onRestore={restoreProject}
+              onRestoreCheckpoint={(checkpoint) => {
+                setCheckpointMenuOpen(false)
+                requestRestoreCheckpoint(checkpoint)
+              }}
+              onSaveCheckpoint={saveCheckpoint}
+              onVisibilityChange={updateProjectVisibility}
             />
-          )}
 
-          <EditorWorkspace
-            activeFile={activeFile}
-            canEditProject={canEditProject}
-            editorExpanded={editorExpanded}
-            editorFontSize={editorFontSize}
-            entryFile={entryFile}
-            project={project}
-            onCreateFile={openCreateFileDialog}
-            onDeleteFile={deleteFile}
-            onDuplicateFile={openDuplicateFileDialog}
-            onEditorExpandedChange={setEditorExpanded}
-            onOpenGuide={() => openLanguageGuide()}
-            onOpenGuideTopic={openLanguageGuide}
-            onOpenPractice={() => setPracticeLabOpen(true)}
-            onRenameFile={openRenameFileDialog}
-            onRunnerCancel={clearPendingPracticeCheck}
-            onRunnerComplete={handlePracticeRunComplete}
-            onRunFromMobileCode={runFromMobileCode}
-            onSelectFile={setActivePath}
-            onSetEntryPath={setEntryPath}
-            onUpdateActiveFile={updateActiveFile}
-          />
-        </section>
+            {canAccessProjectFeedback && (
+              <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
+            )}
+
+            {currentPracticeChallenge && (
+              <PracticeSessionPanel
+                key={`${project.id}:${currentPracticeChallenge.id}`}
+                challenge={currentPracticeChallenge}
+                checking={practiceChecking}
+                completed={completedPracticeIds.includes(currentPracticeChallenge.id)}
+                result={practiceResult}
+                onCheck={checkPracticeWork}
+                onOpenLab={openPracticeLab}
+              />
+            )}
+
+            <EditorWorkspace
+              activeFile={activeFile}
+              canEditProject={canEditProject}
+              editorExpanded={editorExpanded}
+              editorFontSize={editorFontSize}
+              entryFile={entryFile}
+              project={project}
+              onCreateFile={openCreateFileDialog}
+              onDeleteFile={deleteFile}
+              onDuplicateFile={openDuplicateFileDialog}
+              onEditorExpandedChange={setEditorExpanded}
+              onOpenGuide={() => openLanguageGuide()}
+              onOpenPractice={openPracticeLab}
+              onErrorAdviceChange={handleErrorAdviceChange}
+              onRenameFile={openRenameFileDialog}
+              onRunnerCancel={clearPendingPracticeCheck}
+              onRunnerComplete={handlePracticeRunComplete}
+              onRunFromMobileCode={runFromMobileCode}
+              onSelectFile={setActivePath}
+              onSetEntryPath={setEntryPath}
+              onUpdateActiveFile={updateActiveFile}
+            />
+          </section>
+        </div>
+
+        <LearningSidecar
+          activeTab={learningTab}
+          coachContext={learningCoachContext}
+          completedChallengeIds={completedPracticeIds}
+          guideKind={languageGuideKind}
+          guideNavigationRevision={guideNavigationRevision}
+          guideTopicId={languageGuideTopicId}
+          kind={project.kind}
+          open={learningSidecarOpen}
+          onActiveTabChange={setLearningTab}
+          onClose={() => setLearningSidecarOpen(false)}
+          onOpenGuideTopic={openLanguageGuide}
+          onStartChallenge={startPracticeChallenge}
+          onTryExample={tryGuideExample}
+        />
       </div>
 
       <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={setMobileTab} />
 
-      <LanguageGuide
-        key={`${project.kind}:${languageGuideTopicId ?? 'default'}`}
-        kind={project.kind}
-        open={languageGuideOpen}
-        initialTopicId={languageGuideTopicId}
-        onClose={() => setLanguageGuideOpen(false)}
-        onOpenPractice={() => {
-          setLanguageGuideOpen(false)
-          setPracticeLabOpen(true)
-        }}
-        onTryExample={tryGuideExample}
-      />
-
-      <PracticeLab
-        completedChallengeIds={completedPracticeIds}
-        initialKind={project.kind}
-        open={practiceLabOpen}
-        onClose={() => setPracticeLabOpen(false)}
-        onStartChallenge={startPracticeChallenge}
-      />
+      {learningCoachContext && !learningSidecarOpen && (
+        <button
+          className="learning-coach-launcher"
+          type="button"
+          onClick={() => {
+            setLearningTab('coach')
+            setLearningSidecarOpen(true)
+          }}
+        >
+          <TriangleAlert size={17} /> Fix this error
+        </button>
+      )}
 
       <WorkspaceDialogs
         activeProjectCount={activeContextProjects.length}
