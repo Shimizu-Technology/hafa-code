@@ -1,10 +1,17 @@
 import type { PracticeChallenge } from '../practiceLab'
 
 function isObviouslyHidden(element: Element) {
-  const inlineStyle = element.getAttribute('style')?.toLowerCase() ?? ''
-  return element.hasAttribute('hidden')
-    || element.getAttribute('aria-hidden')?.toLowerCase() === 'true'
-    || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important\s*)?(?:;|$)/.test(inlineStyle)
+  let current: Element | null = element
+  while (current) {
+    const inlineStyle = current.getAttribute('style')?.toLowerCase() ?? ''
+    if (
+      current.hasAttribute('hidden')
+      || current.getAttribute('aria-hidden')?.toLowerCase() === 'true'
+      || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important\s*)?(?:;|$)/.test(inlineStyle)
+    ) return true
+    current = current.parentElement
+  }
+  return false
 }
 
 function visibleTextContent(element: Element): string {

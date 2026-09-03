@@ -105,6 +105,7 @@ describe('practice challenge catalog', () => {
     expect(labelPassed('<label for="email" aria-hidden="true">Email</label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email" style="display: none">Email</label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email"><span hidden>Email</span></label><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<div hidden><label for="email">Email</label></div><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email">Email</label><input id="email" name="email" type="email">')).toBe(true)
   })
 
