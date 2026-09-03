@@ -301,6 +301,23 @@ describe('RunnerPanel', () => {
     })
   })
 
+  it('reports an active run to the latest completion callback', () => {
+    const firstCompletion = vi.fn()
+    const latestCompletion = vi.fn()
+    const view = render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={firstCompletion} />)
+
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances.at(-1)!
+    const run = worker.messages.find((message) => message.type === 'run')
+    if (!run || run.type !== 'run') throw new Error('Expected a run request')
+
+    view.rerender(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={latestCompletion} />)
+    act(() => worker.respond({ id: run.id, type: 'result', stdout: 'Done\n', stderr: '', exitCode: 0, durationMs: 8 }))
+
+    expect(firstCompletion).not.toHaveBeenCalled()
+    expect(latestCompletion).toHaveBeenCalledOnce()
+  })
+
   it('reports an unexpected worker error exactly once', () => {
     const onRunComplete = vi.fn()
     render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)

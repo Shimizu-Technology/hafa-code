@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import {
@@ -12,6 +12,8 @@ import {
   remapPendingPracticeCheck,
   replacePracticeProjectId,
 } from './practiceProgress'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
   it('offers a three-step progression for every supported project kind', () => {
@@ -112,6 +114,15 @@ describe('practice challenge catalog', () => {
     const challenge = practiceChallengeById('web-click-counter')!
     const quotedExample = 'const example = \'button.addEventListener("click", () => { count++; output.textContent = count })\'\n'
     const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: quotedExample }])
+
+    expect(result.passed).toBe(false)
+    expect(result.checks.slice(1).every((check) => !check.passed)).toBe(true)
+  })
+
+  it('does not extract click-handler behavior from a regular-expression literal', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const regexExample = 'const fake = /button.addEventListener("click", () => { count += 1; output.textContent = count })/\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: regexExample }])
 
     expect(result.passed).toBe(false)
     expect(result.checks.slice(1).every((check) => !check.passed)).toBe(true)
@@ -238,24 +249,20 @@ describe('practice progress', () => {
   it('persists conflict mappings atomically when the combined write fails', () => {
     linkPracticeProject('local-project', 'python-loop-stops')
     const durableBefore = localStorage.getItem('hafa-code-practice-progress-v1')
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
 
     expect(preservePracticeConflictLinks('local-project', 'conflict-copy', 'server-project')).toBe(false)
     expect(localStorage.getItem('hafa-code-practice-progress-v1')).toBe(durableBefore)
     expect(practiceChallengeIdForProject('conflict-copy')).toBe('python-loop-stops')
     expect(practiceChallengeIdForProject('server-project')).toBe('python-loop-stops')
-
-    setItem.mockRestore()
   })
 
   it('keeps practice usable when the browser blocks storage writes', () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
 
     expect(linkPracticeProject('local-project', 'python-loop-stops')).toBe(false)
     expect(completePracticeChallenge('python-loop-stops')).toBe(false)
     expect(practiceChallengeIdForProject('local-project')).toBe('python-loop-stops')
     expect(completedPracticeChallengeIds()).toContain('python-loop-stops')
-
-    setItem.mockRestore()
   })
 })

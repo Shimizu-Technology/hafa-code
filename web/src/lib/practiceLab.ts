@@ -375,7 +375,7 @@ function extractClickHandlerBody(source: string) {
 }
 
 function findExecutableMatch(source: string, pattern: RegExp) {
-  const structure = sourceWithoutStringContents(source)
+  const structure = sourceWithoutJavaScriptRegexLiterals(sourceWithoutStringContents(source))
   pattern.lastIndex = 0
   let match = pattern.exec(source)
   while (match) {
@@ -383,6 +383,68 @@ function findExecutableMatch(source: string, pattern: RegExp) {
     match = pattern.exec(source)
   }
   return null
+}
+
+function sourceWithoutJavaScriptRegexLiterals(source: string) {
+  const structure = [...source]
+  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
+  let canStartRegex = true
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (/\s/.test(char)) continue
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char
+      index += 1
+      while (index < source.length && source[index] !== quote) index += 1
+      canStartRegex = false
+      continue
+    }
+
+    if (/[$A-Z_a-z]/.test(char)) {
+      const start = index
+      while (index + 1 < source.length && /[$\w]/.test(source[index + 1])) index += 1
+      canStartRegex = regexPrefixKeywords.has(source.slice(start, index + 1))
+      continue
+    }
+
+    if (/\d/.test(char)) {
+      while (index + 1 < source.length && /[\d._]/.test(source[index + 1])) index += 1
+      canStartRegex = false
+      continue
+    }
+
+    if (char === '/' && canStartRegex) {
+      let escaped = false
+      let inCharacterClass = false
+      structure[index] = ' '
+      index += 1
+      while (index < source.length) {
+        const regexChar = source[index]
+        structure[index] = regexChar === '\n' ? '\n' : ' '
+        if (regexChar === '\n') break
+        if (escaped) escaped = false
+        else if (regexChar === '\\') escaped = true
+        else if (regexChar === '[') inCharacterClass = true
+        else if (regexChar === ']') inCharacterClass = false
+        else if (regexChar === '/' && !inCharacterClass) {
+          while (index + 1 < source.length && /[a-z]/i.test(source[index + 1])) {
+            index += 1
+            structure[index] = ' '
+          }
+          break
+        }
+        index += 1
+      }
+      canStartRegex = false
+      continue
+    }
+
+    canStartRegex = !/[\])}]/.test(char) && char !== '.'
+  }
+
+  return structure.join('')
 }
 
 function extractBracedBody(source: string, openingBrace: number) {

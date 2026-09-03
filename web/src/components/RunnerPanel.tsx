@@ -47,12 +47,14 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
   const streamedOutputRef = useRef({ stdout: '', stderr: '' })
   const detachWorkerListenersRef = useRef<() => void>(() => {})
   const onRunCancelRef = useRef(onRunCancel)
+  const onRunCompleteRef = useRef(onRunComplete)
   const terminalScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     onRunCancelRef.current = onRunCancel
-  }, [onRunCancel])
+    onRunCompleteRef.current = onRunComplete
+  }, [onRunCancel, onRunComplete])
 
   const appendTerminalLine = (line: Omit<TerminalLine, 'id'>) => {
     setTerminalLines((current) => [...current, { id: crypto.randomUUID(), ...line }])
@@ -131,7 +133,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
         durationMs: Math.round(performance.now() - startedAt),
       }
       setRunState(outcome)
-      onRunComplete?.(outcome)
+      onRunCompleteRef.current?.(outcome)
       startedAtRef.current = null
     }, startupTimeoutMs)
 
@@ -149,7 +151,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
         }
         appendTerminalLine({ kind: 'system', text: message })
         setRunState(outcome)
-        onRunComplete?.(outcome)
+        onRunCompleteRef.current?.(outcome)
         startedAtRef.current = null
       }, executionTimeoutMs + 250)
     }
@@ -209,7 +211,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
       }
       setRunState(outcome)
-      onRunComplete?.(outcome)
+      onRunCompleteRef.current?.(outcome)
       startedAtRef.current = null
     }
 
@@ -229,7 +231,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
       }
       appendTerminalLine({ kind: 'stderr', text: message })
       setRunState(outcome)
-      onRunComplete?.(outcome)
+      onRunCompleteRef.current?.(outcome)
       startedAtRef.current = null
     }
 
@@ -277,7 +279,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
       durationMs: startedAtRef.current === null ? runState.durationMs : Math.round(performance.now() - startedAtRef.current),
     }
     setRunState(outcome)
-    onRunComplete?.(outcome)
+    onRunCompleteRef.current?.(outcome)
     startedAtRef.current = null
   }
 
