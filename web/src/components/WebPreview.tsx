@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { buildHtmlPreview, type ProjectFile } from '../lib/codeRunner'
+import { coachRunnerError } from '../lib/errorCoach'
+import { ErrorCoach } from './ErrorCoach'
 
 interface PreviewConsoleMessage {
   source: 'hafa-code-preview-console'
@@ -12,7 +14,7 @@ function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['
   return level === 'log' || level === 'warn' || level === 'error'
 }
 
-export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: string }) {
+export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { files: ProjectFile[]; entryPath: string; onOpenGuideTopic?: (topicId: string) => void }) {
   const draftPreview = useMemo(() => buildHtmlPreview(files, entryPath), [entryPath, files])
   const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -20,6 +22,11 @@ export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPa
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
   const previewIsStale = draftPreview !== renderedPreview
+  const latestError = [...consoleMessages].reverse().find((message) => message.level === 'error')
+  const scriptPath = files.find((file) => file.language === 'javascript')?.path ?? entryPath
+  const errorAdvice = latestError ? coachRunnerError('web', scriptPath, {
+    status: 'error', stdout: '', stderr: latestError.message, durationMs: 0,
+  }) : null
 
   const sendPreviewToFrame = useCallback((html: string) => {
     previewPortRef.current?.postMessage({
@@ -116,6 +123,7 @@ export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPa
           ))
         )}
       </div>
+      {errorAdvice && <ErrorCoach advice={errorAdvice} kind="web" onOpenGuideTopic={onOpenGuideTopic} />}
     </section>
   )
 }

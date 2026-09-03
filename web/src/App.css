@@ -1585,6 +1585,55 @@ button.context-chip.active,
 .preview-console-line.warn { color: #ffd38a; }
 .preview-console-line.error { color: #ffb3a7; }
 
+.error-coach {
+  background: #fff8dc;
+  border-top: 1px solid #e8c85b;
+  color: #33290f;
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+}
+
+.error-coach-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  justify-content: space-between;
+}
+
+.error-coach-heading span,
+.error-coach-heading small {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.error-coach-heading span {
+  color: #8a5b00;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.error-coach-heading small { color: #6a5a31; }
+.error-coach h3 { font-size: 1.05rem; margin: 0; }
+.error-coach p { color: #594a24; line-height: 1.5; margin: 0; }
+.error-coach ol { display: grid; gap: 0.3rem; margin: 0; padding-left: 1.3rem; }
+.error-coach li { line-height: 1.4; padding-left: 0.15rem; }
+.error-coach button { justify-self: start; }
+
+.app-shell[data-theme="dark"] .error-coach {
+  background: #29230f;
+  border-color: #6e5a22;
+  color: #fff2bc;
+}
+
+.app-shell[data-theme="dark"] .error-coach-heading span { color: #f1ca55; }
+.app-shell[data-theme="dark"] .error-coach-heading small,
+.app-shell[data-theme="dark"] .error-coach p { color: #d8c998; }
+
 .mobile-bottom-nav {
   display: none;
 }
@@ -3653,4 +3702,7 @@ button.context-chip.active,
   .practice-check-row button {
     width: 100%;
   }
+
+  .error-coach { padding: 0.85rem; }
+  .error-coach button { min-height: 44px; width: 100%; }
 }

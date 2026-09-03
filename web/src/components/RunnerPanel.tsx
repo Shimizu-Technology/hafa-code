@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, Loader2, Play, Square, Terminal, Zap } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerOutcome, RunnerStatus } from '../lib/runnerOutcome'
+import { coachRunnerError } from '../lib/errorCoach'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
+import { ErrorCoach } from './ErrorCoach'
 
 type RunPhase = 'idle' | 'loading' | 'executing' | 'input'
 
@@ -26,9 +28,10 @@ interface RunnerPanelProps {
   entryFile: ProjectFile
   onRunCancel?: () => void
   onRunComplete?: (outcome: RunnerOutcome) => void
+  onOpenGuideTopic?: (topicId: string) => void
 }
 
-export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: RunnerPanelProps) {
+export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, onOpenGuideTopic = () => {} }: RunnerPanelProps) {
   const runner = projectKindDefinition(project.kind).runner
   const startupTimeoutMs = runner?.startupTimeoutMs ?? RUNNER_STARTUP_TIMEOUT_MS
   const executionTimeoutMs = runner?.executionTimeoutMs ?? RUNNER_TIMEOUT_MS
@@ -255,6 +258,14 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
   })
 
   const outputIsEmpty = !runState.stdout && !runState.stderr
+  const errorAdvice = runState.status === 'error' || runState.status === 'timeout'
+    ? coachRunnerError(project.kind, entryFile.path, {
+        status: runState.status,
+        stdout: runState.stdout,
+        stderr: runState.stderr,
+        durationMs: runState.durationMs ?? 0,
+      })
+    : null
 
   const submitTerminalInput = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -362,6 +373,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
           </form>
         )}
       </div>
+      {errorAdvice && <ErrorCoach advice={errorAdvice} kind={project.kind} onOpenGuideTopic={onOpenGuideTopic} />}
       <div className="terminal-footer">
         <span>{runStatusLabel}</span>
         <span>{awaitingInput ? 'press Enter to continue' : runState.durationMs === null ? `${executionTimeoutMs}ms limit` : `${runState.durationMs}ms`}</span>

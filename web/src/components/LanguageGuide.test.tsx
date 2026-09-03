@@ -64,4 +64,11 @@ describe('LanguageGuide', () => {
     expect(screen.getByRole('button', { name: 'Copy failed' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/select the code and copy it manually/i)
   })
+
+  it('opens directly to a topic requested by the error coach', () => {
+    render(<LanguageGuide kind="java" open initialTopicId="java-exceptions" onClose={vi.fn()} onOpenPractice={vi.fn()} onTryExample={vi.fn()} />)
+
+    expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Exceptions$/ }).getAttribute('aria-current')).toBe('page')
+  })
 })

@@ -11,6 +11,7 @@ web/src/
   components/
     AuthControls.tsx          Clerk/local cloud-sync controls
     EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
+    ErrorCoach.tsx            Plain-language error explanation and guide deep link
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
     MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
     PracticeLab.tsx           All-language challenge browser and progress overview
@@ -28,6 +29,7 @@ web/src/
     api.ts                    Rails API client and cloud/local data mapping
     clerk.ts                  Clerk env validation
     codeRunner.ts             Starter-project and web-preview helpers
+    errorCoach.ts             Deterministic runtime/preview error classification and next steps
     languageGuides.ts         Guide topics and complete practice projects for every project kind
     languageRegistry.ts       Supported languages, starters, editor and runner metadata
     practiceLab.ts            Challenge catalog and deterministic source/output checks
@@ -51,6 +53,7 @@ web/src/
 - Add project kinds and file-language behavior through `lib/languageRegistry.ts`; do not add parallel language switches in components.
 - Add syntax-reference content through `lib/languageGuides.ts`; every topic needs a stable ID and a complete practice project.
 - Add short exercises through `lib/practiceLab.ts`; each supported project kind should keep a Starter, Builder, and Stretch progression.
+- Add error patterns through `lib/errorCoach.ts`; advice must remain deterministic, concise, and linked to a real guide topic.
 - Keep pure project rules in `lib/workspace.ts` or `lib/codeRunner.ts`.
 - Keep Rails request/response mapping in `lib/api.ts`; UI components should not know API payload casing.
 - Keep browser storage and import/export behavior in `lib/projectStorage.ts`.

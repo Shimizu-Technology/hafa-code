@@ -1,0 +1,42 @@
+import { act, cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, expect, it, vi } from 'vitest'
+import { WebPreview } from './WebPreview'
+
+afterEach(cleanup)
+
+it('coaches Web console errors and links to the relevant guide topic', async () => {
+  const user = userEvent.setup()
+  const onOpenGuideTopic = vi.fn()
+  let receiveMessage: ((event: MessageEvent) => void) | null = null
+  const port = {
+    close: vi.fn(),
+    postMessage: vi.fn(),
+    start: vi.fn(),
+    get onmessage() { return receiveMessage },
+    set onmessage(listener) { receiveMessage = listener },
+  } as unknown as MessagePort
+
+  render(<WebPreview
+    entryPath="index.html"
+    files={[
+      { path: 'index.html', language: 'html', content: '<h1>Test</h1>' },
+      { path: 'script.js', language: 'javascript', content: 'console.log(button)' },
+    ]}
+    onOpenGuideTopic={onOpenGuideTopic}
+  />)
+  const frame = screen.getByTitle('Web preview') as HTMLIFrameElement
+  act(() => window.dispatchEvent(new MessageEvent('message', {
+    data: { source: 'hafa-code-preview-connect' },
+    source: frame.contentWindow,
+    ports: [port],
+  })))
+  act(() => receiveMessage?.({
+    data: { source: 'hafa-code-preview-console', level: 'error', message: 'ReferenceError: button is not defined' },
+  } as MessageEvent))
+
+  expect(screen.getByRole('heading', { name: 'The page script cannot find that name' })).toBeTruthy()
+  expect(screen.getByText('script.js')).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Review DOM and events' }))
+  expect(onOpenGuideTopic).toHaveBeenCalledWith('web-dom-events')
+})

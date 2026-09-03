@@ -335,6 +335,8 @@ describe('RunnerPanel', () => {
       stderr: 'Runtime broke',
       durationMs: expect.any(Number),
     })
+    expect(screen.getByRole('complementary', { name: 'Error coach' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Let’s decode this python error' })).toBeTruthy()
   })
 
   it('notifies the owner when an active run is cancelled by unmounting', () => {
