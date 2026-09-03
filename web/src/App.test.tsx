@@ -158,6 +158,34 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('tab', { name: /Coach/ }).getAttribute('aria-selected')).toBe('true')
   })
 
+  it('creates a practice project with the retained Coach guide language', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    act(() => runnerHarness.onErrorAdviceChange?.({
+      kind: 'java',
+      advice: {
+        title: 'Java cannot find that name',
+        explanation: 'The compiler cannot see it.',
+        location: 'Main.java · line 4',
+        steps: ['Check spelling.', 'Declare the name.', 'Run again.'],
+        guideTopicId: 'java-variables-types',
+      },
+    }))
+    await user.click(screen.getByRole('button', { name: 'Review Variables and types' }))
+    await user.click(screen.getByRole('button', { name: 'Try example' }))
+
+    const updatedLibrary = storedLibrary()
+    const practiceProject = updatedLibrary.projects.find((candidate) => candidate.id === updatedLibrary.activeProjectId)!
+    const topic = languageGuideFor('java').topics.find((candidate) => candidate.id === 'java-variables-types')!
+    expect(practiceProject).toMatchObject({
+      kind: 'java',
+      entryPath: topic.practiceProject.entryPath,
+      files: topic.practiceProject.files,
+    })
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', topic.practiceProject.title)
+  })
+
   it('starts an all-language lab challenge as a separate private project', async () => {
     const user = userEvent.setup()
     render(<App />)

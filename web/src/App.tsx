@@ -717,13 +717,13 @@ export default function App() {
     setNotice(`${next.title} created.`)
   }
 
-  const tryGuideExample = (topic: LanguageGuideTopic) => {
+  const tryGuideExample = (topic: LanguageGuideTopic, kind: ProjectKind) => {
     if (workspaceArchived) {
       setNotice('Restore this classroom before creating a practice project.')
       return
     }
 
-    const starter = createProject(project.kind, topic.practiceProject.title)
+    const starter = createProject(kind, topic.practiceProject.title)
     const practiceProject: SavedProject = {
       ...starter,
       organizationId: activeOrganizationId,

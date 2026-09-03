@@ -27,7 +27,7 @@ interface LearningSidecarProps {
   onClose: () => void
   onOpenGuideTopic: (topicId: string, kind: ProjectKind) => void
   onStartChallenge: (challenge: PracticeChallenge) => void
-  onTryExample: (topic: LanguageGuideTopic) => void
+  onTryExample: (topic: LanguageGuideTopic, kind: ProjectKind) => void
 }
 
 function useOverlaySidecar() {
@@ -160,7 +160,7 @@ export function LearningSidecar({
             kind={guideKind}
             initialTopicId={guideTopicId}
             onOpenPractice={() => onActiveTabChange('practice')}
-            onTryExample={onTryExample}
+            onTryExample={(topic) => onTryExample(topic, guideKind)}
           />
         </section>
         <section id="learning-practice-panel" role="tabpanel" aria-label="Practice lab" hidden={activeTab !== 'practice'}>
