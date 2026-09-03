@@ -103,6 +103,8 @@ describe('practice challenge catalog', () => {
 
     expect(labelPassed('<label for="email" hidden>Email</label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email" aria-hidden="true">Email</label><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email" style="display: none">Email</label><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email"><span hidden>Email</span></label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email">Email</label><input id="email" name="email" type="email">')).toBe(true)
   })
 
@@ -115,6 +117,13 @@ describe('practice challenge catalog', () => {
     }])
 
     expect(result.checks.find((check) => check.label === 'Set the action text color')?.passed).toBe(false)
+
+    const colorFirst = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.action {\n  color: white;\n  background: #176b78;\n  padding: 1rem;\n}',
+    }])
+    expect(colorFirst.checks.find((check) => check.label === 'Set the action text color')?.passed).toBe(true)
   })
 
   it('checks both Java syntax requirements and normalized runtime output', () => {

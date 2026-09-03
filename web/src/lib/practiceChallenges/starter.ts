@@ -1,5 +1,20 @@
 import type { PracticeChallenge } from '../practiceLab'
 
+function isObviouslyHidden(element: Element) {
+  const inlineStyle = element.getAttribute('style')?.toLowerCase() ?? ''
+  return element.hasAttribute('hidden')
+    || element.getAttribute('aria-hidden')?.toLowerCase() === 'true'
+    || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important\s*)?(?:;|$)/.test(inlineStyle)
+}
+
+function visibleTextContent(element: Element): string {
+  return Array.from(element.childNodes).map((node) => {
+    if (node.nodeType === 3) return node.textContent ?? ''
+    if (node.nodeType !== 1 || isObviouslyHidden(node as Element)) return ''
+    return visibleTextContent(node as Element)
+  }).join('')
+}
+
 /** Additional first-step exercises. The original greeting challenge remains first for every language. */
 export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
   {
@@ -246,9 +261,8 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
       { filePath: 'index.html', label: 'Add the email input', domCheck: (document) => Boolean(document.querySelector('input#email[type="email"][name="email"]')) },
       { filePath: 'index.html', label: 'Connect a visible label to the field', domCheck: (document) => (
         Array.from(document.querySelectorAll('label[for="email"]')).some((label) => (
-          !label.hasAttribute('hidden')
-          && label.getAttribute('aria-hidden')?.toLowerCase() !== 'true'
-          && Boolean(label.textContent?.trim())
+          !isObviouslyHidden(label)
+          && Boolean(visibleTextContent(label).trim())
         ))
       ) },
     ],
@@ -267,7 +281,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
       { filePath: 'style.css', label: 'Target the action class', pattern: /\.action\s*\{[^}]*\}/i },
       { filePath: 'style.css', label: 'Add an action background', pattern: /\.action\s*\{[^}]*(?:background|background-color)\s*:\s*(?!transparent\b|none\b)[^;}]+[;}]/i },
       { filePath: 'style.css', label: 'Add space inside the action', pattern: /\.action\s*\{[^}]*padding\s*:\s*(?:0*\.(?:\d*[1-9]\d*)|[1-9]\d*(?:\.\d+)?)(?:px|rem|em|%|vw|vh|ch)(?:\s+[^;}]+)?[;}]/i },
-      { filePath: 'style.css', label: 'Set the action text color', pattern: /\.action\s*\{(?:[^;}]+;\s*)*color\s*:\s*[^;}]+[;}]/i },
+      { filePath: 'style.css', label: 'Set the action text color', pattern: /\.action\s*\{\s*(?:[^;}]+;\s*)*color\s*:\s*[^;}]+[;}]/i },
     ],
   },
   {
