@@ -92,7 +92,10 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete }: 
 
   const run = () => {
     if (!runner) return
-    if (runIdRef.current) stopWorker()
+    if (runIdRef.current) {
+      onRunCancelRef.current?.()
+      stopWorker()
+    }
     else clearRunTimer()
 
     const runId = crypto.randomUUID()

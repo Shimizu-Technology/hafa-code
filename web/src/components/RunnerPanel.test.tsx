@@ -111,7 +111,9 @@ describe('RunnerPanel', () => {
 
   it('cancels an overlapping run without leaving a timer that can stop its replacement', () => {
     vi.useFakeTimers()
-    const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+    const onRunCancel = vi.fn()
+    const onRunComplete = vi.fn()
+    const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} onRunCancel={onRunCancel} onRunComplete={onRunComplete} />)
 
     act(() => {
       window.dispatchEvent(new Event('hafa-code-run-active-project'))
@@ -119,9 +121,14 @@ describe('RunnerPanel', () => {
     })
 
     expect(FakeWorker.instances).toHaveLength(2)
+    expect(onRunCancel).toHaveBeenCalledOnce()
     const [replacedWorker, currentWorker] = FakeWorker.instances
+    const replacedRun = replacedWorker.messages.find((message) => message.type === 'run')
+    if (!replacedRun || replacedRun.type !== 'run') throw new Error('Expected the replaced run request')
     act(() => vi.advanceTimersByTime(0))
     expect(replacedWorker.terminated).toBe(true)
+    act(() => replacedWorker.respond({ id: replacedRun.id, type: 'result', stdout: 'Stale run\n', stderr: '', durationMs: 5 }))
+    expect(onRunComplete).not.toHaveBeenCalled()
 
     const currentRun = currentWorker.messages.find((message) => message.type === 'run')
     if (!currentRun || currentRun.type !== 'run') throw new Error('Expected the replacement run request')
@@ -134,6 +141,7 @@ describe('RunnerPanel', () => {
     expect(currentWorker.terminated).toBe(false)
     expect(screen.getByText('Current run')).toBeTruthy()
     expect(screen.queryByText(/took too long to load/)).toBeNull()
+    expect(onRunComplete).toHaveBeenCalledOnce()
 
     unmount()
     act(() => vi.advanceTimersByTime(0))

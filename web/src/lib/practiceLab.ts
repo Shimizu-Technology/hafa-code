@@ -215,7 +215,7 @@ const webChallenges: PracticeChallenge[] = [
     checks: [
       { filePath: 'style.css', label: 'Use CSS Grid', pattern: /\.project-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i },
       { filePath: 'style.css', label: 'Create flexible columns', pattern: /\.project-grid\s*\{[^}]*grid-template-columns\s*:\s*repeat\s*\(\s*auto-fit\s*,\s*minmax\s*\(/i },
-      { filePath: 'style.css', label: 'Add space between cards', pattern: /\.project-grid\s*\{[^}]*\bgap\s*:\s*(?!\s*0(?:\.0+)?(?:px|rem|em|%|vw|vh|ch)?(?:[;}\s]|$))[^;}]+[;}]/i },
+      { filePath: 'style.css', label: 'Add space between cards', pattern: /\.project-grid\s*\{[^}]*\bgap\s*:\s*(?:(?:0*\.(?:\d*[1-9]\d*))|(?:(?:[1-9]\d*)(?:\.\d+)?))(?:px|rem|em|%|vw|vh|ch)\s*[;}]/i },
     ],
   },
   {
@@ -256,6 +256,9 @@ function sourceWithoutComments(file: ProjectFile) {
       .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
   }
 
+  const content = file.language === 'ruby'
+    ? file.content.replace(/^=begin\b[\s\S]*?(?:^=end\b[^\n]*|$(?![\s\S]))/gm, (comment) => comment.replace(/[^\n]/g, ' '))
+    : file.content
   const lineComment = file.language === 'ruby' || file.language === 'python' ? '#' : '//'
   const hasLineComments = ['ruby', 'python', 'javascript', 'java'].includes(file.language)
   const hasBlockComments = ['javascript', 'java', 'css'].includes(file.language)
@@ -263,9 +266,9 @@ function sourceWithoutComments(file: ProjectFile) {
   let quote: string | null = null
   let escaped = false
 
-  for (let index = 0; index < file.content.length; index += 1) {
-    const char = file.content[index]
-    const pair = file.content.slice(index, index + 2)
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index]
+    const pair = content.slice(index, index + 2)
 
     if (quote) {
       result += char
@@ -281,23 +284,23 @@ function sourceWithoutComments(file: ProjectFile) {
       continue
     }
 
-    if (hasLineComments && file.content.startsWith(lineComment, index)) {
-      while (index < file.content.length && file.content[index] !== '\n') {
+    if (hasLineComments && content.startsWith(lineComment, index)) {
+      while (index < content.length && content[index] !== '\n') {
         result += ' '
         index += 1
       }
-      if (index < file.content.length) result += '\n'
+      if (index < content.length) result += '\n'
       continue
     }
 
     if (hasBlockComments && pair === '/*') {
       result += '  '
       index += 2
-      while (index < file.content.length && file.content.slice(index, index + 2) !== '*/') {
-        result += file.content[index] === '\n' ? '\n' : ' '
+      while (index < content.length && content.slice(index, index + 2) !== '*/') {
+        result += content[index] === '\n' ? '\n' : ' '
         index += 1
       }
-      if (index < file.content.length) {
+      if (index < content.length) {
         result += '  '
         index += 1
       }
@@ -357,9 +360,17 @@ function sourceWithoutStringContents(source: string) {
 function extractClickHandlerBody(source: string) {
   const callbackStart = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*(?:(?:function(?:\s+[$\w]+)?\s*\([^)]*\))|(?:(?:\([^)]*\)|[$A-Z_a-z][$\w]*)\s*=>))\s*\{/g
   const match = callbackStart.exec(source)
-  if (!match) return ''
+  if (match) return extractBracedBody(source, match.index + match[0].lastIndexOf('{'))
 
-  const openingBrace = match.index + match[0].lastIndexOf('{')
+  const namedCallback = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*([$A-Z_a-z][$\w]*)\s*\)/.exec(source)?.[1]
+  if (!namedCallback) return ''
+  const escapedName = namedCallback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const namedStart = new RegExp(`(?:function\\s+${escapedName}\\s*\\([^)]*\\)|(?:const|let|var)\\s+${escapedName}\\s*=\\s*(?:(?:function\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>)))\\s*\\{`)
+  const namedMatch = namedStart.exec(source)
+  return namedMatch ? extractBracedBody(source, namedMatch.index + namedMatch[0].lastIndexOf('{')) : ''
+}
+
+function extractBracedBody(source: string, openingBrace: number) {
   const structure = sourceWithoutStringContents(source)
   let depth = 1
   for (let index = openingBrace + 1; index < structure.length; index += 1) {

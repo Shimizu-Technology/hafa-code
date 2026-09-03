@@ -5,6 +5,7 @@ import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
   linkPracticeProject,
+  pendingPracticeCheckMatches,
   practiceChallengeIdForProject,
   preservePracticeConflictLinks,
   resetPracticeProgressCache,
@@ -80,6 +81,13 @@ describe('practice challenge catalog', () => {
       content: '# (1..3).each do |stop|\nexample = "for stop in stops"\nputs "Stop 1"\n',
     }], { status: 'success', stdout: 'Stop 1\nStop 2\nStop 3', stderr: '', durationMs: 1 })
 
+    const rubyBlockChallenge = practiceChallengeById('ruby-method-condition')!
+    const rubyBlockResult = evaluatePracticeChallenge(rubyBlockChallenge, [{
+      path: 'main.rb',
+      language: 'ruby',
+      content: '=begin\ndef launch_status(tests_passing)\n  if tests_passing\n  else\n  end\nend\n=end\nputs "Ready to ship"\n',
+    }], { status: 'success', stdout: 'Ready to ship', stderr: '', durationMs: 1 })
+
     const webChallenge = practiceChallengeById('web-semantic-profile')!
     const webResult = evaluatePracticeChallenge(webChallenge, [{
       path: 'index.html',
@@ -95,6 +103,7 @@ describe('practice challenge catalog', () => {
     }])
 
     expect(rubyResult.checks[0].passed).toBe(false)
+    expect(rubyBlockResult.checks.slice(0, 2).every((check) => !check.passed)).toBe(true)
     expect(webResult.checks.every((check) => !check.passed)).toBe(true)
     expect(cssResult.checks.every((check) => !check.passed)).toBe(true)
   })
@@ -117,6 +126,17 @@ describe('practice challenge catalog', () => {
     expect(cssResult.checks.every((check) => check.passed)).toBe(true)
   })
 
+  it('resolves a named click-handler function', () => {
+    const challenge = practiceChallengeById('web-click-counter')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'script.js',
+      language: 'javascript',
+      content: 'function updateCount(event) {\n  if (event) { count++ }\n  output.textContent = count\n}\nbutton.addEventListener("click", updateCount)\n',
+    }])
+
+    expect(result.checks.every((check) => check.passed)).toBe(true)
+  })
+
   it('does not accept a zero-sized responsive grid gap', () => {
     const challenge = practiceChallengeById('web-responsive-grid')!
     const result = evaluatePracticeChallenge(challenge, [{
@@ -126,6 +146,13 @@ describe('practice challenge catalog', () => {
     }])
 
     expect(result.checks.find((check) => check.label === 'Add space between cards')?.passed).toBe(false)
+
+    const invalidKeyword = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: none; }',
+    }])
+    expect(invalidKeyword.checks.find((check) => check.label === 'Add space between cards')?.passed).toBe(false)
   })
 })
 
@@ -146,9 +173,11 @@ describe('practice progress', () => {
   })
 
   it('remaps only the pending check that belongs to the saved local project', () => {
-    const pending = { projectId: 'local-project', challengeId: 'python-loop-stops', files: [] }
+    const pending = { token: 'check-1', projectId: 'local-project', challengeId: 'python-loop-stops', files: [] }
 
-    expect(remapPendingPracticeCheck(pending, 'local-project', '42')).toEqual({ projectId: '42', challengeId: 'python-loop-stops', files: [] })
+    const remapped = remapPendingPracticeCheck(pending, 'local-project', '42')
+    expect(remapped).toEqual({ token: 'check-1', projectId: '42', challengeId: 'python-loop-stops', files: [] })
+    expect(pendingPracticeCheckMatches(remapped, 'check-1')).toBe(true)
     expect(remapPendingPracticeCheck(pending, 'another-project', '42')).toBe(pending)
   })
 
@@ -160,6 +189,19 @@ describe('practice progress', () => {
     expect(practiceChallengeIdForProject('local-project')).toBeNull()
     expect(practiceChallengeIdForProject('conflict-copy')).toBe('python-loop-stops')
     expect(practiceChallengeIdForProject('server-project')).toBe('python-loop-stops')
+  })
+
+  it('persists conflict mappings atomically when the combined write fails', () => {
+    linkPracticeProject('local-project', 'python-loop-stops')
+    const durableBefore = localStorage.getItem('hafa-code-practice-progress-v1')
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full') })
+
+    expect(preservePracticeConflictLinks('local-project', 'conflict-copy', 'server-project')).toBe(false)
+    expect(localStorage.getItem('hafa-code-practice-progress-v1')).toBe(durableBefore)
+    expect(practiceChallengeIdForProject('conflict-copy')).toBe('python-loop-stops')
+    expect(practiceChallengeIdForProject('server-project')).toBe('python-loop-stops')
+
+    setItem.mockRestore()
   })
 
   it('keeps practice usable when the browser blocks storage writes', () => {

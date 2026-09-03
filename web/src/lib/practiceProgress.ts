@@ -9,6 +9,7 @@ interface PracticeProgress {
 }
 
 export interface PendingPracticeCheck {
+  token: string
   projectId: string
   challengeId: string
   files: ProjectFile[]
@@ -91,15 +92,22 @@ export function remapPendingPracticeCheck(pending: PendingPracticeCheck | null, 
   return pending?.projectId === previousId ? { ...pending, projectId: nextId } : pending
 }
 
+/** Identifies the same check even when cloud sync changes its project id. */
+export function pendingPracticeCheckMatches(pending: PendingPracticeCheck | null, token: string) {
+  return pending?.token === token
+}
+
 /** Keeps both sides of a cloud conflict connected to the original practice challenge. */
 export function preservePracticeConflictLinks(sourceProjectId: string, conflictCopyId: string, restoredProjectId: string) {
-  const challengeId = practiceChallengeIdForProject(sourceProjectId)
+  const progress = loadProgress()
+  const challengeId = progress.projectChallenges[sourceProjectId]
   if (!challengeId) return true
-  const copySaved = linkPracticeProject(conflictCopyId, challengeId)
-  const restoredSaved = sourceProjectId === restoredProjectId
-    ? true
-    : replacePracticeProjectId(sourceProjectId, restoredProjectId)
-  return copySaved && restoredSaved
+  progress.projectChallenges[conflictCopyId] = challengeId
+  if (sourceProjectId !== restoredProjectId) {
+    delete progress.projectChallenges[sourceProjectId]
+    progress.projectChallenges[restoredProjectId] = challengeId
+  }
+  return saveProgress(progress)
 }
 
 /** Records a completed challenge once while keeping attempts unlimited. */

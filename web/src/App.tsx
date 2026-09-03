@@ -67,6 +67,7 @@ import {
   completedPracticeChallengeIds,
   linkPracticeProject,
   practiceChallengeIdForProject,
+  pendingPracticeCheckMatches,
   preservePracticeConflictLinks,
   remapPendingPracticeCheck,
   replacePracticeProjectId,
@@ -762,7 +763,9 @@ export default function App() {
       return
     }
 
+    const checkToken = crypto.randomUUID()
     pendingPracticeCheckRef.current = {
+      token: checkToken,
       projectId: project.id,
       challengeId: currentPracticeChallenge.id,
       files: project.files.map((file) => ({ ...file })),
@@ -773,7 +776,7 @@ export default function App() {
       + 2_000
     clearPracticeCheckWatchdog()
     practiceCheckWatchdogRef.current = window.setTimeout(() => {
-      if (pendingPracticeCheckRef.current?.projectId !== project.id) return
+      if (!pendingPracticeCheckMatches(pendingPracticeCheckRef.current, checkToken)) return
       pendingPracticeCheckRef.current = null
       practiceCheckWatchdogRef.current = null
       setPracticeChecking(false)
