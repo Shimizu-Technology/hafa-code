@@ -32,6 +32,7 @@ type EditorWorkspaceProps = {
   onDuplicateFile: (file: ProjectFile) => void
   onEditorExpandedChange: (expanded: boolean) => void
   onOpenGuide: () => void
+  onOpenGuideTopic?: (topicId: string) => void
   onOpenPractice: () => void
   onRenameFile: (file: ProjectFile) => void
   onRunFromMobileCode: () => void
@@ -55,6 +56,7 @@ export function EditorWorkspace({
   onDuplicateFile,
   onEditorExpandedChange,
   onOpenGuide,
+  onOpenGuideTopic = onOpenGuide,
   onOpenPractice,
   onRenameFile,
   onRunFromMobileCode,
@@ -160,8 +162,8 @@ export function EditorWorkspace({
       </section>
 
       {project.kind === 'web'
-        ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} />
-        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} />}
+        ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onOpenGuideTopic={onOpenGuideTopic} />
+        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onOpenGuideTopic={onOpenGuideTopic} />}
     </div>
   )
 }

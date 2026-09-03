@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { errorCoachGuideTopicIds } from './errorCoach'
 import { PROJECT_KINDS } from './languageRegistry'
 import { filterGuideTopics, languageGuideFor } from './languageGuides'
 
@@ -35,6 +36,11 @@ describe('language guides', () => {
         expect(topic.practiceProject.files[0].content).toBe(topic.code)
       }
     })
+  })
+
+  it.each(PROJECT_KINDS)('keeps every %s Error Coach destination in the language guide', (kind) => {
+    const guideTopicIds = new Set(languageGuideFor(kind).topics.map((topic) => topic.id))
+    errorCoachGuideTopicIds(kind).forEach((topicId) => expect(guideTopicIds.has(topicId)).toBe(true))
   })
 
   it('searches titles, descriptions, literal code, mistakes, and keywords without changing the guide', () => {

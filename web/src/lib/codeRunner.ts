@@ -175,6 +175,10 @@ function mimeTypeForFile(file: ProjectFile) {
 }
 
 function dataUrlForFile(file: ProjectFile, files: ProjectFile[], seen = new Set<string>()): string {
+  if (file.language === 'javascript') {
+    return dataUrl(mimeTypeForFile(file), file.content)
+      .replace(';base64,', `;hafa-code-path=${encodeURIComponent(file.path)};base64,`)
+  }
   if (file.language !== 'css') return dataUrl(mimeTypeForFile(file), file.content)
   if (seen.has(file.path)) return dataUrl('text/css', file.content)
 
@@ -224,11 +228,15 @@ function previewBridge(files: ProjectFile[], basePath: string) {
     content: file.content,
     mimeType: mimeTypeForFile(file),
   }]))
+  const scriptPathByUrl = Object.fromEntries(files
+    .filter((file) => file.language === 'javascript')
+    .map((file) => [dataUrlForFile(file, files), file.path]))
 
   return `<script>
       (() => {
         const __hafaFiles = ${JSON.stringify(assetMap).replace(/</g, '\\u003c')}
         const __hafaBasePath = ${JSON.stringify(basePath)}
+        const __hafaScriptPathByUrl = ${JSON.stringify(scriptPathByUrl).replace(/</g, '\\u003c')}
         const __hafaResolvePath = (reference) => {
           if (/^(?:[a-z][a-z0-9+.-]*:|#|\\/\\/)/i.test(reference)) return null
           const path = String(reference).split(/[?#]/)[0]
@@ -279,11 +287,12 @@ function previewBridge(files: ProjectFile[], basePath: string) {
           if (typeof value === 'string') return value
           try { return JSON.stringify(value) } catch { return String(value) }
         }
-        const send = (level, values) => {
+        const send = (level, values, location) => {
           consolePort?.postMessage({
             source: 'hafa-code-preview-console',
             level,
-            message: values.map(formatValue).join(' ')
+            message: values.map(formatValue).join(' '),
+            ...(location || {})
           })
         }
         ;['log', 'warn', 'error'].forEach((level) => {
@@ -300,7 +309,9 @@ function previewBridge(files: ProjectFile[], basePath: string) {
             send('error', ['Failed to load', url])
             return
           }
-          send('error', [event.message || 'Runtime error'])
+          const sourcePath = __hafaScriptPathByUrl[event.filename]
+          const sourceLine = Number.isInteger(event.lineno) && event.lineno > 0 ? event.lineno : undefined
+          send('error', [event.message || 'Runtime error'], sourcePath ? { path: sourcePath, line: sourceLine } : undefined)
         }, true)
         window.addEventListener('unhandledrejection', (event) => {
           send('error', [event.reason || 'Unhandled promise rejection'])

@@ -12,6 +12,7 @@ interface LanguageGuideProps {
   onClose: () => void
   onOpenPractice: () => void
   onTryExample: (topic: LanguageGuideTopic) => void
+  initialTopicId?: string | null
 }
 
 type CopyFeedback = {
@@ -27,10 +28,12 @@ function inlineCode(text: string) {
   ))
 }
 
-export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExample }: LanguageGuideProps) {
+export function LanguageGuide({ kind, open, onClose, onOpenPractice, onTryExample, initialTopicId }: LanguageGuideProps) {
   const guide = languageGuideFor(kind)
   const [query, setQuery] = useState('')
-  const [selectedTopicId, setSelectedTopicId] = useState(guide.topics[0].id)
+  const [selectedTopicId, setSelectedTopicId] = useState(
+    guide.topics.some((topic) => topic.id === initialTopicId) ? initialTopicId! : guide.topics[0].id,
+  )
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
   const dialogRef = useModalFocus<HTMLElement>(open, onClose)
   const filteredTopics = useMemo(() => filterGuideTopics(guide, query), [guide, query])

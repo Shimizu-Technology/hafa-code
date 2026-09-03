@@ -18,6 +18,7 @@ Create a small, open-source coding playground for students and alumni to practic
 
 - I can open a browser and immediately write Ruby, JavaScript, Python, or Java.
 - I can press Run and see output/errors.
+- I can understand common errors in plain language and jump to the relevant guide topic.
 - I can create an HTML/CSS/JS page and see it update live.
 - I can look up common syntax without leaving my project.
 - I can open an example in a separate practice project without replacing my code.
@@ -88,6 +89,14 @@ Create a small, open-source coding playground for students and alumni to practic
 - Deterministic checks for required syntax and runtime output, or HTML/CSS/JS file requirements for Web projects
 - Unlimited attempts and local completion tracking without scores, deadlines, or a required sequence
 - Responsive browsing and in-workspace feedback designed for both desktop and mobile use
+
+### Contextual Error Coach
+
+- Deterministic, private explanations for common Ruby, JavaScript, Python, Java, and Web preview errors
+- File and line context when the runtime provides it, followed by three focused next steps
+- Direct links into the relevant topic in the project’s language guide
+- No generated fixes or hidden code changes; the original terminal/console error remains visible
+- Responsive cards with full-width, touch-friendly guide actions on mobile
 
 ### Saving
 

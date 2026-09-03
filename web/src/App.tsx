@@ -160,6 +160,7 @@ export default function App() {
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [languageGuideOpen, setLanguageGuideOpen] = useState(false)
+  const [languageGuideTopicId, setLanguageGuideTopicId] = useState<string | null>(null)
   const [practiceLabOpen, setPracticeLabOpen] = useState(false)
   const [practiceResult, setPracticeResult] = useState<PracticeCheckResult | null>(null)
   const [practiceChecking, setPracticeChecking] = useState(false)
@@ -194,6 +195,10 @@ export default function App() {
     setPracticeChecking(false)
     setPracticeResult(null)
   }, [clearPracticeCheckWatchdog])
+  const openLanguageGuide = useCallback((topicId: string | null = null) => {
+    setLanguageGuideTopicId(topicId)
+    setLanguageGuideOpen(true)
+  }, [])
   const fileDialogRef = useModalFocus<HTMLElement>(Boolean(fileDialog), () => {
     setFileDialog(null)
     setFileDialogError('')
@@ -1843,7 +1848,7 @@ export default function App() {
         <div className="mobile-home-actions">
           <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
           <button className="secondary" type="button" onClick={() => setPracticeLabOpen(true)}><Dumbbell size={16} /> Practice lab</button>
-          <button className="secondary" type="button" onClick={() => setLanguageGuideOpen(true)}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
+          <button className="secondary" type="button" onClick={() => openLanguageGuide()}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : 'Run project'}
@@ -1888,7 +1893,7 @@ export default function App() {
             onCheckpointMenuChange={setCheckpointMenuOpen}
             onDelete={requestDeleteProject}
             onDuplicate={cloneProject}
-            onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenGuide={() => openLanguageGuide()}
             onOpenPractice={() => setPracticeLabOpen(true)}
             onOpenProjectActions={() => setProjectActionsOpen(true)}
             onRename={renameProject}
@@ -1928,7 +1933,8 @@ export default function App() {
             onDeleteFile={deleteFile}
             onDuplicateFile={openDuplicateFileDialog}
             onEditorExpandedChange={setEditorExpanded}
-            onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenGuide={() => openLanguageGuide()}
+            onOpenGuideTopic={openLanguageGuide}
             onOpenPractice={() => setPracticeLabOpen(true)}
             onRenameFile={openRenameFileDialog}
             onRunnerCancel={clearPendingPracticeCheck}
@@ -1944,9 +1950,10 @@ export default function App() {
       <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={setMobileTab} />
 
       <LanguageGuide
-        key={project.kind}
+        key={`${project.kind}:${languageGuideTopicId ?? 'default'}`}
         kind={project.kind}
         open={languageGuideOpen}
+        initialTopicId={languageGuideTopicId}
         onClose={() => setLanguageGuideOpen(false)}
         onOpenPractice={() => {
           setLanguageGuideOpen(false)

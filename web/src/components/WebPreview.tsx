@@ -1,25 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe, RefreshCw } from 'lucide-react'
 import { buildHtmlPreview, type ProjectFile } from '../lib/codeRunner'
+import { coachRunnerError } from '../lib/errorCoach'
+import { ErrorCoach } from './ErrorCoach'
 
 interface PreviewConsoleMessage {
   source: 'hafa-code-preview-console'
   level: 'log' | 'warn' | 'error'
   message: string
+  path?: string
+  line?: number
 }
 
 function isPreviewConsoleLevel(level: unknown): level is PreviewConsoleMessage['level'] {
   return level === 'log' || level === 'warn' || level === 'error'
 }
 
-export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPath: string }) {
+export function WebPreview({ files, entryPath, onOpenGuideTopic = () => {} }: { files: ProjectFile[]; entryPath: string; onOpenGuideTopic?: (topicId: string) => void }) {
   const draftPreview = useMemo(() => buildHtmlPreview(files, entryPath), [entryPath, files])
   const [renderedPreview, setRenderedPreview] = useState(() => draftPreview)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const previewPortRef = useRef<MessagePort | null>(null)
+  const filesRef = useRef(files)
   const [consoleMessages, setConsoleMessages] = useState<PreviewConsoleMessage[]>([])
   const previewFrameUrl = useMemo(() => `/preview-frame.html?parent=${encodeURIComponent(window.location.origin)}`, [])
   const previewIsStale = draftPreview !== renderedPreview
+  const latestError = [...consoleMessages].reverse().find((message) => message.level === 'error')
+  const errorAdvice = latestError ? coachRunnerError('web', entryPath, {
+    status: 'error', stdout: '', stderr: latestError.message, durationMs: 0,
+  }, latestError.path ? { path: latestError.path, ...(latestError.line ? { line: latestError.line } : {}) } : undefined) : null
+
+  useEffect(() => {
+    filesRef.current = files
+  }, [files])
 
   const sendPreviewToFrame = useCallback((html: string) => {
     previewPortRef.current?.postMessage({
@@ -48,6 +61,9 @@ export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPa
         source: 'hafa-code-preview-console',
         level,
         message: String(message.message),
+        ...(typeof message.path === 'string' && filesRef.current.some((file) => file.path === message.path)
+          ? { path: message.path, ...(Number.isInteger(message.line) && Number(message.line) > 0 ? { line: Number(message.line) } : {}) }
+          : {}),
       }
       setConsoleMessages((current) => [
         ...current,
@@ -116,6 +132,7 @@ export function WebPreview({ files, entryPath }: { files: ProjectFile[]; entryPa
           ))
         )}
       </div>
+      {errorAdvice && <ErrorCoach advice={errorAdvice} kind="web" onOpenGuideTopic={onOpenGuideTopic} />}
     </section>
   )
 }
