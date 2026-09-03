@@ -50,7 +50,7 @@ function extractBracedBody(source: string, openingBrace: number) {
   return closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
 }
 
-const MIN_WIDTH_MEDIA_START = /@media\b[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
+const MIN_WIDTH_MEDIA_START = /@media\b(?![^{}]*\bnot\b)[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
 
 function minWidthMediaBodies(source: string) {
   const mediaStart = new RegExp(MIN_WIDTH_MEDIA_START)
@@ -368,7 +368,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'style.css', label: 'Use a grid by default', pattern: /\.card-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
       { filePath: 'style.css', label: 'Start with one column', pattern: /\.card-grid\s*\{[^}]*grid-template-columns\s*:\s*1fr\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
-      { filePath: 'style.css', label: 'Add a min-width media query', pattern: /@media\b[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/i },
+      { filePath: 'style.css', label: 'Add a min-width media query', pattern: /@media\b(?![^{}]*\bnot\b)[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/i },
       { filePath: 'style.css', label: 'Create multiple columns inside the breakpoint', pattern: /\.card-grid\s*\{[^}]*(?:grid-template-columns\s*:\s*repeat\s*\(\s*[2-9]\d*\s*,\s*1fr\s*\)|grid-template-columns\s*:\s*1fr\s+1fr(?:\s+1fr)*)\s*[;}][^}]*\}/i, scope: minWidthMediaBodies },
     ],
   },

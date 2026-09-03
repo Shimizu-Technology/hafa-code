@@ -229,6 +229,23 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(false)
   })
 
+  it('rejects a negated Web min-width query that never applies at wider sizes', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.card-grid { display: grid; grid-template-columns: 1fr; }\n@media not all and (min-width: 40rem) { .card-grid { grid-template-columns: repeat(2, 1fr); } }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: true },
+      { label: 'Start with one column', passed: true },
+      { label: 'Add a min-width media query', passed: false },
+      { label: 'Create multiple columns inside the breakpoint', passed: false },
+    ])
+    expect(result.passed).toBe(false)
+  })
+
   it('keeps every challenge id unique', () => {
     const ids = PROJECT_KINDS.flatMap((kind) => practiceChallengesFor(kind).map((challenge) => challenge.id))
     expect(new Set(ids).size).toBe(ids.length)
