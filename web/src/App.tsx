@@ -166,6 +166,7 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('home')
   const [learningSidecarOpen, setLearningSidecarOpen] = useState(false)
   const [learningTab, setLearningTab] = useState<LearningTab>('guide')
+  const [languageGuideKind, setLanguageGuideKind] = useState<ProjectKind>(initialProject.kind)
   const [languageGuideTopicId, setLanguageGuideTopicId] = useState<string | null>(null)
   const [guideNavigationRevision, setGuideNavigationRevision] = useState(0)
   const [learningCoachContext, setLearningCoachContext] = useState<ErrorCoachContext>(null)
@@ -192,6 +193,7 @@ export default function App() {
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
+  const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const clearPracticeCheckWatchdog = useCallback(() => {
     if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
     practiceCheckWatchdogRef.current = null
@@ -202,12 +204,13 @@ export default function App() {
     setPracticeChecking(false)
     setPracticeResult(null)
   }, [clearPracticeCheckWatchdog])
-  const openLanguageGuide = useCallback((topicId: string | null = null) => {
+  const openLanguageGuide = useCallback((topicId: string | null = null, requestedKind: ProjectKind = project.kind) => {
+    setLanguageGuideKind(requestedKind)
     setLanguageGuideTopicId(topicId)
     setGuideNavigationRevision((revision) => revision + 1)
     setLearningTab('guide')
     setLearningSidecarOpen(true)
-  }, [])
+  }, [project.kind])
   const openPracticeLab = useCallback(() => {
     setLearningTab('practice')
     setLearningSidecarOpen(true)
@@ -231,7 +234,6 @@ export default function App() {
     setPendingCheckpoint(null)
   })
 
-  const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const currentPracticeChallenge = useMemo(
     () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
     [project.id],
@@ -1971,6 +1973,7 @@ export default function App() {
           activeTab={learningTab}
           coachContext={learningCoachContext}
           completedChallengeIds={completedPracticeIds}
+          guideKind={languageGuideKind}
           guideNavigationRevision={guideNavigationRevision}
           guideTopicId={languageGuideTopicId}
           kind={project.kind}

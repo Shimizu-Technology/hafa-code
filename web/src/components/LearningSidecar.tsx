@@ -18,13 +18,14 @@ interface LearningSidecarProps {
   activeTab: LearningTab
   coachContext: ErrorCoachContext
   completedChallengeIds: string[]
+  guideKind: ProjectKind
   guideNavigationRevision: number
   guideTopicId: string | null
   kind: ProjectKind
   open: boolean
   onActiveTabChange: (tab: LearningTab) => void
   onClose: () => void
-  onOpenGuideTopic: (topicId: string) => void
+  onOpenGuideTopic: (topicId: string, kind: ProjectKind) => void
   onStartChallenge: (challenge: PracticeChallenge) => void
   onTryExample: (topic: LanguageGuideTopic) => void
 }
@@ -51,6 +52,7 @@ export function LearningSidecar({
   activeTab,
   coachContext,
   completedChallengeIds,
+  guideKind,
   guideNavigationRevision,
   guideTopicId,
   kind,
@@ -63,7 +65,9 @@ export function LearningSidecar({
 }: LearningSidecarProps) {
   const overlay = useOverlaySidecar()
   const dialogRef = useModalFocus<HTMLElement>(open && overlay, onClose)
-  const guide = languageGuideFor(kind)
+  const guide = languageGuideFor(guideKind)
+  const visibleKind = activeTab === 'guide' ? guideKind : activeTab === 'coach' && coachContext ? coachContext.kind : kind
+  const visibleGuide = languageGuideFor(visibleKind)
 
   useEffect(() => {
     if (!open || !overlay) return
@@ -88,8 +92,8 @@ export function LearningSidecar({
         <div className="learning-sidecar-mark" aria-hidden="true"><GraduationCap size={21} /></div>
         <div>
           <p className="eyebrow">Stays beside your code</p>
-          <h2 id="learning-sidecar-title">{guide.label} learning</h2>
-          <p>{guide.introduction}</p>
+          <h2 id="learning-sidecar-title">{visibleGuide.label} learning</h2>
+          <p>{visibleGuide.introduction}</p>
         </div>
         <button className="ghost icon-button" type="button" onClick={onClose} aria-label="Close learning sidecar" data-modal-initial-focus>
           <X size={19} />
@@ -152,8 +156,8 @@ export function LearningSidecar({
       <div className="learning-sidecar-body">
         <section id="learning-guide-panel" role="tabpanel" aria-label={`${guide.label} guide`} hidden={activeTab !== 'guide'}>
           <LanguageGuideContent
-            key={`${kind}:${guideTopicId ?? 'default'}:${guideNavigationRevision}`}
-            kind={kind}
+            key={`${guideKind}:${guideTopicId ?? 'default'}:${guideNavigationRevision}`}
+            kind={guideKind}
             initialTopicId={guideTopicId}
             onOpenPractice={() => onActiveTabChange('practice')}
             onTryExample={onTryExample}
@@ -175,7 +179,7 @@ export function LearningSidecar({
               <ErrorCoach
                 advice={coachContext.advice}
                 kind={coachContext.kind}
-                onOpenGuideTopic={onOpenGuideTopic}
+                onOpenGuideTopic={(topicId) => onOpenGuideTopic(topicId, coachContext.kind)}
               />
             </>
           ) : (
