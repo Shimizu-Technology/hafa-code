@@ -1,38 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import MonacoEditor from '@monaco-editor/react'
 import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
-  Archive,
   BookOpen,
-  Check,
   Cloud,
   Copy,
   Download,
-  FilePlus2,
   Files,
   Globe,
-  History,
   Import,
   Layers3,
   Loader2,
-  Maximize2,
-  Minimize2,
-  MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Pencil,
   Play,
   Plus,
-  RotateCcw,
   Rocket,
-  Save,
   Search,
   Send,
   ShieldCheck,
-  Terminal,
   Trash2,
   UserPlus,
-  X,
 } from 'lucide-react'
 import './App.css'
 import {
@@ -63,10 +48,13 @@ import { useAuthContext } from './contexts/AuthContext'
 import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
-import { RunnerPanel } from './components/RunnerPanel'
-import { WebPreview } from './components/WebPreview'
 import { ProjectFeedback } from './components/ProjectFeedback'
 import { LanguageGuide } from './components/LanguageGuide'
+import { EditorWorkspace } from './components/EditorWorkspace'
+import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
+import { ProjectSidebar } from './components/ProjectSidebar'
+import { ProjectToolbar } from './components/ProjectToolbar'
+import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
 import type { LanguageGuideTopic } from './lib/languageGuides'
 import {
   clearProjectPendingCloudSync,
@@ -87,18 +75,14 @@ import {
 import { useModalFocus } from './hooks/useModalFocus'
 import {
   PROJECT_FILE_LIMIT,
-  availableVisibilityOptions,
   canViewProjectFeedback,
   canAddWorkspaceFile,
   clearHashParam,
   formatCheckpointTime,
-  formatFileLanguage,
   formatUpdatedAt,
   invitationUrl,
   isArchived,
   isCloudProjectId,
-  kindLabels,
-  languageForFile,
   loadInitialLibraryWithSharedProject,
   mergeCloudAndLocalProjects,
   nextAvailableCopyPath,
@@ -109,7 +93,6 @@ import {
   starterContentForPath,
   starterPathForProject,
   validateWorkspacePath,
-  visibilityDescriptions,
   visibilityLabels,
   writeClipboardText,
   type ClassroomTab,
@@ -117,13 +100,6 @@ import {
   type FileDialogState,
   type MobileTab,
 } from './lib/workspace'
-
-type ShareDialogState = {
-  url: string
-  mode: 'server' | 'offline'
-  copied: boolean
-  error?: string | null
-} | null
 
 type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | 'conflict'
 
@@ -1719,337 +1695,79 @@ export default function App() {
       </section>
 
       <div className="layout-grid">
-        <aside className="panel project-sidebar surface-grid">
-          <div className="sidebar-header">
-            <h2><Files size={18} /> Projects</h2>
-            <div className="sidebar-tools">
-              <span>{showArchived ? archivedContextProjects.length : activeContextProjects.length}</span>
-              <button
-                className="ghost icon-button desktop-only"
-                type="button"
-                aria-label="Collapse project sidebar"
-                onClick={() => setSidebarCollapsed(true)}
-              >
-                <PanelLeftClose size={17} />
-              </button>
-            </div>
-          </div>
-          <button
-            className="ghost collapsed-sidebar-button"
-            type="button"
-            aria-label="Expand project sidebar"
-            onClick={() => setSidebarCollapsed(false)}
-          >
-            <PanelLeftOpen size={18} />
-          </button>
-          <details className="mobile-project-menu" open={mobileTab === 'projects' ? true : undefined}>
-            <summary>
-              <span>{project.title || 'Untitled Project'}</span>
-              <small>{showArchived ? `${archivedContextProjects.length} archived` : `${activeContextProjects.length} active`}</small>
-            </summary>
-            <div className="mobile-project-content">
-              <div className="project-view-toggle" aria-label="Project view">
-                <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                  Active <span>{activeContextProjects.length}</span>
-                </button>
-                <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                  Archived <span>{archivedContextProjects.length}</span>
-                </button>
-              </div>
-              <div className="new-project-grid">
-                {PROJECT_KINDS.map((kind) => (
-                  <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-                    <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
-                  </button>
-                ))}
-              </div>
-              <div className="project-list">
-                {visibleProjects.length === 0 && (
-                  <p className="empty-project-list">{showArchived ? 'No archived projects yet.' : 'No active projects yet.'}</p>
-                )}
-                {visibleProjects.map((candidate) => (
-                  <button
-                    key={candidate.id}
-                    className={`project-card ${candidate.id === project.id ? 'active' : ''}`}
-                    onClick={() => setActiveProject(candidate.id)}
-                  >
-                    <span>{candidate.title || 'Untitled Project'}</span>
-                    <small>
-                      {kindLabels[candidate.kind]}
-                      {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
-                    </small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </details>
-          <div className="sidebar-content">
-            <p className="sidebar-note">{isSignedIn ? `Signed in${user?.full_name ? ` as ${user.full_name}` : ''}. Projects sync to your account.` : 'Everything is private to this browser until you export, share, or sign in.'}</p>
-            <div className="project-view-toggle" aria-label="Project view">
-              <button className={!showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(false)}>
-                Active <span>{activeContextProjects.length}</span>
-              </button>
-              <button className={showArchived ? 'active' : ''} type="button" onClick={() => setShowArchived(true)}>
-                Archived <span>{archivedContextProjects.length}</span>
-              </button>
-            </div>
-          <div className="new-project-grid">
-            {PROJECT_KINDS.map((kind) => (
-              <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-                <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
-              </button>
-            ))}
-          </div>
-          <div className="project-list">
-            {visibleProjects.length === 0 && (
-              <p className="empty-project-list">{showArchived ? 'No archived projects yet.' : 'No active projects yet.'}</p>
-            )}
-            {visibleProjects.map((candidate) => (
-              <button
-                key={candidate.id}
-                className={`project-card ${candidate.id === project.id ? 'active' : ''}`}
-                onClick={() => setActiveProject(candidate.id)}
-              >
-                <span>{candidate.title || 'Untitled Project'}</span>
-                <small>
-                  {kindLabels[candidate.kind]}
-                  {activeOrganizationId && projectOwnerLabel(candidate, user?.id) ? ` · ${projectOwnerLabel(candidate, user?.id)}` : ''}
-                </small>
-              </button>
-            ))}
-          </div>
-          </div>
-        </aside>
+        <ProjectSidebar
+          activeOrganizationId={activeOrganizationId}
+          activeProjectCount={activeContextProjects.length}
+          archivedProjectCount={archivedContextProjects.length}
+          currentProjectId={project.id}
+          currentProjectTitle={project.title}
+          isSignedIn={isSignedIn}
+          mobileProjectsOpen={mobileTab === 'projects'}
+          projects={visibleProjects}
+          showArchived={showArchived}
+          userId={user?.id}
+          userName={user?.full_name}
+          onAddProject={addProject}
+          onCollapse={() => setSidebarCollapsed(true)}
+          onExpand={() => setSidebarCollapsed(false)}
+          onSelectProject={setActiveProject}
+          onShowArchivedChange={setShowArchived}
+        />
 
         <section className="main-workspace">
-          <div className="project-toolbar panel surface-grid">
-            <div className="title-field">
-              <label htmlFor="project-title">Project name</label>
-              <input id="project-title" value={project.title} onChange={(event) => renameProject(event.target.value)} disabled={!canEditProject} />
-              <small>
-                {isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
-                {activeOrganizationId && currentProjectOwnerLabel ? ` · by ${currentProjectOwnerLabel}` : ''}
-                {isArchived(project) ? ' · archived' : ''}
-                {!canEditProject ? ' · read-only instructor view' : ''}
-                {' · updated '}
-                {formatUpdatedAt(project.updatedAt)}
-              </small>
-              <div className="visibility-section">
-                <div className="visibility-row">
-                  <span>Visibility</span>
-                  <div className="visibility-control" aria-label="Project visibility">
-                    {availableVisibilityOptions(activeOrganizationId).map((visibility) => (
-                      <button
-                        key={visibility}
-                        className={project.visibility === visibility ? 'active' : ''}
-                        type="button"
-                        title={visibilityDescriptions[visibility]}
-                        aria-label={`${visibility === 'private' && activeOrganizationId ? 'Teacher only' : visibilityLabels[visibility]}: ${visibilityDescriptions[visibility]}`}
-                        disabled={!canEditProject}
-                        onClick={() => updateProjectVisibility(visibility)}
-                      >
-                        {visibility === 'private' && activeOrganizationId ? 'Teacher only' : visibilityLabels[visibility]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <small className="visibility-help">{visibilityDescriptions[project.visibility]}</small>
-              </div>
-            </div>
-            <div className="toolbar-actions">
-              <button className="secondary guide-toolbar-button" type="button" onClick={() => setLanguageGuideOpen(true)}>
-                <BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide
-              </button>
-              <details
-                ref={checkpointMenuRef}
-                className="checkpoint-menu"
-                open={checkpointMenuIsOpen}
-                onToggle={(event) => {
-                  if (mobileTab !== 'history') setCheckpointMenuOpen(event.currentTarget.open)
-                }}
-              >
-                <summary>
-                  <History size={16} />
-                  <span>History</span>
-                  <small>{checkpoints.length}</small>
-                </summary>
-                <div className="checkpoint-popover">
-                  <div className="checkpoint-popover-header">
-                    <strong>Checkpoints</strong>
-                    <button className="secondary compact" type="button" onClick={saveCheckpoint} disabled={!canEditProject}>
-                      <Save size={14} /> Save
-                    </button>
-                  </div>
-                  <div className="checkpoint-list">
-                    {checkpoints.length === 0 ? (
-                      <p className="empty-project-list">No checkpoints yet.</p>
-                    ) : checkpoints.slice(0, 5).map((checkpoint) => (
-                      <button
-                        key={checkpoint.id}
-                        className="checkpoint-card secondary"
-                        type="button"
-                        onClick={() => {
-                          setCheckpointMenuOpen(false)
-                          requestRestoreCheckpoint(checkpoint)
-                        }}
-                        title={`Restore ${checkpoint.title}`}
-                      >
-                        <span>{checkpoint.title}</span>
-                        <small>{formatCheckpointTime(checkpoint.createdAt)}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </details>
-              {isArchived(project) ? (
-                <button className="secondary" onClick={restoreProject} disabled={!canEditProject}><RotateCcw size={16} /> Restore</button>
-              ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={!canEditProject || activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
-              )}
-              <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={requestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
-            </div>
-          <button className="secondary mobile-project-actions-button" onClick={() => setProjectActionsOpen(true)}>
-            <MoreHorizontal size={16} /> Actions
-          </button>
-          </div>
+          <ProjectToolbar
+            activeOrganizationId={activeOrganizationId}
+            canEditProject={canEditProject}
+            checkpointMenuIsOpen={checkpointMenuIsOpen}
+            checkpointMenuRef={checkpointMenuRef}
+            checkpoints={checkpoints}
+            cloudSaveLabel={isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
+            currentProjectOwnerLabel={currentProjectOwnerLabel}
+            mobileHistoryOpen={mobileTab === 'history'}
+            project={project}
+            projectCount={activeContextProjects.length}
+            onArchive={requestArchiveProject}
+            onCheckpointMenuChange={setCheckpointMenuOpen}
+            onDelete={requestDeleteProject}
+            onDuplicate={cloneProject}
+            onOpenGuide={() => setLanguageGuideOpen(true)}
+            onOpenProjectActions={() => setProjectActionsOpen(true)}
+            onRename={renameProject}
+            onRestore={restoreProject}
+            onRestoreCheckpoint={(checkpoint) => {
+              setCheckpointMenuOpen(false)
+              requestRestoreCheckpoint(checkpoint)
+            }}
+            onSaveCheckpoint={saveCheckpoint}
+            onVisibilityChange={updateProjectVisibility}
+          />
 
           {canAccessProjectFeedback && (
             <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
           )}
 
-          <div className="workspace">
-            <section className="panel editor-panel">
-              <div className="file-tabs">
-                <div className="file-tab-list">
-                  {project.files.map((file) => (
-                    <button key={file.path} className={file.path === activeFile.path ? 'active' : ''} onClick={() => setActivePath(file.path)}>
-                      {file.path}
-                      {file.path === project.entryPath && <span className="entry-dot">entry</span>}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  className="ghost icon-button"
-                  type="button"
-                  aria-label="Create file"
-                  title="Create file"
-                  onClick={openCreateFileDialog}
-                  disabled={!canEditProject}
-                >
-                  <FilePlus2 size={17} />
-                </button>
-                <button
-                  className="secondary mobile-editor-guide-button"
-                  type="button"
-                  onClick={() => setLanguageGuideOpen(true)}
-                  aria-label={`Open ${projectKindDefinition(project.kind).label} language guide`}
-                >
-                  <BookOpen size={16} /> Guide
-                </button>
-                <button
-                  className="ghost icon-button editor-focus-button"
-                  type="button"
-                  aria-label={editorExpanded ? 'Exit editor focus mode' : 'Expand code editor'}
-                  title={editorExpanded ? 'Exit focus' : 'Focus editor'}
-                  onClick={() => setEditorExpanded((current) => !current)}
-                >
-                  {editorExpanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-                </button>
-              </div>
-              <details className="file-browser" aria-label="Project files">
-                <summary>
-                  <span><Files size={15} /> Files</span>
-                  <small>{project.files.length} files · entry {project.entryPath}</small>
-                </summary>
-                <div className="file-browser-actions">
-                  <button className="secondary compact" type="button" onClick={openCreateFileDialog} disabled={!canEditProject}>
-                    <FilePlus2 size={14} /> New file
-                  </button>
-                </div>
-                <div className="file-browser-list">
-                  {project.files.map((file) => (
-                    <div key={file.path} className={`file-row ${file.path === activeFile.path ? 'active' : ''}`}>
-                      <button type="button" className="file-row-main" onClick={() => setActivePath(file.path)}>
-                        <span>{file.path}</span>
-                        <small>{formatFileLanguage(file)}{file.path === project.entryPath ? ' · entry' : ''}</small>
-                      </button>
-                      <div className="file-row-actions">
-                        {file.path !== project.entryPath && (
-                          <button className="ghost icon-button" type="button" aria-label={`Set ${file.path} as entry`} title="Set as entry" onClick={() => setEntryPath(file)} disabled={!canEditProject}>
-                            <Check size={15} />
-                          </button>
-                        )}
-                        <button className="ghost icon-button" type="button" aria-label={`Rename ${file.path}`} title="Rename" onClick={() => openRenameFileDialog(file)} disabled={!canEditProject}>
-                          <Pencil size={15} />
-                        </button>
-                        <button className="ghost icon-button" type="button" aria-label={`Duplicate ${file.path}`} title="Duplicate" onClick={() => openDuplicateFileDialog(file)} disabled={!canEditProject}>
-                          <Copy size={15} />
-                        </button>
-                        <button className="ghost icon-button danger-icon" type="button" aria-label={`Delete ${file.path}`} title="Delete" onClick={() => deleteFile(file)} disabled={!canEditProject || project.files.length <= 1}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </details>
-              <div className="mobile-code-runbar">
-                <button type="button" onClick={runFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()}>
-                  {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
-                  {project.kind === 'web' ? 'Open preview' : `Run ${projectKindDefinition(project.kind).shortLabel}`}
-                </button>
-              </div>
-              <MonacoEditor
-                height="var(--workspace-pane-height)"
-                language={languageForFile(activeFile)}
-                theme="vs-dark"
-                value={activeFile.content}
-                loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
-                onChange={(value) => updateActiveFile(value ?? '')}
-                options={{
-                  readOnly: !canEditProject,
-                  minimap: { enabled: false },
-                  fontSize: editorFontSize,
-                  tabSize: 2,
-                  insertSpaces: true,
-                  wordWrap: 'on',
-                  automaticLayout: true,
-                  scrollBeyondLastLine: false,
-                  padding: { top: 16, bottom: 16 },
-                }}
-              />
-            </section>
-
-            {project.kind === 'web'
-              ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} />
-              : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} />}
-          </div>
+          <EditorWorkspace
+            activeFile={activeFile}
+            canEditProject={canEditProject}
+            editorExpanded={editorExpanded}
+            editorFontSize={editorFontSize}
+            entryFile={entryFile}
+            project={project}
+            onCreateFile={openCreateFileDialog}
+            onDeleteFile={deleteFile}
+            onDuplicateFile={openDuplicateFileDialog}
+            onEditorExpandedChange={setEditorExpanded}
+            onOpenGuide={() => setLanguageGuideOpen(true)}
+            onRenameFile={openRenameFileDialog}
+            onRunFromMobileCode={runFromMobileCode}
+            onSelectFile={setActivePath}
+            onSetEntryPath={setEntryPath}
+            onUpdateActiveFile={updateActiveFile}
+          />
         </section>
       </div>
 
-      <nav className="mobile-bottom-nav" aria-label="Workspace sections">
-        <button className={mobileTab === 'home' ? 'active' : ''} type="button" onClick={() => setMobileTab('home')}>
-          <Layers3 size={18} />
-          <span>Home</span>
-        </button>
-        <button className={mobileTab === 'projects' ? 'active' : ''} type="button" onClick={() => setMobileTab('projects')}>
-          <Files size={18} />
-          <span>Projects</span>
-        </button>
-        <button className={mobileTab === 'code' ? 'active' : ''} type="button" onClick={() => setMobileTab('code')}>
-          <BookOpen size={18} />
-          <span>Code</span>
-        </button>
-        <button className={mobileTab === 'output' ? 'active' : ''} type="button" onClick={() => setMobileTab('output')}>
-          {project.kind === 'web' ? <Globe size={18} /> : <Terminal size={18} />}
-          <span>{project.kind === 'web' ? 'Preview' : 'Output'}</span>
-        </button>
-        <button className={mobileTab === 'history' ? 'active' : ''} type="button" onClick={() => setMobileTab('history')}>
-          <History size={18} />
-          <span>History</span>
-        </button>
-      </nav>
+      <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={setMobileTab} />
 
       <LanguageGuide
         key={project.kind}
@@ -2059,195 +1777,56 @@ export default function App() {
         onTryExample={tryGuideExample}
       />
 
-      {fileDialog && (
-        <div className="modal-backdrop" role="presentation" onClick={() => {
-          setFileDialog(null)
-          setFileDialogError('')
-        }}>
-          <section ref={fileDialogRef} tabIndex={-1} className="modal-sheet file-dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="file-dialog-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Workspace file</p>
-                <h2 id="file-dialog-title">
-                  {fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}
-                </h2>
-              </div>
-              <button className="ghost icon-button" aria-label="Close file dialog" onClick={() => {
-                setFileDialog(null)
-                setFileDialogError('')
-              }}>
-                <X size={18} />
-              </button>
-            </div>
-            <label className="file-path-field" htmlFor="file-path-input">
-              <span>Path</span>
-              <input
-                id="file-path-input"
-                value={fileDialog.path}
-                autoFocus
-                onChange={(event) => {
-                  setFileDialog((current) => current ? { ...current, path: event.target.value } : current)
-                  setFileDialogError('')
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') submitFileDialog()
-                }}
-                placeholder="lib/helper.rb"
-              />
-            </label>
-            {fileDialogError && <p className="form-error" role="alert">{fileDialogError}</p>}
-            <p className="helper-text">Use a simple filename like `helper.rb`, `about.html`, or `styles.css`. Add folders later with paths like `assets/logo.svg`.</p>
-            <div className="confirm-actions">
-              <button className="secondary" onClick={() => {
-                setFileDialog(null)
-                setFileDialogError('')
-              }}>Cancel</button>
-              <button onClick={submitFileDialog}>
-                {fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {shareDialog && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setShareDialog(null)}>
-          <section ref={shareDialogRef} tabIndex={-1} className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Snapshot share</p>
-                <h2 id="share-dialog-title">Copy project link</h2>
-              </div>
-              <button className="ghost icon-button" aria-label="Close share dialog" onClick={() => setShareDialog(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <p className="helper-text">
-              {shareDialog.mode === 'server'
-                ? 'This link imports a server snapshot of the project.'
-                : 'The server share could not be created, so this offline link carries a copy in the URL.'}
-            </p>
-            {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
-            <label className="file-path-field" htmlFor="share-url">
-              <span>Share URL</span>
-              <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
-            </label>
-            <div className="confirm-actions">
-              <button className="secondary" type="button" onClick={() => setShareDialog(null)}>Done</button>
-              <button type="button" onClick={async () => {
-                const copied = await writeClipboardText(shareDialog.url)
-                setShareDialog((current) => current ? { ...current, copied } : current)
-                setNotice(copied ? 'Share link copied.' : 'Clipboard blocked. Select the link to copy it.')
-              }}>
-                <Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {orgCreateOpen && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setOrgCreateOpen(false)}>
-          <section ref={orgDialogRef} tabIndex={-1} className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="org-dialog-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Organization</p>
-                <h2 id="org-dialog-title">Create workspace</h2>
-              </div>
-              <button className="ghost icon-button" aria-label="Close organization dialog" onClick={() => setOrgCreateOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <label className="file-path-field" htmlFor="org-name">
-              <span>Name</span>
-              <input
-                id="org-name"
-                value={orgNameDraft}
-                autoFocus
-                onChange={(event) => setOrgNameDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') createOrganization()
-                }}
-                placeholder="Code School of Guam"
-              />
-            </label>
-            <p className="helper-text">Platform admins and mentors create organization workspaces, then invite instructors and students.</p>
-            <div className="confirm-actions">
-              <button className="secondary" type="button" onClick={() => setOrgCreateOpen(false)}>Cancel</button>
-              <button type="button" onClick={createOrganization}>Create workspace</button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {projectActionsOpen && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setProjectActionsOpen(false)}>
-          <section ref={projectActionsDialogRef} tabIndex={-1} className="modal-sheet project-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="project-actions-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Project</p>
-                <h2 id="project-actions-title">Actions</h2>
-              </div>
-              <button className="ghost icon-button" aria-label="Close project actions" onClick={() => setProjectActionsOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-action-grid">
-              {isArchived(project) ? (
-                <button className="secondary" onClick={() => {
-                  setProjectActionsOpen(false)
-                  restoreProject()
-                }}><RotateCcw size={16} /> Restore</button>
-              ) : (
-                <button className="secondary" onClick={requestArchiveProject} disabled={activeContextProjects.length <= 1}><Archive size={16} /> Archive</button>
-              )}
-              <button className="secondary" onClick={cloneProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={requestDeleteProject}><Trash2 size={16} /> Delete</button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {confirmAction && (
-        <div className="modal-backdrop" role="presentation" onClick={() => {
+      <WorkspaceDialogs
+        activeProjectCount={activeContextProjects.length}
+        confirmAction={confirmAction}
+        confirmDialogRef={confirmDialogRef}
+        fileDialog={fileDialog}
+        fileDialogError={fileDialogError}
+        fileDialogRef={fileDialogRef}
+        isSignedIn={isSignedIn}
+        orgCreateOpen={orgCreateOpen}
+        orgDialogRef={orgDialogRef}
+        orgNameDraft={orgNameDraft}
+        pendingCheckpoint={pendingCheckpoint}
+        project={project}
+        projectActionsDialogRef={projectActionsDialogRef}
+        projectActionsOpen={projectActionsOpen}
+        shareDialog={shareDialog}
+        shareDialogRef={shareDialogRef}
+        onArchiveProject={requestArchiveProject}
+        onCloseConfirm={() => {
           setConfirmAction(null)
           setPendingCheckpoint(null)
-        }}>
-          <section ref={confirmDialogRef} tabIndex={-1} className="modal-sheet confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">{confirmAction === 'delete' ? 'Delete project' : confirmAction === 'checkpoint' ? 'Restore checkpoint' : 'Archive project'}</p>
-                <h2 id="confirm-title">
-                  {confirmAction === 'delete' ? 'Delete this project?' : confirmAction === 'checkpoint' ? 'Restore this checkpoint?' : 'Archive this project?'}
-                </h2>
-              </div>
-              <button className="ghost icon-button" aria-label="Cancel" onClick={() => {
-                setConfirmAction(null)
-                setPendingCheckpoint(null)
-              }}>
-                <X size={18} />
-              </button>
-            </div>
-            <p id="confirm-description" className="confirm-copy">
-              {confirmAction === 'delete'
-                ? `"${project.title || 'Untitled Project'}" will be removed from this browser${isSignedIn && isCloudProjectId(project.id) ? ' and your cloud account' : ''}.`
-                : confirmAction === 'checkpoint'
-                  ? `Your current code will be replaced with "${pendingCheckpoint?.title || 'this checkpoint'}". Save a checkpoint first if you want to keep the current version.`
-                : `"${project.title || 'Untitled Project'}" will move out of your active project list. You can restore it from Archived.`}
-            </p>
-            <div className="confirm-actions">
-              <button className="secondary" onClick={() => {
-                setConfirmAction(null)
-                setPendingCheckpoint(null)
-              }}>Cancel</button>
-              <button className={confirmAction === 'delete' ? 'danger' : ''} onClick={confirmProjectAction}>
-                {confirmAction === 'delete' ? <Trash2 size={16} /> : confirmAction === 'checkpoint' ? <RotateCcw size={16} /> : <Archive size={16} />}
-                {confirmAction === 'delete' ? 'Delete project' : confirmAction === 'checkpoint' ? 'Restore checkpoint' : 'Archive project'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+        }}
+        onCloseFileDialog={() => {
+          setFileDialog(null)
+          setFileDialogError("")
+        }}
+        onCloseOrganizationDialog={() => setOrgCreateOpen(false)}
+        onCloseProjectActions={() => setProjectActionsOpen(false)}
+        onCloseShareDialog={() => setShareDialog(null)}
+        onConfirmProjectAction={confirmProjectAction}
+        onCopyShareLink={async () => {
+          if (!shareDialog) return
+          const copied = await writeClipboardText(shareDialog.url)
+          setShareDialog((current) => current ? { ...current, copied } : current)
+          setNotice(copied ? "Share link copied." : "Clipboard blocked. Select the link to copy it.")
+        }}
+        onCreateOrganization={createOrganization}
+        onDuplicateProject={cloneProject}
+        onFilePathChange={(path) => {
+          setFileDialog((current) => current ? { ...current, path } : current)
+          setFileDialogError("")
+        }}
+        onOrganizationNameChange={setOrgNameDraft}
+        onRequestDeleteProject={requestDeleteProject}
+        onRestoreProject={() => {
+          setProjectActionsOpen(false)
+          void restoreProject()
+        }}
+        onSubmitFileDialog={submitFileDialog}
+      />
 
       <footer className="oss-footer" aria-label="Open source project">
         <span>Hafa Code is open source.</span>

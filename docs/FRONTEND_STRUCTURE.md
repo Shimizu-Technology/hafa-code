@@ -10,9 +10,14 @@ web/src/
   App.css                     App-level styling for the workspace UI
   components/
     AuthControls.tsx          Clerk/local cloud-sync controls
+    EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
+    MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
+    ProjectSidebar.tsx        Desktop and mobile project navigation
+    ProjectToolbar.tsx        Project metadata, visibility, history, and primary actions
     RunnerPanel.tsx           Ruby/JavaScript/Python/Java terminal runner UI
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
+    WorkspaceDialogs.tsx      Controlled file, share, organization, action, and confirmation dialogs
   contexts/
     AuthContext.tsx           Clerk session sync into Rails
   hooks/
@@ -49,12 +54,10 @@ web/src/
 
 ## Next Cleanup Targets
 
-`App.tsx` is still the largest file because it owns the workspace state machine and several panels. The next safe extraction steps are:
+`App.tsx` remains the workspace state machine and composition root. Project navigation, editor/output composition, metadata actions, mobile navigation, and dialogs are controlled presentation components. The next safe extraction steps are:
 
-1. Move the project sidebar and mobile project menu into `components/ProjectSidebar.tsx`.
-2. Move the editor/file browser area into `components/EditorWorkspace.tsx`.
-3. Move the classroom roster/invitation panel into `components/ClassroomPanel.tsx`.
-4. Move modal sheets into small dialog components once their props settle.
-5. Split `App.css` by feature after the JSX is split, keeping shared tokens and base controls in one stylesheet.
+1. Move the classroom roster/invitation panel into `components/ClassroomPanel.tsx` once that workflow changes again.
+2. Extract stateful cloud-sync orchestration into a dedicated hook with focused conflict/retry tests.
+3. Split `App.css` by feature after the remaining classroom JSX is split, keeping shared tokens and base controls in one stylesheet.
 
-Avoid doing all five at once. Each extraction should keep behavior unchanged and pass lint/build before the next step.
+Keep presentation components controlled: persistence, permissions, and destructive confirmations stay in `App.tsx` or focused state hooks. Each extraction should keep behavior unchanged and pass lint/build before the next step.
