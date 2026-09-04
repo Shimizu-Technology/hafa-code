@@ -13,3 +13,14 @@ export function isObviouslyHidden(element: Element) {
   }
   return false
 }
+
+/** Collects rendered descendant text while excluding hidden and non-rendered elements. */
+export function visibleTextContent(element: Element): string {
+  return Array.from(element.childNodes).map((node) => {
+    if (node.nodeType === 3) return node.textContent ?? ''
+    if (node.nodeType !== 1) return ''
+    const child = node as Element
+    if (isObviouslyHidden(child) || /^(SCRIPT|STYLE|TEMPLATE)$/.test(child.tagName)) return ''
+    return visibleTextContent(child)
+  }).join('')
+}

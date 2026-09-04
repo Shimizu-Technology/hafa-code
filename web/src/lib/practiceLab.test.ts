@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
-import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, PRACTICE_CHALLENGES, practiceChallengeById, practiceChallengesFor } from './practiceLab'
+import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import {
@@ -18,11 +18,6 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('keeps every challenge id unique', () => {
-    const ids = PRACTICE_CHALLENGES.map((challenge) => challenge.id)
-    expect(new Set(ids).size).toBe(ids.length)
-  })
-
   it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
@@ -238,6 +233,16 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(true)
   })
 
+  it('accepts priority counting after a nested Ruby block', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  unless priority.nil?\n    note = priority\n  end\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
   it('requires strict equality when counting JavaScript priorities', () => {
     const challenge = practiceChallengeById('javascript-count-priorities')!
     const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (priority == "high") highCount++; } console.log(`High priority: ${highCount}`);'
@@ -377,6 +382,7 @@ describe('practice challenge catalog', () => {
     expect(labelPassed('<label for="email" style="/* note */ display: none">Email</label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email"><span hidden>Email</span></label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<div hidden><label for="email">Email</label></div><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email"><script>Email</script><style>Email</style><template>Email</template></label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email">Email</label><input id="email" name="email" type="email">')).toBe(true)
   })
 

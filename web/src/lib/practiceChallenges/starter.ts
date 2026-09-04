@@ -1,13 +1,5 @@
 import type { PracticeChallenge } from '../practiceLab'
-import { isObviouslyHidden } from './dom'
-
-function visibleTextContent(element: Element): string {
-  return Array.from(element.childNodes).map((node) => {
-    if (node.nodeType === 3) return node.textContent ?? ''
-    if (node.nodeType !== 1 || isObviouslyHidden(node as Element)) return ''
-    return visibleTextContent(node as Element)
-  }).join('')
-}
+import { isObviouslyHidden, visibleTextContent } from './dom'
 
 /** Additional first-step exercises. The original greeting challenge remains first for every language. */
 export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [

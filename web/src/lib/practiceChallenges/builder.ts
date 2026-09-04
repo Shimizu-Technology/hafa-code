@@ -1,17 +1,6 @@
 import { tokenizer } from 'acorn'
 import type { PracticeChallenge } from '../practiceLab'
-import { isObviouslyHidden } from './dom'
-
-/** Collects rendered descendant text while excluding hidden and non-rendered elements. */
-function visibleTextContent(element: Element): string {
-  return Array.from(element.childNodes).map((node) => {
-    if (node.nodeType === 3) return node.textContent ?? ''
-    if (node.nodeType !== 1) return ''
-    const child = node as Element
-    if (isObviouslyHidden(child) || /^(SCRIPT|STYLE|TEMPLATE)$/.test(child.tagName)) return ''
-    return visibleTextContent(child)
-  }).join('')
-}
+import { isObviouslyHidden, visibleTextContent } from './dom'
 
 /** Finds the closing brace paired with an opening brace while respecting quoted text. */
 function closingBraceIndex(source: string, openingBrace: number) {
@@ -182,10 +171,20 @@ function validRubyPriorityCount(source: string) {
   const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const bodyStart = match.index + match[0].length
-    const endMatch = /\bend\b/g
-    endMatch.lastIndex = bodyStart
-    const bodyEnd = endMatch.exec(structure)?.index ?? structure.length
-    const body = structure.slice(bodyStart, bodyEnd)
+    const lines = structure.slice(bodyStart).split('\n')
+    const bodyLines: string[] = []
+    let depth = 1
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (/^end\b/.test(trimmed)) {
+        depth -= 1
+        if (depth === 0) break
+      }
+      bodyLines.push(line)
+      if (/^(?:begin|case|class|def|for|if|module|unless|until|while)\b/.test(trimmed)
+        || /\bdo\b(?:\s*\|[^|]*\|)?\s*$/.test(trimmed)) depth += 1
+    }
+    const body = bodyLines.join('\n')
     return /\bpriority\s*==\s*HIGH_PRIORITY_LITERAL/.test(body) && /\bhigh_count\s*\+=\s*1/.test(body)
   })
   return valid ? 'VALID_PRIORITY_COUNT' : ''
