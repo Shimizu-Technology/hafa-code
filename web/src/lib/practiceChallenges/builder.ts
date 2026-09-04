@@ -165,26 +165,42 @@ function withoutRubyRegexLiterals(source: string) {
   return structure.join('').replace(RUBY_SLASH_REGEX_LITERAL, (literal) => literal.replace(/[^\n]/g, ' '))
 }
 
+/** Extracts a Ruby block body while balancing nested statement and do/end blocks. */
+function rubyBlockBody(source: string, bodyStart: number) {
+  const bodyLines: string[] = []
+  let depth = 1
+  for (const line of source.slice(bodyStart).split('\n')) {
+    const events: Array<{ index: number; change: 1 | -1 }> = []
+    const statementOpener = /^\s*(?:begin|case|class|def|for|if|module|unless|until|while)\b/.exec(line)
+    if (statementOpener) events.push({ index: statementOpener.index + statementOpener[0].search(/\S/), change: 1 })
+    const startsLoopStatement = /^\s*(?:for|until|while)\b/.test(line)
+    if (!startsLoopStatement) {
+      for (const match of line.matchAll(/\bdo\b/g)) events.push({ index: match.index, change: 1 })
+    }
+    for (const match of line.matchAll(/\bend\b/g)) events.push({ index: match.index, change: -1 })
+    events.sort((left, right) => left.index - right.index)
+
+    let closingIndex = -1
+    for (const event of events) {
+      depth += event.change
+      if (depth === 0) {
+        closingIndex = event.index
+        break
+      }
+    }
+    bodyLines.push(closingIndex === -1 ? line : line.slice(0, closingIndex))
+    if (closingIndex !== -1) break
+  }
+  return bodyLines.join('\n')
+}
+
 /** Reports whether a Ruby priorities loop contains both the comparison and increment. */
 function validRubyPriorityCount(source: string) {
   const structure = quotedTextStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(source)))
   const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const bodyStart = match.index + match[0].length
-    const lines = structure.slice(bodyStart).split('\n')
-    const bodyLines: string[] = []
-    let depth = 1
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (/^end\b/.test(trimmed)) {
-        depth -= 1
-        if (depth === 0) break
-      }
-      bodyLines.push(line)
-      if (/^(?:begin|case|class|def|for|if|module|unless|until|while)\b/.test(trimmed)
-        || /\bdo\b(?:\s*\|[^|]*\|)?\s*$/.test(trimmed)) depth += 1
-    }
-    const body = bodyLines.join('\n')
+    const body = rubyBlockBody(structure, bodyStart)
     return /\bpriority\s*==\s*HIGH_PRIORITY_LITERAL/.test(body) && /\bhigh_count\s*\+=\s*1/.test(body)
   })
   return valid ? 'VALID_PRIORITY_COUNT' : ''
