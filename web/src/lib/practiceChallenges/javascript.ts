@@ -5,6 +5,7 @@ type SyntaxNode = Node & Record<string, unknown>
 type Scope = {
   parent?: Scope
   bindings: Map<string, SyntaxNode>
+  acceptsVarBindings: boolean
 }
 
 function isNode(value: unknown): value is SyntaxNode {
@@ -33,8 +34,14 @@ function identifierName(node: unknown) {
     : undefined
 }
 
-function createScope(parent?: Scope): Scope {
-  return { parent, bindings: new Map() }
+function createScope(parent?: Scope, acceptsVarBindings = false): Scope {
+  return { parent, bindings: new Map(), acceptsVarBindings }
+}
+
+function nearestVarScope(scope: Scope) {
+  let current = scope
+  while (!current.acceptsVarBindings && current.parent) current = current.parent
+  return current
 }
 
 function bindPattern(pattern: unknown, binding: SyntaxNode, scope: Scope) {
@@ -61,16 +68,18 @@ function bindPattern(pattern: unknown, binding: SyntaxNode, scope: Scope) {
 
 function indexScopes(root: SyntaxNode) {
   const scopes = new WeakMap<SyntaxNode, Scope>()
-  const rootScope = createScope()
+  const rootScope = createScope(undefined, true)
 
-  const visit = (node: SyntaxNode, inheritedScope: Scope) => {
+  const visit = (node: SyntaxNode, inheritedScope: Scope, declarationKind?: string) => {
     if (node.type === 'FunctionDeclaration') {
       const name = identifierName(node.id)
       if (name) inheritedScope.bindings.set(name, node)
     }
 
     let scope = inheritedScope
-    if (node !== root && (node.type === 'BlockStatement' || node.type === 'CatchClause' || isFunction(node))) {
+    if (node !== root && isFunction(node)) {
+      scope = createScope(inheritedScope, true)
+    } else if (node !== root && ['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement'].includes(node.type)) {
       scope = createScope(inheritedScope)
     }
     scopes.set(node, scope)
@@ -83,10 +92,13 @@ function indexScopes(root: SyntaxNode) {
     }
     if (node.type === 'VariableDeclarator') {
       const binding = isNode(node.init) && isFunction(node.init) ? node.init : node
-      bindPattern(node.id, binding, scope)
+      bindPattern(node.id, binding, declarationKind === 'var' ? nearestVarScope(scope) : scope)
     }
 
-    childNodes(node).forEach((child) => visit(child, scope))
+    const childDeclarationKind = node.type === 'VariableDeclaration' && typeof node.kind === 'string'
+      ? node.kind
+      : undefined
+    childNodes(node).forEach((child) => visit(child, scope, childDeclarationKind))
   }
 
   visit(root, rootScope)
