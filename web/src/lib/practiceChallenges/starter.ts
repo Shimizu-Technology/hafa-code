@@ -1,19 +1,5 @@
 import type { PracticeChallenge } from '../practiceLab'
-
-function isObviouslyHidden(element: Element) {
-  let current: Element | null = element
-  while (current) {
-    const inlineStyle = (current as HTMLElement).style
-    if (
-      current.hasAttribute('hidden')
-      || current.getAttribute('aria-hidden')?.toLowerCase() === 'true'
-      || inlineStyle?.display.toLowerCase() === 'none'
-      || inlineStyle?.visibility.toLowerCase() === 'hidden'
-    ) return true
-    current = current.parentElement
-  }
-  return false
-}
+import { isObviouslyHidden } from './dom'
 
 function visibleTextContent(element: Element): string {
   return Array.from(element.childNodes).map((node) => {

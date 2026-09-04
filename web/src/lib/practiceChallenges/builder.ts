@@ -1,20 +1,5 @@
 import type { PracticeChallenge } from '../practiceLab'
-
-/** Reports whether an element or one of its ancestors is explicitly hidden. */
-function isObviouslyHidden(element: Element) {
-  let current: Element | null = element
-  while (current) {
-    const inlineStyle = (current as HTMLElement).style
-    if (
-      current.hasAttribute('hidden')
-      || current.getAttribute('aria-hidden')?.toLowerCase() === 'true'
-      || inlineStyle?.display.toLowerCase() === 'none'
-      || inlineStyle?.visibility.toLowerCase() === 'hidden'
-    ) return true
-    current = current.parentElement
-  }
-  return false
-}
+import { isObviouslyHidden } from './dom'
 
 /** Collects rendered descendant text while excluding hidden and non-rendered elements. */
 function visibleTextContent(element: Element): string {
@@ -193,9 +178,25 @@ function markHighPriorityComparisons(source: string) {
   return source.replace(/(\bpriority\s*==\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
 }
 
+const RUBY_REGEX_LITERALS = [
+  /\/(?:\\.|[^/\n])*\/[a-z]*/gi,
+  /%r\{(?:\\.|[^}\n])*\}[a-z]*/gi,
+  /%r\[(?:\\.|[^\]\n])*\][a-z]*/gi,
+  /%r\((?:\\.|[^)\n])*\)[a-z]*/gi,
+  /%r<(?:\\.|[^>\n])*>[a-z]*/gi,
+  /%r\|(?:\\.|[^|\n])*\|[a-z]*/gi,
+]
+
+/** Masks Ruby slash and common percent-regex literals without shifting source offsets. */
+function withoutRubyRegexLiterals(source: string) {
+  return RUBY_REGEX_LITERALS.reduce((result, pattern) => (
+    result.replace(pattern, (literal) => literal.replace(/[^\n]/g, ' '))
+  ), source)
+}
+
 /** Reports whether a Ruby priorities loop contains both the comparison and increment. */
 function validRubyPriorityCount(source: string) {
-  const structure = javascriptExecutableStructure(markHighPriorityComparisons(source))
+  const structure = javascriptExecutableStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(source)))
   const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const bodyStart = match.index + match[0].length
@@ -231,14 +232,17 @@ function validPythonPriorityCount(source: string) {
 
 /** Reports whether one Java priorities loop contains both value comparison and increment. */
 function validJavaPriorityCount(source: string) {
-  const marked = source.replace(/["']high["'](\s*\.equals\s*\(\s*priority\s*\))/g, 'HIGH_PRIORITY_LITERAL$1')
+  const marked = source
+    .replace(/["']high["'](\s*\.equals\s*\(\s*priority\s*\))/g, 'HIGH_PRIORITY_LITERAL$1')
+    .replace(/(\bpriority\s*\.equals\s*\(\s*)["']high["'](\s*\))/g, '$1HIGH_PRIORITY_LITERAL$2')
   const structure = javascriptExecutableStructure(marked)
   const loopStart = /\bfor\s*\(\s*String\s+priority\s*:\s*priorities\s*\)\s*\{/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const openingBrace = match.index + match[0].lastIndexOf('{')
     const closingBrace = closingBraceIndex(structure, openingBrace)
     const body = closingBrace === -1 ? '' : structure.slice(openingBrace + 1, closingBrace)
-    return /HIGH_PRIORITY_LITERAL\s*\.equals\s*\(\s*priority\s*\)/.test(body)
+    return (/HIGH_PRIORITY_LITERAL\s*\.equals\s*\(\s*priority\s*\)/.test(body)
+      || /\bpriority\s*\.equals\s*\(\s*HIGH_PRIORITY_LITERAL\s*\)/.test(body))
       && /\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/.test(body)
   })
   return valid ? 'VALID_PRIORITY_COUNT' : ''
