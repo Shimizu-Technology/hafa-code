@@ -129,17 +129,20 @@ const RUBY_SLASH_REGEX_LITERAL = /\/(?:\\.|[^/\n])*\/[a-z]*/gi
 const RUBY_PAIRED_DELIMITERS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '<': '>' }
 
 /** Masks selected delimiter-aware Ruby percent literals without shifting source offsets. */
-function withoutRubyPercentLiterals(source: string, literalTypes: string) {
+function withoutRubyPercentLiterals(source: string, literalTypes: string, includeBareString = false) {
   const structure = source.split('')
-  for (let index = 0; index < source.length - 2; index += 1) {
-    if (source[index] !== '%' || !literalTypes.includes(source[index + 1])) continue
-    const openingDelimiter = source[index + 2]
+  for (let index = 0; index < source.length - 1; index += 1) {
+    if (source[index] !== '%') continue
+    const hasExplicitType = literalTypes.includes(source[index + 1])
+    const delimiterIndex = index + (hasExplicitType ? 2 : 1)
+    if (!hasExplicitType && !includeBareString) continue
+    const openingDelimiter = source[delimiterIndex]
     if (/[\w\s]/.test(openingDelimiter)) continue
     const closingDelimiter = RUBY_PAIRED_DELIMITERS[openingDelimiter] ?? openingDelimiter
     const paired = closingDelimiter !== openingDelimiter
     let depth = 1
     let escaped = false
-    let end = index + 3
+    let end = delimiterIndex + 1
     for (; end < source.length; end += 1) {
       const char = source[end]
       if (escaped) {
@@ -195,7 +198,7 @@ function withoutRubyHeredocBodies(source: string) {
 
 /** Masks Ruby percent strings and heredocs while leaving ordinary comparison quotes markable. */
 function withoutRubyNonQuoteStrings(source: string) {
-  return withoutRubyPercentLiterals(withoutRubyHeredocBodies(source), 'qQwWiIxs')
+  return withoutRubyPercentLiterals(withoutRubyHeredocBodies(source), 'qQwWiIxs', true)
 }
 
 /** Extracts a Ruby block body while balancing nested statement and do/end blocks. */

@@ -256,6 +256,7 @@ describe('practice challenge catalog', () => {
 
   it.each([
     'note = %q{do}',
+    'note = %{do}',
     'note = <<~TEXT\ndo\nTEXT',
   ])('ignores Ruby string content that looks like a block opener: %s', (literal) => {
     const challenge = practiceChallengeById('ruby-count-priorities')!
