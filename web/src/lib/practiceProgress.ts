@@ -3,7 +3,7 @@ import type { ProjectFile } from './projectTypes'
 const STORAGE_KEY = 'hafa-code-practice-progress-v1'
 let memoryFallback: PracticeProgress | null = null
 
-interface PracticeProgress {
+export interface PracticeProgress {
   completedChallengeIds: string[]
   projectChallenges: Record<string, string>
 }
@@ -45,6 +45,24 @@ function loadProgress(): PracticeProgress {
   }
 }
 
+/** Returns a validated copy suitable for a complete workspace backup. */
+export function loadPracticeProgress(): PracticeProgress {
+  return loadProgress()
+}
+
+/** Validates practice progress from a backup without trusting arbitrary storage fields. */
+export function normalizePracticeProgress(candidate: Partial<PracticeProgress> | null | undefined): PracticeProgress {
+  if (!candidate) return emptyProgress()
+  return {
+    completedChallengeIds: Array.isArray(candidate.completedChallengeIds)
+      ? [...new Set(candidate.completedChallengeIds.filter((id): id is string => typeof id === 'string'))]
+      : [],
+    projectChallenges: candidate.projectChallenges && typeof candidate.projectChallenges === 'object'
+      ? Object.fromEntries(Object.entries(candidate.projectChallenges).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+      : {},
+  }
+}
+
 function saveProgress(progress: PracticeProgress) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
@@ -57,6 +75,11 @@ function saveProgress(progress: PracticeProgress) {
     }
     return false
   }
+}
+
+/** Saves already-normalized progress restored from a workspace backup. */
+export function savePracticeProgress(progress: PracticeProgress) {
+  return saveProgress(normalizePracticeProgress(progress))
 }
 
 /** Lists stable challenge ids that this browser has completed. */

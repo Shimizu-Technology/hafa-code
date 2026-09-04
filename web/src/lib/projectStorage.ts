@@ -14,7 +14,7 @@ export interface ProjectLibrary {
   projects: SavedProject[]
 }
 
-type CheckpointLibrary = Record<string, ProjectCheckpoint[]>
+export type CheckpointLibrary = Record<string, ProjectCheckpoint[]>
 
 function safeParse<T>(value: string | null): T | null {
   if (!value) return null
@@ -91,7 +91,7 @@ function normalizeCheckpoint(candidate: Partial<ProjectCheckpoint> | null | unde
   }
 }
 
-function normalizeLibrary(candidate: ProjectLibrary | null): ProjectLibrary | null {
+export function normalizeProjectLibrary(candidate: ProjectLibrary | null): ProjectLibrary | null {
   if (!candidate || !Array.isArray(candidate.projects) || candidate.projects.length === 0) return null
   const projects = candidate.projects
     .map((project) => normalizeProject(project))
@@ -104,7 +104,7 @@ function normalizeLibrary(candidate: ProjectLibrary | null): ProjectLibrary | nu
 }
 
 export function loadProjectLibrary(): ProjectLibrary {
-  const current = normalizeLibrary(safeParse<ProjectLibrary>(localStorage.getItem(STORAGE_KEY)))
+  const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(localStorage.getItem(STORAGE_KEY)))
   if (current) return current
 
   const legacyProject = safeParse<SavedProject>(localStorage.getItem(LEGACY_STORAGE_KEY))
@@ -126,13 +126,28 @@ export function saveProjectLibrary(library: ProjectLibrary) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(library))
 }
 
-function loadCheckpointLibrary(): CheckpointLibrary {
-  const parsed = safeParse<CheckpointLibrary>(localStorage.getItem(CHECKPOINT_STORAGE_KEY))
-  if (!parsed || typeof parsed !== 'object') return {}
-  return parsed
+export function normalizeCheckpointLibrary(candidate: unknown): CheckpointLibrary {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return {}
+  return Object.fromEntries(
+    Object.entries(candidate)
+      .filter((entry): entry is [string, ProjectCheckpoint[]] => Array.isArray(entry[1]))
+      .map(([projectId, checkpoints]) => [
+        projectId,
+        checkpoints
+          .map((checkpoint) => normalizeCheckpoint(checkpoint))
+          .filter((checkpoint): checkpoint is ProjectCheckpoint => Boolean(checkpoint))
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+          .slice(0, 30),
+      ])
+      .filter(([, checkpoints]) => checkpoints.length > 0),
+  )
 }
 
-function saveCheckpointLibrary(library: CheckpointLibrary) {
+export function loadCheckpointLibrary(): CheckpointLibrary {
+  return normalizeCheckpointLibrary(safeParse<CheckpointLibrary>(localStorage.getItem(CHECKPOINT_STORAGE_KEY)))
+}
+
+export function saveCheckpointLibrary(library: CheckpointLibrary) {
   localStorage.setItem(CHECKPOINT_STORAGE_KEY, JSON.stringify(library))
 }
 

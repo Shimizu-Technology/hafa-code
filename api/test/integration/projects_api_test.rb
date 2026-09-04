@@ -1075,7 +1075,7 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     Rails.define_singleton_method(:env) { ActiveSupport::StringInquirer.new("production") }
     load Rails.root.join("config/initializers/app_origin.rb")
 
-    assert_equal "https://hafa-code.netlify.app", Api::V1::OrganizationsController.new.send(:frontend_origin)
+    assert_equal "https://code.shimizu-technology.com", Api::V1::OrganizationsController.new.send(:frontend_origin)
   ensure
     Rails.define_singleton_method(:env, old_rails_env) if old_rails_env
     Rails.application.config.x.public_app_origin = old_public_app_origin

@@ -3,7 +3,7 @@
 **Version:** 1.1
 **Audit date:** July 25, 2026
 **Target:** Father Dueñas Memorial School classroom use during the 2026–2027 school year
-**Production frontend:** <https://hafa-code.netlify.app/>
+**Production frontend:** <https://code.shimizu-technology.com/>
 **Production API:** <https://hafa-code.onrender.com/>
 **Current recommendation:** **Repository-ready after this hardening PR; production launch remains conditional on the deployment, school, backup, monitoring, and pilot gates below**
 
@@ -74,10 +74,10 @@ These checks were performed against the production URLs on July 25, 2026, before
 
 The earlier concern should be stated precisely:
 
-- The application is available at `https://hafa-code.netlify.app/`.
+- The application is available at `https://code.shimizu-technology.com/`.
 - The Netlify frontend is not down.
 - The production Rails API is healthy.
-- The baseline break is that the API does not authorize `https://hafa-code.netlify.app` as a CORS origin.
+- The baseline break was that the API did not authorize the production frontend as a CORS origin.
 - `hafacode.com` is a stale or future canonical domain in the baseline metadata, not the URL students should use today.
 - The hardening branch declares the Netlify URL as the production application origin and always includes it in CORS, while preserving an environment override for a future domain.
 
@@ -171,8 +171,8 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 **Work:**
 
-- [ ] Set Render `ALLOWED_ORIGINS` to include `https://hafa-code.netlify.app`.
-- [ ] Set Render `FRONTEND_URL` or `APP_URL` to `https://hafa-code.netlify.app` so invitation links use the live site.
+- [ ] Set Render `ALLOWED_ORIGINS` to include `https://code.shimizu-technology.com` and the `https://hafa-code.netlify.app` recovery origin.
+- [ ] Set Render `FRONTEND_URL` or `APP_URL` to `https://code.shimizu-technology.com` so invitation links use the canonical site.
 - [ ] Verify Netlify `VITE_API_URL` points to `https://hafa-code.onrender.com`.
 - [ ] Verify Clerk production allowed origins and redirect URLs include the Netlify domain.
 - [ ] Decide whether `hafacode.com` will be launched now or later.

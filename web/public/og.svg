@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Hafa Code browser coding playground</title>
-  <desc id="desc">Open graph image for Hafa Code, a browser coding playground for Ruby, JavaScript, HTML and CSS.</desc>
+  <desc id="desc">Open graph image for Hafa Code, a browser coding playground for Ruby, JavaScript, Python, Java, HTML and CSS.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
       <stop stop-color="#fff7e8"/>
@@ -26,7 +26,7 @@
   <text x="92" y="212" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="900" fill="#14110f">Hafa Code</text>
   <text x="98" y="292" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#5b5048">A tiny Replit alternative</text>
   <text x="98" y="342" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#5b5048">for Guam students learning to code.</text>
-  <text x="98" y="390" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#5b5048">Ruby, JavaScript, HTML, and CSS.</text>
+  <text x="98" y="390" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#5b5048">Ruby, JavaScript, Python, Java, and Web.</text>
   <rect x="98" y="438" width="560" height="72" rx="36" fill="#e9472f"/>
   <text x="136" y="485" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="800" fill="#fffaf1">Beginner-first. Open source. No setup.</text>
   <text x="98" y="558" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800" fill="#38291c">Built for CSG, FD, and Guam classrooms.</text>
