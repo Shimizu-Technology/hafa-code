@@ -55,6 +55,7 @@ function extractBracedBody(source: string, openingBrace: number) {
 }
 
 const MIN_WIDTH_MEDIA_START = /@media\b(?![^{}]*\bnot\b)[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/gi
+const MIN_WIDTH_MEDIA_TEST = new RegExp(MIN_WIDTH_MEDIA_START.source, 'i')
 
 /** Collects the bodies of non-negated min-width media queries. */
 function minWidthMediaBodies(source: string) {
@@ -82,7 +83,7 @@ function withoutFormatNameDeclaration(source: string) {
   return source
     .replace(/^\s*def\s+format_name\s*\(\s*name\s*\)\s*:?.*$/gm, '')
     .replace(/\bfunction\s+formatName\s*\(\s*name\s*\)/g, '')
-    .replace(/\bstatic\s+String\s+formatName\s*\(\s*String\s+name\s*\)/g, '')
+    .replace(/\b(?:(?:public|private|protected|static|final|synchronized)\s+)*String\s+formatName\s*\(\s*(?:final\s+)?String\s+name\s*\)/g, '')
 }
 
 /** Replaces the required strict comparison literal with a marker that survives string masking. */
@@ -174,6 +175,62 @@ function strictHighPriorityLoopBodies(source: string) {
   }).join('\n')
 }
 
+/** Marks non-strict high-priority comparisons before quoted text is masked. */
+function markHighPriorityComparisons(source: string) {
+  return source.replace(/(\bpriority\s*==\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
+}
+
+/** Reports whether a Ruby priorities loop contains both the comparison and increment. */
+function validRubyPriorityCount(source: string) {
+  const structure = javascriptExecutableStructure(markHighPriorityComparisons(source))
+  const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
+  const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
+    const bodyStart = match.index + match[0].length
+    const endMatch = /\bend\b/g
+    endMatch.lastIndex = bodyStart
+    const bodyEnd = endMatch.exec(structure)?.index ?? structure.length
+    const body = structure.slice(bodyStart, bodyEnd)
+    return /\bpriority\s*==\s*HIGH_PRIORITY_LITERAL/.test(body) && /\bhigh_count\s*\+=\s*1/.test(body)
+  })
+  return valid ? 'VALID_PRIORITY_COUNT' : ''
+}
+
+/** Reports whether one Python priorities loop contains both the comparison and increment. */
+function validPythonPriorityCount(source: string) {
+  const structure = javascriptExecutableStructure(markHighPriorityComparisons(source))
+  const lines = structure.split('\n')
+  const valid = lines.some((line, lineIndex) => {
+    const header = /^(\s*)for\s+priority\s+in\s+priorities\s*:\s*(.*)$/.exec(line)
+    if (!header) return false
+    const baseIndent = header[1].length
+    const bodyLines = [header[2]]
+    for (let index = lineIndex + 1; index < lines.length; index += 1) {
+      if (!lines[index].trim()) continue
+      const indent = /^\s*/.exec(lines[index])?.[0].length ?? 0
+      if (indent <= baseIndent) break
+      bodyLines.push(lines[index])
+    }
+    const body = bodyLines.join('\n')
+    return /\bpriority\s*==\s*HIGH_PRIORITY_LITERAL/.test(body) && /\bhigh_count\s*\+=\s*1/.test(body)
+  })
+  return valid ? 'VALID_PRIORITY_COUNT' : ''
+}
+
+/** Reports whether one Java priorities loop contains both value comparison and increment. */
+function validJavaPriorityCount(source: string) {
+  const marked = source.replace(/["']high["'](\s*\.equals\s*\(\s*priority\s*\))/g, 'HIGH_PRIORITY_LITERAL$1')
+  const structure = javascriptExecutableStructure(marked)
+  const loopStart = /\bfor\s*\(\s*String\s+priority\s*:\s*priorities\s*\)\s*\{/g
+  const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
+    const openingBrace = match.index + match[0].lastIndexOf('{')
+    const closingBrace = closingBraceIndex(structure, openingBrace)
+    const body = closingBrace === -1 ? '' : structure.slice(openingBrace + 1, closingBrace)
+    return /HIGH_PRIORITY_LITERAL\s*\.equals\s*\(\s*priority\s*\)/.test(body)
+      && /\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/.test(body)
+  })
+  return valid ? 'VALID_PRIORITY_COUNT' : ''
+}
+
 /** Additional intermediate exercises. The original loop/grid challenge remains first for every language. */
 export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
   {
@@ -198,7 +255,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Ruby Priority Count', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\n\n# Count the high-priority requests.\n\nputs "High priority: #{high_count}"\n' }] },
     checks: [
       { filePath: 'main.rb', label: 'Loop over priorities', pattern: /\bpriorities\.each\b/, ignoreStrings: true },
-      { filePath: 'main.rb', label: 'Count only high priorities', pattern: /\bpriority\s*==\s*["']high["'][\s\S]*\bhigh_count\s*\+=\s*1/, ignoreStrings: false },
+      { filePath: 'main.rb', label: 'Count only high priorities inside the loop', pattern: /VALID_PRIORITY_COUNT/, scope: validRubyPriorityCount },
     ],
     expectedOutput: 'High priority: 2',
   },
@@ -310,7 +367,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Python Priority Count', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\n\n# Count the high-priority requests.\n\nprint(f"High priority: {high_count}")\n' }] },
     checks: [
       { filePath: 'main.py', label: 'Loop over priorities', pattern: /\bfor\s+priority\s+in\s+priorities\s*:/, ignoreStrings: true },
-      { filePath: 'main.py', label: 'Count only high priorities', pattern: /\bif\s+priority\s*==\s*["']high["']\s*:[\s\S]*\bhigh_count\s*\+=\s*1/ },
+      { filePath: 'main.py', label: 'Count only high priorities inside the loop', pattern: /VALID_PRIORITY_COUNT/, scope: validPythonPriorityCount },
     ],
     expectedOutput: 'High priority: 2',
   },
@@ -367,8 +424,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Java Priority Count', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    String[] priorities = {"high", "low", "high", "medium"};\n    int highCount = 0;\n\n    // Count the high-priority requests.\n\n    System.out.println("High priority: " + highCount);\n  }\n}\n' }] },
     checks: [
       { filePath: 'Main.java', label: 'Loop over priorities', pattern: /\bfor\s*\(\s*String\s+priority\s*:\s*priorities\s*\)/, ignoreStrings: true },
-      { filePath: 'Main.java', label: 'Compare Java strings by value', pattern: /["']high["']\.equals\s*\(\s*priority\s*\)/ },
-      { filePath: 'Main.java', label: 'Increase the high-priority count', pattern: /\b(?:highCount\+\+|\+\+highCount|highCount\s*\+=\s*1)/, ignoreStrings: true },
+      { filePath: 'Main.java', label: 'Compare and count inside the loop', pattern: /VALID_PRIORITY_COUNT/, scope: validJavaPriorityCount },
     ],
     expectedOutput: 'High priority: 2',
   },
@@ -464,7 +520,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     checks: [
       { filePath: 'style.css', label: 'Use a grid by default', pattern: /\.card-grid\s*\{[^}]*display\s*:\s*grid\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
       { filePath: 'style.css', label: 'Start with one column', pattern: /\.card-grid\s*\{[^}]*grid-template-columns\s*:\s*1fr\s*[;}]/i, scope: withoutMinWidthMediaBlocks },
-      { filePath: 'style.css', label: 'Add a min-width media query', pattern: /@media\b(?![^{}]*\bnot\b)[^{}]*\(\s*min-width\s*:\s*(?:\d*\.)?\d+(?:px|rem|em)\s*\)[^{}]*\{/i },
+      { filePath: 'style.css', label: 'Add a min-width media query', pattern: MIN_WIDTH_MEDIA_TEST },
       { filePath: 'style.css', label: 'Create multiple columns inside the breakpoint', pattern: /\.card-grid\s*\{[^}]*(?:grid-template-columns\s*:\s*repeat\s*\(\s*[2-9]\d*\s*,\s*1fr\s*\)|grid-template-columns\s*:\s*1fr\s+1fr(?:\s+1fr)*)\s*[;}][^}]*\}/i, scope: minWidthMediaBodies },
     ],
   },

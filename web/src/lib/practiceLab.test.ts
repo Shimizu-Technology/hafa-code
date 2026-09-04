@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
-import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
+import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, PRACTICE_CHALLENGES, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import {
@@ -18,6 +18,11 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
+  it('keeps every challenge id unique', () => {
+    const ids = PRACTICE_CHALLENGES.map((challenge) => challenge.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
   it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
@@ -154,14 +159,21 @@ describe('practice challenge catalog', () => {
       content: '<fieldset><legend hidden>Preferred contact</legend><input id="email" type="radio" name="contact"><label hidden for="email">Email</label><input id="phone" type="radio" name="contact"><label hidden for="phone">Phone</label></fieldset>',
     }])
 
-    expect(result.checks.every((check) => !check.passed)).toBe(true)
+    expect(result.checks).toHaveLength(2)
+    expect(result.checks).toEqual([
+      { label: 'Add the Preferred contact group label', passed: false },
+      { label: 'Add Email and Phone radio choices', passed: false },
+    ])
 
     const nonRenderedText = evaluatePracticeChallenge(challenge, [{
       path: 'index.html',
       language: 'html',
       content: '<fieldset><legend><script>Preferred contact</script></legend><input id="email" type="radio" name="contact"><label for="email"><style>Email</style></label><input id="phone" type="radio" name="contact"><label for="phone"><template>Phone</template></label></fieldset>',
     }])
-    expect(nonRenderedText.checks.every((check) => !check.passed)).toBe(true)
+    expect(nonRenderedText.checks).toEqual([
+      { label: 'Add the Preferred contact group label', passed: false },
+      { label: 'Add Email and Phone radio choices', passed: false },
+    ])
   })
 
   it('does not mistake roster formatter declarations for calls', () => {
@@ -169,7 +181,7 @@ describe('practice challenge catalog', () => {
       'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nputs "Roster: ANA, BEN"\n',
       'javascript-format-roster': 'function formatName(name) { return name.toUpperCase() }\nconsole.log("Roster: ANA, BEN")\n',
       'python-format-roster': 'def format_name(name):\n    return name.upper()\nprint("Roster: ANA, BEN")\n',
-      'java-format-roster': 'class Main { static String formatName(String name) { return name.toUpperCase(); } public static void main(String[] args) { System.out.println("Roster: ANA, BEN"); } }',
+      'java-format-roster': 'class Main { public static String formatName(final String name) { return name.toUpperCase(); } public static void main(String[] args) { System.out.println("Roster: ANA, BEN"); } }',
     }
 
     Object.entries(declarationOnly).forEach(([challengeId, content]) => {
@@ -183,6 +195,21 @@ describe('practice challenge catalog', () => {
       expect(result.checks.find((check) => check.label.includes('Call format'))?.passed, challengeId).toBe(false)
       expect(result.passed).toBe(false)
     })
+  })
+
+  it.each([
+    ['ruby-count-priorities', 'main.rb', 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n'],
+    ['python-count-priorities', 'main.py', 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\nfor priority in priorities:\n    pass\nif priority == "high":\n    high_count += 1\nprint("High priority: 2")\n'],
+    ['java-count-priorities', 'Main.java', 'class Main { public static void main(String[] args) { String[] priorities = {"high", "low", "high", "medium"}; int highCount = 0; for (String priority : priorities) {} if ("high".equals(priority)) highCount++; System.out.println("High priority: 2"); } }'],
+  ])('requires %s priority counting to happen inside one loop', (challengeId, path, content) => {
+    const challenge = practiceChallengeById(challengeId)!
+    const language = challenge.project.files.find((file) => file.path === path)!.language
+    const result = evaluatePracticeChallenge(challenge, [{ path, language, content }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
   })
 
   it('requires strict equality when counting JavaScript priorities', () => {
