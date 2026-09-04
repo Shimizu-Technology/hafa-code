@@ -244,9 +244,16 @@ describe('practice challenge catalog', () => {
 
   it('extracts every executable handler for a standalone receiver', () => {
     const clickBodies = eventHandlerBody('openButton', 'click')
-    const source = '// openButton.addEventListener("click", () => { fake() })\n/* { openButton.addEventListener("click", () => { fake() }) } */\nother.openButton.addEventListener("click", () => { wrong() })\nopenButton.addEventListener("click", () => { first() })\nopenButton.addEventListener("click", () => { second() })\n'
+    const source = '// openButton.addEventListener("click", () => { fake() })\n/* { openButton.addEventListener("click", () => { fake() }) } */\nother.\n  openButton.addEventListener("click", () => { wrong() })\nopenButton.addEventListener("click", () => { first() })\nopenButton.addEventListener("click", () => { second() })\n'
 
     expect(clickBodies(source)).toBe(' first() \n second() ')
+  })
+
+  it('resolves named handlers from the listener registration lexical scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() {}\nopenButton.addEventListener("click", handleOpen)\nif (false) { function handleOpen() { dialog.showModal() } }\n'
+
+    expect(clickBodies(source)).toBe('')
   })
 
   it('accepts required theme operations split across two live click handlers', () => {

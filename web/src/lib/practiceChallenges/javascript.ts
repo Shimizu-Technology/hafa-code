@@ -1,81 +1,133 @@
-import { tokenizer } from 'acorn'
+import { parse, type Node } from 'acorn'
 
-/** Preserves JavaScript structure while masking literal tokens without changing offsets. */
-function executableStructure(source: string) {
-  const structure = source.split('')
-  const comments: Array<{ start: number; end: number }> = []
-  try {
-    const tokens = tokenizer(source, {
-      ecmaVersion: 'latest',
-      onComment: (_isBlock, _text, start, end) => comments.push({ start, end }),
-    })
-    while (true) {
-      const token = tokens.getToken()
-      if (token.type.label === 'eof') break
-      if (!['regexp', 'string', 'template'].includes(token.type.label)) continue
-      for (let index = token.start; index < token.end; index += 1) {
-        if (structure[index] !== '\n') structure[index] = ' '
-      }
+type SyntaxNode = Node & Record<string, unknown>
+
+type Scope = {
+  parent?: Scope
+  bindings: Map<string, SyntaxNode>
+}
+
+function isNode(value: unknown): value is SyntaxNode {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as { type?: unknown }).type === 'string'
+    && typeof (value as { start?: unknown }).start === 'number'
+    && typeof (value as { end?: unknown }).end === 'number'
+}
+
+function childNodes(node: SyntaxNode) {
+  return Object.values(node).flatMap((value) => {
+    if (isNode(value)) return [value]
+    if (Array.isArray(value)) return value.filter(isNode)
+    return []
+  })
+}
+
+function isFunction(node: SyntaxNode) {
+  return ['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression'].includes(node.type)
+}
+
+function identifierName(node: unknown) {
+  return isNode(node) && node.type === 'Identifier' && typeof node.name === 'string'
+    ? node.name
+    : undefined
+}
+
+function createScope(parent?: Scope): Scope {
+  return { parent, bindings: new Map() }
+}
+
+function indexScopes(root: SyntaxNode) {
+  const scopes = new WeakMap<SyntaxNode, Scope>()
+  const rootScope = createScope()
+
+  const visit = (node: SyntaxNode, inheritedScope: Scope) => {
+    if (node.type === 'FunctionDeclaration') {
+      const name = identifierName(node.id)
+      if (name) inheritedScope.bindings.set(name, node)
     }
-    comments.forEach(({ start, end }) => {
-      for (let index = start; index < end; index += 1) {
-        if (structure[index] !== '\n') structure[index] = ' '
-      }
-    })
-  } catch {
-    return ''
+
+    let scope = inheritedScope
+    if (node !== root && (node.type === 'BlockStatement' || isFunction(node))) {
+      scope = createScope(inheritedScope)
+    }
+    scopes.set(node, scope)
+
+    if (node.type === 'VariableDeclarator' && isNode(node.init) && isFunction(node.init)) {
+      const name = identifierName(node.id)
+      if (name) scope.bindings.set(name, node.init)
+    }
+
+    childNodes(node).forEach((child) => visit(child, scope))
   }
-  return structure.join('')
+
+  visit(root, rootScope)
+  return scopes
 }
 
-function closingBraceIndex(structure: string, openingBrace: number) {
-  let depth = 1
-  for (let index = openingBrace + 1; index < structure.length; index += 1) {
-    if (structure[index] === '{') depth += 1
-    if (structure[index] === '}') depth -= 1
-    if (depth === 0) return index
+function resolveBinding(scope: Scope | undefined, name: string) {
+  let current = scope
+  while (current) {
+    const binding = current.bindings.get(name)
+    if (binding) return binding
+    current = current.parent
   }
-  return -1
+  return undefined
 }
 
-function bracedBody(source: string, openingBrace: number) {
-  const closingBrace = closingBraceIndex(executableStructure(source), openingBrace)
-  return closingBrace === -1 ? '' : source.slice(openingBrace + 1, closingBrace)
+function functionBody(source: string, callback: SyntaxNode | undefined) {
+  if (!callback || !isFunction(callback) || !isNode(callback.body)) return ''
+  const body = callback.body
+  return body.type === 'BlockStatement'
+    ? source.slice(body.start + 1, body.end - 1)
+    : source.slice(body.start, body.end)
 }
 
-function executableMatches(source: string, pattern: RegExp) {
-  const structure = executableStructure(source)
-  pattern.lastIndex = 0
-  const matches: RegExpExecArray[] = []
-  let match = pattern.exec(source)
-  while (match) {
-    if (structure[match.index] === source[match.index]) matches.push(match)
-    match = pattern.exec(source)
+function listenerCallback(
+  node: SyntaxNode,
+  receiver: string,
+  eventName: string,
+  scope: Scope | undefined,
+) {
+  if (node.type !== 'CallExpression' || !isNode(node.callee)) return undefined
+  const callee = node.callee
+  if (callee.type !== 'MemberExpression' || identifierName(callee.object) !== receiver) return undefined
+
+  const propertyName = callee.computed
+    ? isNode(callee.property) && callee.property.type === 'Literal' && callee.property.value === 'addEventListener'
+      ? 'addEventListener'
+      : undefined
+    : identifierName(callee.property)
+  if (propertyName !== 'addEventListener' || !Array.isArray(node.arguments)) return undefined
+
+  const [event, callback] = node.arguments
+  if (!isNode(event) || event.type !== 'Literal' || event.value !== eventName || !isNode(callback)) {
+    return undefined
   }
-  return matches
+  if (isFunction(callback)) return callback
+
+  const callbackName = identifierName(callback)
+  return callbackName ? resolveBinding(scope, callbackName) : undefined
 }
 
-/** Creates a scope that returns only the requested receiver's inline or named event handler body. */
+/** Returns bodies from live listeners on the exact receiver, with named callbacks resolved lexically. */
 export function eventHandlerBody(receiver: string, eventName: string) {
-  const escapedReceiver = receiver.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const escapedEvent = eventName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
   return (source: string) => {
-    const standaloneReceiver = `(?<![$.\\w])${escapedReceiver}`
-    const inlineStart = new RegExp(`${standaloneReceiver}\\s*\\.\\s*addEventListener\\s*\\(\\s*["']${escapedEvent}["']\\s*,\\s*(?:(?:function(?:\\s+[$\\w]+)?\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>))\\s*\\{`, 'g')
-    const bodies = executableMatches(source, inlineStart).map((match) => (
-      bracedBody(source, match.index + match[0].lastIndexOf('{'))
-    ))
+    let root: SyntaxNode
+    try {
+      root = parse(source, { ecmaVersion: 'latest', sourceType: 'script' }) as unknown as SyntaxNode
+    } catch {
+      return ''
+    }
 
-    const namedListener = new RegExp(`${standaloneReceiver}\\s*\\.\\s*addEventListener\\s*\\(\\s*["']${escapedEvent}["']\\s*,\\s*([$A-Z_a-z][$\\w]*)\\s*\\)`, 'g')
-    executableMatches(source, namedListener).forEach((listener) => {
-      const escapedCallback = listener[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const namedStart = new RegExp(`(?:function\\s+${escapedCallback}\\s*\\([^)]*\\)|(?:const|let|var)\\s+${escapedCallback}\\s*=\\s*(?:(?:function\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>)))\\s*\\{`, 'g')
-      executableMatches(source, namedStart).forEach((match) => {
-        bodies.push(bracedBody(source, match.index + match[0].lastIndexOf('{')))
-      })
-    })
-
+    const scopes = indexScopes(root)
+    const bodies: string[] = []
+    const visit = (node: SyntaxNode) => {
+      const callback = listenerCallback(node, receiver, eventName, scopes.get(node))
+      if (callback) bodies.push(functionBody(source, callback))
+      childNodes(node).forEach(visit)
+    }
+    visit(root)
     return bodies.join('\n')
   }
 }
