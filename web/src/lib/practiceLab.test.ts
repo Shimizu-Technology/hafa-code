@@ -258,6 +258,7 @@ describe('practice challenge catalog', () => {
     'note = %q{do}',
     'note = %{do}',
     'note = <<~TEXT\ndo\nTEXT',
+    "note = <<~'TEXT-END'\ndo\nTEXT-END",
   ])('ignores Ruby string content that looks like a block opener: %s', (literal) => {
     const challenge = practiceChallengeById('ruby-count-priorities')!
     const source = `priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  ${literal.replace(/\n/g, '\n  ')}\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n`

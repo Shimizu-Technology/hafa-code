@@ -177,9 +177,9 @@ function withoutRubyRegexLiterals(source: string) {
 /** Masks Ruby heredoc bodies so their prose cannot be interpreted as executable tokens. */
 function withoutRubyHeredocBodies(source: string) {
   const structure = source.split('')
-  const heredocStart = /<<([-~]?)(?:["'`]([A-Z_a-z]\w*)["'`]|([A-Z_a-z]\w*))/g
+  const heredocStart = /<<([-~]?)(?:(["'`])([^\n]+?)\2|([A-Z_a-z]\w*))/g
   for (const match of source.matchAll(heredocStart)) {
-    const delimiter = match[2] ?? match[3]
+    const delimiter = match[3] ?? match[4]
     const contentStart = source.indexOf('\n', match.index + match[0].length)
     if (contentStart === -1) continue
     const escapedDelimiter = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
