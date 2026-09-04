@@ -3,6 +3,7 @@ import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
+import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -18,14 +19,14 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
+  it('offers five exercises at every difficulty for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
-      expect(challenges).toHaveLength(11)
+      expect(challenges).toHaveLength(15)
       expect(challenges.map((challenge) => challenge.difficulty)).toEqual([
         'Starter', 'Starter', 'Starter', 'Starter', 'Starter',
         'Builder', 'Builder', 'Builder', 'Builder', 'Builder',
-        'Stretch',
+        'Stretch', 'Stretch', 'Stretch', 'Stretch', 'Stretch',
       ])
       challenges.forEach((challenge) => {
         expect(challenge.project.files.some((file) => file.path === challenge.project.entryPath)).toBe(true)
@@ -39,7 +40,7 @@ describe('practice challenge catalog', () => {
     const first = practiceChallengeById('java-variables-greeting')!
     const second = practiceChallengeById('java-arithmetic-total')!
     const third = practiceChallengeById('java-conditional-access')!
-    const last = practiceChallengeById('java-method-condition')!
+    const last = practiceChallengeById('java-sort-requests')!
     const everyJavaChallenge = practiceChallengesFor('java').map((challenge) => challenge.id)
 
     expect(nextIncompletePracticeChallenge(first, [first.id])).toBe(second)
@@ -120,6 +121,62 @@ describe('practice challenge catalog', () => {
 
     expect(ADDITIONAL_BUILDER_CHALLENGES).toHaveLength(20)
     ADDITIONAL_BUILDER_CHALLENGES.forEach((challenge) => {
+      const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(unfinished.passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const source = runtimeSolutions[challenge.id]
+      const files = source
+        ? challenge.project.files.map((file) => file.path === challenge.project.entryPath ? { ...file, content: source } : file)
+        : challenge.project.files.map((file) => ({ ...file, content: webSolutions[challenge.id]?.[file.path] ?? file.content }))
+      const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
+    })
+  })
+
+  it('gives every additional Stretch an unfinished scaffold and a valid reference solution', () => {
+    const runtimeSolutions: Record<string, string> = {
+      'ruby-ticket-class': 'class SupportTicket\n  def initialize(customer, priority)\n    @customer = customer\n    @priority = priority\n  end\n  def summary\n    "#{@customer} | #{@priority}"\n  end\nend\nticket = SupportTicket.new("Mia", "high")\nputs ticket.summary\n',
+      'ruby-transfer-errors': 'def transfer_status(amount)\n  raise ArgumentError, "Amount must be positive" if amount <= 0\n  "Transfer: $#{amount}"\nend\nputs transfer_status(75)\nbegin\n  transfer_status(-1)\nrescue ArgumentError => error\n  puts "Error: #{error.message}"\nend\n',
+      'ruby-transaction-totals': 'transactions = [{ category: "Food", amount: 12 }, { category: "Travel", amount: 5 }, { category: "Food", amount: 8 }]\ntotals = Hash.new(0)\ntransactions.each do |transaction|\n  totals[transaction[:category]] += transaction[:amount]\nend\nputs "Food: #{totals["Food"]}"\nputs "Travel: #{totals["Travel"]}"\n',
+      'ruby-sort-requests': 'requests = [{ name: "Card question", priority: 1 }, { name: "Password reset", priority: 3 }, { name: "Address update", priority: 2 }]\nranked = requests.sort_by { |request| -request[:priority] }\nputs ranked.map { |request| request[:name] }.join(" > ")\n',
+      'javascript-ticket-class': 'class SupportTicket {\n  constructor(customer, priority) { this.customer = customer; this.priority = priority }\n  summary() { return `${this.customer} | ${this.priority}` }\n}\nconst ticket = new SupportTicket("Mia", "high")\nconsole.log(ticket.summary())\n',
+      'javascript-transfer-errors': 'function transferStatus(amount) {\n  if (amount <= 0) throw new Error("Amount must be positive")\n  return `Transfer: $${amount}`\n}\nconsole.log(transferStatus(75))\ntry { transferStatus(-1) } catch (error) { console.log(`Error: ${error.message}`) }\n',
+      'javascript-transaction-totals': 'const transactions = [{ category: "Food", amount: 12 }, { category: "Travel", amount: 5 }, { category: "Food", amount: 8 }]\nconst totals = {}\nfor (const transaction of transactions) { totals[transaction.category] = (totals[transaction.category] || 0) + transaction.amount }\nconsole.log(`Food: ${totals.Food}`)\nconsole.log(`Travel: ${totals.Travel}`)\n',
+      'javascript-sort-requests': 'const requests = [{ name: "Card question", priority: 1 }, { name: "Password reset", priority: 3 }, { name: "Address update", priority: 2 }]\nconst ranked = requests.sort((a, b) => b.priority - a.priority)\nconsole.log(ranked.map((request) => request.name).join(" > "))\n',
+      'python-ticket-class': 'class SupportTicket:\n    def __init__(self, customer, priority):\n        self.customer = customer\n        self.priority = priority\n    def summary(self):\n        return f"{self.customer} | {self.priority}"\nticket = SupportTicket("Mia", "high")\nprint(ticket.summary())\n',
+      'python-transfer-errors': 'def transfer_status(amount):\n    if amount <= 0:\n        raise ValueError("Amount must be positive")\n    return f"Transfer: ${amount}"\nprint(transfer_status(75))\ntry:\n    transfer_status(-1)\nexcept ValueError as error:\n    print(f"Error: {error}")\n',
+      'python-transaction-totals': 'transactions = [{"category": "Food", "amount": 12}, {"category": "Travel", "amount": 5}, {"category": "Food", "amount": 8}]\ntotals = {}\nfor transaction in transactions:\n    totals[transaction["category"]] = totals.get(transaction["category"], 0) + transaction["amount"]\nprint(f"Food: {totals[\'Food\']}")\nprint(f"Travel: {totals[\'Travel\']}")\n',
+      'python-sort-requests': 'requests = [{"name": "Card question", "priority": 1}, {"name": "Password reset", "priority": 3}, {"name": "Address update", "priority": 2}]\nranked = sorted(requests, key=lambda request: request["priority"], reverse=True)\nprint(" > ".join([request["name"] for request in ranked]))\n',
+      'java-ticket-class': 'public class Main { public static void main(String[] args) { SupportTicket ticket = new SupportTicket("Mia", "high"); System.out.println(ticket.summary()); } }\nclass SupportTicket { String customer; String priority; SupportTicket(String customer, String priority) { this.customer = customer; this.priority = priority; } String summary() { return customer + " | " + priority; } }\n',
+      'java-transfer-errors': 'public class Main {\nstatic String transferStatus(int amount) { if (amount <= 0) throw new IllegalArgumentException("Amount must be positive"); return "Transfer: $" + amount; }\npublic static void main(String[] args) { System.out.println(transferStatus(75)); try { transferStatus(-1); } catch (IllegalArgumentException error) { System.out.println("Error: " + error.getMessage()); } }\n}\n',
+      'java-transaction-totals': 'import java.util.LinkedHashMap; import java.util.Map;\npublic class Main { public static void main(String[] args) { String[] categories = {"Food", "Travel", "Food"}; int[] amounts = {12, 5, 8}; Map<String, Integer> totals = new LinkedHashMap<>(); for (int index = 0; index < categories.length; index++) { totals.put(categories[index], totals.getOrDefault(categories[index], 0) + amounts[index]); } System.out.println("Food: " + totals.get("Food")); System.out.println("Travel: " + totals.get("Travel")); } }\n',
+      'java-sort-requests': 'import java.util.ArrayList; import java.util.Collections; import java.util.List;\npublic class Main { public static void main(String[] args) { List<ServiceRequest> requests = new ArrayList<>(); requests.add(new ServiceRequest("Card question", 1)); requests.add(new ServiceRequest("Password reset", 3)); requests.add(new ServiceRequest("Address update", 2)); Collections.sort(requests); System.out.println(requests.get(0).name + " > " + requests.get(1).name + " > " + requests.get(2).name); } }\nclass ServiceRequest implements Comparable<ServiceRequest> { String name; int priority; ServiceRequest(String name, int priority) { this.name = name; this.priority = priority; } public int compareTo(ServiceRequest other) { return Integer.compare(other.priority, this.priority); } }\n',
+    }
+    const webSolutions: Record<string, Record<string, string>> = {
+      'web-accessible-dialog': {
+        'index.html': '<main><h1>Help center</h1><button id="open-help">Open help</button><dialog id="help-dialog" aria-labelledby="help-title"><h2 id="help-title">Quick help</h2><form method="dialog"><button>Close</button></form></dialog></main>',
+        'script.js': 'const openButton = document.querySelector("#open-help")\nconst dialog = document.querySelector("#help-dialog")\nopenButton.addEventListener("click", () => { dialog.showModal() })',
+      },
+      'web-validated-form': {
+        'index.html': '<main><form><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button>Join</button></form></main>',
+        'script.js': 'const form = document.querySelector("form")\nconst error = document.querySelector("#email-error")\nform.addEventListener("submit", (event) => { if (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" } })',
+      },
+      'web-theme-toggle': {
+        'index.html': '<main><button id="theme-toggle" aria-pressed="false">Dark theme</button></main>',
+        'script.js': 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { const isDark = document.body.classList.toggle("dark-theme"); toggle.setAttribute("aria-pressed", String(isDark)) })',
+      },
+      'web-dynamic-task-list': {
+        'index.html': '<main><label for="task-input">Task</label><input id="task-input"><button id="add-task">Add task</button><ul id="task-list"></ul></main>',
+        'script.js': 'const input = document.querySelector("#task-input")\nconst button = document.querySelector("#add-task")\nconst list = document.querySelector("#task-list")\nbutton.addEventListener("click", () => { const item = document.createElement("li"); item.textContent = input.value.trim(); list.append(item); input.value = "" })',
+      },
+    }
+
+    expect(ADDITIONAL_STRETCH_CHALLENGES).toHaveLength(20)
+    ADDITIONAL_STRETCH_CHALLENGES.forEach((challenge) => {
       const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
         status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
       } : undefined)
