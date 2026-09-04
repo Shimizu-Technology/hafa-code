@@ -16,6 +16,8 @@ export interface PracticeFileCheck {
   domCheck?: (document: Document) => boolean
   scope?: (source: string) => string
   ignoreStrings?: boolean
+  /** Use only when a check contains learner-authored display text, not programming syntax. */
+  matchLearnerText?: boolean
 }
 
 const CLICK_HANDLER_BODY = eventHandlerBody('button', 'click')
@@ -386,8 +388,26 @@ function sourceWithoutStringContents(source: string) {
   return result
 }
 
+/** Folds keyboard-equivalent accents and punctuation without changing semantic characters. */
+function normalizeLearnerText(text: string) {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019\u201a\u201b\u2032\u2035]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u201f\u2033\u2036]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/\p{Zs}/gu, ' ')
+}
+
+/** Normalizes learner-facing output while preserving line and semantic exactness. */
 function normalizeOutput(output: string) {
-  return output.replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n').trim()
+  return normalizeLearnerText(output)
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim()
 }
 
 /** Checks source requirements first, then runtime output when the challenge has an executable result. */
@@ -402,7 +422,8 @@ export function evaluatePracticeChallenge(challenge: PracticeChallenge, files: P
     }
     const commentFreeSource = file ? sourceWithoutComments(file) : ''
     const scopedSource = check.scope ? check.scope(commentFreeSource) : commentFreeSource
-    const source = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
+    const comparableSource = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
+    const source = check.matchLearnerText ? normalizeLearnerText(comparableSource) : comparableSource
     return { label: check.label, passed: Boolean(file && check.pattern?.test(source)) }
   })
 

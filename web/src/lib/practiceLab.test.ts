@@ -320,6 +320,126 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(true)
   })
 
+  it.each([
+    {
+      id: 'ruby-array-stops',
+      source: 'stops = ["Hagatna", "Tamuning", "Dededo"]\nputs "First stop: #{stops.first}"\nputs "Total stops: #{stops.length}"\n',
+      stdout: 'First stop: Hagatna\nTotal stops: 3',
+    },
+    {
+      id: 'javascript-array-stops',
+      source: 'const stops = ["Hagatna", "Tamuning", "Dededo"]\nconsole.log(`First stop: ${stops[0]}`)\nconsole.log(`Total stops: ${stops.length}`)\n',
+      stdout: 'First stop: Hagatna\nTotal stops: 3',
+    },
+    {
+      id: 'python-list-stops',
+      source: 'stops = ["Hagatna", "Tamuning", "Dededo"]\nprint(f"First stop: {stops[0]}")\nprint(f"Total stops: {len(stops)}")\n',
+      stdout: 'First stop: Hagatna\nTotal stops: 3',
+    },
+    {
+      id: 'java-array-stops',
+      source: 'class Main { public static void main(String[] args) { String[] stops = {"Hagatna", "Tamuning", "Dededo"}; System.out.println("First stop: " + stops[0]); System.out.println("Total stops: " + stops.length); } }',
+      stdout: 'First stop: Hagatna\nTotal stops: 3',
+    },
+    {
+      id: 'ruby-hash-district',
+      source: 'districts = { "H" => "Hagatna", "T" => "Tamuning", "D" => "Dededo" }\nputs "District T: #{districts["T"]}"\n',
+      stdout: 'District T: Tamuning',
+    },
+    {
+      id: 'javascript-object-district',
+      source: 'const districts = { H: "Hagatna", T: "Tamuning", D: "Dededo" }\nconsole.log(`District T: ${districts.T}`)\n',
+      stdout: 'District T: Tamuning',
+    },
+    {
+      id: 'python-dict-district',
+      source: 'districts = { "H": "Hagatna", "T": "Tamuning", "D": "Dededo" }\nprint(f"District T: {districts[\'T\']}")\n',
+      stdout: 'District T: Tamuning',
+    },
+    {
+      id: 'java-map-district',
+      source: 'import java.util.*; class Main { public static void main(String[] args) { Map<String, String> districts = new HashMap<>(); districts.put("H", "Hagatna"); districts.put("T", "Tamuning"); districts.put("D", "Dededo"); System.out.println("District T: " + districts.get("T")); } }',
+      stdout: 'District T: Tamuning',
+    },
+  ])('accepts plain-keyboard text in $id', ({ id, source, stdout }) => {
+    const challenge = practiceChallengeById(id)!
+    const files = challenge.project.files.map((file) => (
+      file.path === challenge.project.entryPath ? { ...file, content: source } : file
+    ))
+    const result = evaluatePracticeChallenge(challenge, files, {
+      status: 'success', stdout, stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed, JSON.stringify(result.checks)).toBe(true)
+  })
+
+  it('still requires the requested code structure when learner text is normalized', () => {
+    const challenge = practiceChallengeById('java-array-stops')!
+    const source = 'class Main { public static void main(String[] args) { String first = "Hagatna"; System.out.println("First stop: " + first); System.out.println("Total stops: 3"); } }'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'First stop: Hagatna\nTotal stops: 3', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Create the three-stop String array')?.passed).toBe(false)
+    expect(result.checks.find((check) => check.label.startsWith('Output matches'))?.passed).toBe(true)
+    expect(result.passed).toBe(false)
+  })
+
+  it('treats equivalent Unicode, spaces, and common keyboard punctuation as the same learner text', () => {
+    const base = practiceChallengeById('ruby-variables-greeting')!
+    const challenge = {
+      ...base,
+      checks: [],
+      expectedOutput: 'Hagåtña says: “Ready”—now…',
+    }
+    const result = evaluatePracticeChallenge(challenge, [], {
+      status: 'success',
+      stdout: 'Haga\u030Atn\u0303a\u1680says: "Ready"-now...',
+      stderr: '',
+      durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it.each([
+    ['different capitalization', 'access granted!'],
+    ['missing meaningful punctuation', 'Access granted'],
+    ['different wording', 'Access approved!'],
+  ])('still rejects %s in learner output', (_description, stdout) => {
+    const base = practiceChallengeById('ruby-variables-greeting')!
+    const challenge = { ...base, checks: [], expectedOutput: 'Access granted!' }
+    const result = evaluatePracticeChallenge(challenge, [], {
+      status: 'success', stdout, stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(false)
+  })
+
+  it('does not fold compatibility characters into semantic values', () => {
+    const base = practiceChallengeById('ruby-variables-greeting')!
+    const challenge = { ...base, checks: [], expectedOutput: 'Stop 2' }
+    const result = evaluatePracticeChallenge(challenge, [], {
+      status: 'success', stdout: 'Stop ²', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(false)
+  })
+
+  it.each([
+    ['a non-Latin combining mark', 'Haga\u094Dtna'],
+    ['an emoji variation selector', 'Haga\uFE0Ftna'],
+  ])('does not discard %s during source checks', (_description, stopName) => {
+    const challenge = practiceChallengeById('java-array-stops')!
+    const source = `class Main { public static void main(String[] args) { String[] stops = {"${stopName}", "Tamuning", "Dededo"}; System.out.println("First stop: " + stops[0]); System.out.println("Total stops: " + stops.length); } }`
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'First stop: Hagatna\nTotal stops: 3', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Create the three-stop String array')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
   it('requires visible labels for grouped Web contact choices', () => {
     const challenge = practiceChallengeById('web-group-contact-options')!
     const result = evaluatePracticeChallenge(challenge, [{
