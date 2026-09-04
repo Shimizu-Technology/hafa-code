@@ -179,6 +179,7 @@ function withoutRubyHeredocBodies(source: string) {
   const structure = source.split('')
   const heredocStart = /<<([-~]?)(?:(["'`])([^\n]+?)\2|([A-Z_a-z]\w*))/g
   for (const match of source.matchAll(heredocStart)) {
+    if (structure[match.index] === ' ') continue
     const delimiter = match[3] ?? match[4]
     const contentStart = source.indexOf('\n', match.index + match[0].length)
     if (contentStart === -1) continue

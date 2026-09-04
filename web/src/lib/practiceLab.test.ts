@@ -280,6 +280,16 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(true)
   })
 
+  it('ignores nested heredoc-like text without masking code after the outer terminator', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  note = <<~OUTER\n  <<~\'MARK-DONE\'\n  OUTER\n  if priority == "high"\n    high_count += 1\n  end\nMARK-DONE\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
   it('requires strict equality when counting JavaScript priorities', () => {
     const challenge = practiceChallengeById('javascript-count-priorities')!
     const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (priority == "high") highCount++; } console.log(`High priority: ${highCount}`);'
