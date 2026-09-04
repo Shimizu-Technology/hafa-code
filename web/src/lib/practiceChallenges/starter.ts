@@ -38,7 +38,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
     hints: ['An array uses square brackets: `["one", "two"]`.', 'Read the first item with `stops[0]` or `stops.first`, and its size with `stops.length`.'],
     project: { title: 'Practice · Ruby Stop List', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: 'stops = []\n\nputs "First stop: "\nputs "Total stops: 0"\n' }] },
     checks: [
-      { filePath: 'main.rb', label: 'Create the three-stop array', pattern: /\bstops\s*=\s*\[\s*["']Hagåtña["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/ },
+      { filePath: 'main.rb', label: 'Create the three-stop array', pattern: /\bstops\s*=\s*\[\s*["']Hagatna["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/, matchLearnerText: true },
       { filePath: 'main.rb', label: 'Read the first stop from the array', pattern: /\bstops\s*(?:\[\s*0\s*\]|\.first\b)/ },
       { filePath: 'main.rb', label: 'Read the array size', pattern: /\bstops\.(?:length|size)\b/ },
     ],
@@ -92,7 +92,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
     hints: ['An array uses square brackets: `["one", "two"]`.', 'The first item is `stops[0]`; the item count is `stops.length`.'],
     project: { title: 'Practice · JavaScript Stop List', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const stops = []\n\nconsole.log("First stop: ")\nconsole.log("Total stops: 0")\n' }] },
     checks: [
-      { filePath: 'main.js', label: 'Create the three-stop array', pattern: /\bstops\s*=\s*\[\s*["']Hagåtña["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/ },
+      { filePath: 'main.js', label: 'Create the three-stop array', pattern: /\bstops\s*=\s*\[\s*["']Hagatna["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/, matchLearnerText: true },
       { filePath: 'main.js', label: 'Read the first stop from the array', pattern: /\bstops\s*\[\s*0\s*\]/ },
       { filePath: 'main.js', label: 'Read the array length', pattern: /\bstops\.length\b/ },
     ],
@@ -147,7 +147,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
     hints: ['A list uses square brackets: `["one", "two"]`.', 'The first item is `stops[0]`; count items with `len(stops)`.'],
     project: { title: 'Practice · Python Stop List', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: 'stops = []\n\nprint("First stop: ")\nprint("Total stops: 0")\n' }] },
     checks: [
-      { filePath: 'main.py', label: 'Create the three-stop list', pattern: /\bstops\s*=\s*\[\s*["']Hagåtña["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/ },
+      { filePath: 'main.py', label: 'Create the three-stop list', pattern: /\bstops\s*=\s*\[\s*["']Hagatna["']\s*,\s*["']Tamuning["']\s*,\s*["']Dededo["']\s*\]/, matchLearnerText: true },
       { filePath: 'main.py', label: 'Read the first stop from the list', pattern: /\bstops\s*\[\s*0\s*\]/ },
       { filePath: 'main.py', label: 'Read the list length', pattern: /\blen\s*\(\s*stops\s*\)/ },
     ],
@@ -202,7 +202,7 @@ export const ADDITIONAL_STARTER_CHALLENGES: PracticeChallenge[] = [
     hints: ['Create it with `String[] stops = { ... };`.', 'The first item is `stops[0]`; an array count is `stops.length`.'],
     project: { title: 'Practice · Java Stop Array', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'public class Main {\n  public static void main(String[] args) {\n    String[] stops = {};\n\n    System.out.println("First stop: ");\n    System.out.println("Total stops: 0");\n  }\n}\n' }] },
     checks: [
-      { filePath: 'Main.java', label: 'Create the three-stop String array', pattern: /\bString\s*\[\s*\]\s+stops\s*=\s*\{\s*"Hagåtña"\s*,\s*"Tamuning"\s*,\s*"Dededo"\s*\}\s*;/ },
+      { filePath: 'Main.java', label: 'Create the three-stop String array', pattern: /\bString\s*\[\s*\]\s+stops\s*=\s*\{\s*"Hagatna"\s*,\s*"Tamuning"\s*,\s*"Dededo"\s*\}\s*;/, matchLearnerText: true },
       { filePath: 'Main.java', label: 'Read the first stop from the array', pattern: /\bstops\s*\[\s*0\s*\]/, ignoreStrings: true },
       { filePath: 'Main.java', label: 'Read the array length', pattern: /\bstops\.length\b/, ignoreStrings: true },
     ],

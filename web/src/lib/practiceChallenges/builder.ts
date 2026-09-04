@@ -320,7 +320,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Ruby District Lookup', entryPath: 'main.rb', files: [{ path: 'main.rb', language: 'ruby', content: 'districts = {}\n\nputs "District T: unknown"\n' }] },
     checks: [
       { filePath: 'main.rb', label: 'Create the district hash', pattern: /\bdistricts\s*=\s*\{/ },
-      { filePath: 'main.rb', label: 'Map H to Hagåtña', pattern: /["']H["']\s*=>\s*["']Hagåtña["']/ },
+      { filePath: 'main.rb', label: 'Map H to Hagåtña', pattern: /["']H["']\s*=>\s*["']Hagatna["']/, matchLearnerText: true },
       { filePath: 'main.rb', label: 'Map T to Tamuning', pattern: /["']T["']\s*=>\s*["']Tamuning["']/ },
       { filePath: 'main.rb', label: 'Map D to Dededo', pattern: /["']D["']\s*=>\s*["']Dededo["']/ },
       { filePath: 'main.rb', label: 'Look up district T', pattern: /\bdistricts\s*\[\s*["']T["']\s*\]/ },
@@ -376,7 +376,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · JavaScript District Lookup', entryPath: 'main.js', files: [{ path: 'main.js', language: 'javascript', content: 'const districts = {}\n\nconsole.log("District T: unknown")\n' }] },
     checks: [
       { filePath: 'main.js', label: 'Create the district object', pattern: /\bdistricts\s*=\s*\{/ },
-      { filePath: 'main.js', label: 'Map H to Hagåtña', pattern: /(?:\bH|["']H["'])\s*:\s*["']Hagåtña["']/ },
+      { filePath: 'main.js', label: 'Map H to Hagåtña', pattern: /(?:\bH|["']H["'])\s*:\s*["']Hagatna["']/, matchLearnerText: true },
       { filePath: 'main.js', label: 'Map T to Tamuning', pattern: /(?:\bT|["']T["'])\s*:\s*["']Tamuning["']/ },
       { filePath: 'main.js', label: 'Map D to Dededo', pattern: /(?:\bD|["']D["'])\s*:\s*["']Dededo["']/ },
       { filePath: 'main.js', label: 'Look up district T', pattern: /\bdistricts\s*(?:\.T\b|\[\s*["']T["']\s*\])/ },
@@ -432,7 +432,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Python District Lookup', entryPath: 'main.py', files: [{ path: 'main.py', language: 'python', content: 'districts = {}\n\nprint("District T: unknown")\n' }] },
     checks: [
       { filePath: 'main.py', label: 'Create the district dictionary', pattern: /\bdistricts\s*=\s*\{/ },
-      { filePath: 'main.py', label: 'Map H to Hagåtña', pattern: /["']H["']\s*:\s*["']Hagåtña["']/ },
+      { filePath: 'main.py', label: 'Map H to Hagåtña', pattern: /["']H["']\s*:\s*["']Hagatna["']/, matchLearnerText: true },
       { filePath: 'main.py', label: 'Map T to Tamuning', pattern: /["']T["']\s*:\s*["']Tamuning["']/ },
       { filePath: 'main.py', label: 'Map D to Dededo', pattern: /["']D["']\s*:\s*["']Dededo["']/ },
       { filePath: 'main.py', label: 'Look up district T', pattern: /\bdistricts\s*\[\s*["']T["']\s*\]/ },
@@ -489,7 +489,7 @@ export const ADDITIONAL_BUILDER_CHALLENGES: PracticeChallenge[] = [
     project: { title: 'Practice · Java District Lookup', entryPath: 'Main.java', files: [{ path: 'Main.java', language: 'java', content: 'import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n  public static void main(String[] args) {\n    Map<String, String> districts = new HashMap<>();\n\n    System.out.println("District T: unknown");\n  }\n}\n' }] },
     checks: [
       { filePath: 'Main.java', label: 'Create the typed district map', pattern: /\bMap\s*<\s*String\s*,\s*String\s*>\s+districts\s*=\s*new\s+HashMap\s*<>\s*\(\s*\)/, ignoreStrings: true },
-      { filePath: 'Main.java', label: 'Map H to Hagåtña', pattern: /\bdistricts\.put\s*\(\s*"H"\s*,\s*"Hagåtña"\s*\)/ },
+      { filePath: 'Main.java', label: 'Map H to Hagåtña', pattern: /\bdistricts\.put\s*\(\s*"H"\s*,\s*"Hagatna"\s*\)/, matchLearnerText: true },
       { filePath: 'Main.java', label: 'Map T to Tamuning', pattern: /\bdistricts\.put\s*\(\s*"T"\s*,\s*"Tamuning"\s*\)/ },
       { filePath: 'Main.java', label: 'Map D to Dededo', pattern: /\bdistricts\.put\s*\(\s*"D"\s*,\s*"Dededo"\s*\)/ },
       { filePath: 'Main.java', label: 'Look up district T', pattern: /\bdistricts\.get\s*\(\s*"T"\s*\)/ },
