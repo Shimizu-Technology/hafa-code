@@ -1,9 +1,15 @@
 import type { PracticeChallenge } from '../practiceLab'
 import { isObviouslyHidden, visibleTextContent } from './dom'
+import { eventHandlerBody } from './javascript'
 
 const visibleText = (element: Element | null) => element && !isObviouslyHidden(element)
   ? visibleTextContent(element).replace(/\s+/g, ' ').trim()
   : ''
+
+const OPEN_HELP_HANDLER = eventHandlerBody('openButton', 'click')
+const SUBMIT_EMAIL_HANDLER = eventHandlerBody('submitButton', 'click')
+const THEME_TOGGLE_HANDLER = eventHandlerBody('toggle', 'click')
+const ADD_TASK_HANDLER = eventHandlerBody('button', 'click')
 
 /** Additional capstone-style exercises. The original launch/counter challenge remains first. */
 export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
@@ -260,7 +266,8 @@ export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
         document.querySelector('button#open-help')
         && document.querySelector('dialog#help-dialog form[method="dialog"] button'),
       ) },
-      { filePath: 'script.js', label: 'Open the dialog with showModal', pattern: /\bopenButton\.addEventListener\s*\(\s*["']click["'][\s\S]*\bdialog\.showModal\s*\(\s*\)/ },
+      { filePath: 'script.js', label: 'Select the dialog and open control', pattern: /\b(?:const|let)\s+openButton\s*=\s*document\.querySelector\s*\(\s*["']#open-help["']\s*\)[\s\S]*\b(?:const|let)\s+dialog\s*=\s*document\.querySelector\s*\(\s*["']#help-dialog["']\s*\)/ },
+      { filePath: 'script.js', label: 'Open the dialog from its click handler', pattern: /\bdialog\.showModal\s*\(\s*\)/, scope: OPEN_HELP_HANDLER, ignoreStrings: true },
     ],
   },
   {
@@ -281,7 +288,8 @@ export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
         return Boolean(form && input && visibleText(label ?? null) && form.querySelector('button#join-updates'))
       } },
       { filePath: 'index.html', label: 'Add a live email error message', domCheck: (document) => Boolean(document.querySelector('#email-error[role="status"]')) },
-      { filePath: 'script.js', label: 'Handle and explain an invalid Join action', pattern: /\bsubmitButton\.addEventListener\s*\(\s*["']click["'][\s\S]*!\s*form\.checkValidity\s*\(\s*\)[\s\S]*\.preventDefault\s*\([\s\S]*\berror\.textContent\s*=\s*["']Enter a valid email["']/, ignoreStrings: false },
+      { filePath: 'script.js', label: 'Select the form, Join button, and error message', pattern: /\b(?:const|let)\s+form\s*=\s*document\.querySelector\s*\(\s*["']form["']\s*\)[\s\S]*\b(?:const|let)\s+submitButton\s*=\s*document\.querySelector\s*\(\s*["']#join-updates["']\s*\)[\s\S]*\b(?:const|let)\s+error\s*=\s*document\.querySelector\s*\(\s*["']#email-error["']\s*\)/ },
+      { filePath: 'script.js', label: 'Handle and explain an invalid Join action', pattern: /!\s*form\.checkValidity\s*\(\s*\)[\s\S]*\.preventDefault\s*\([\s\S]*\berror\.textContent\s*=\s*["']Enter a valid email["']/, scope: SUBMIT_EMAIL_HANDLER },
     ],
   },
   {
@@ -300,8 +308,9 @@ export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
         const button = document.querySelector('button#theme-toggle[aria-pressed="false"]')
         return Boolean(button && visibleText(button))
       } },
-      { filePath: 'script.js', label: 'Toggle dark-theme on the body', pattern: /\bdocument\.body\.classList\.toggle\s*\(\s*["']dark-theme["']\s*\)/ },
-      { filePath: 'script.js', label: 'Synchronize aria-pressed', pattern: /\b(?:toggle|button)\.setAttribute\s*\(\s*["']aria-pressed["']\s*,\s*String\s*\(\s*\w+\s*\)\s*\)/ },
+      { filePath: 'script.js', label: 'Select the theme toggle', pattern: /\b(?:const|let)\s+toggle\s*=\s*document\.querySelector\s*\(\s*["']#theme-toggle["']\s*\)/ },
+      { filePath: 'script.js', label: 'Toggle dark-theme from its click handler', pattern: /\bdocument\.body\.classList\.toggle\s*\(\s*["']dark-theme["']\s*\)/, scope: THEME_TOGGLE_HANDLER },
+      { filePath: 'script.js', label: 'Synchronize aria-pressed in the handler', pattern: /\btoggle\.setAttribute\s*\(\s*["']aria-pressed["']\s*,\s*String\s*\(\s*\w+\s*\)\s*\)/, scope: THEME_TOGGLE_HANDLER },
     ],
   },
   {
@@ -321,8 +330,9 @@ export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
         && document.querySelector('button#add-task')
         && document.querySelector('ul#task-list'),
       ) },
-      { filePath: 'script.js', label: 'Create a safe list item from trimmed input', pattern: /\bdocument\.createElement\s*\(\s*["']li["']\s*\)[\s\S]*\bitem\.textContent\s*=\s*input\.value\.trim\s*\(\s*\)/ },
-      { filePath: 'script.js', label: 'Append the item and clear the input', pattern: /\blist\.append\s*\(\s*item\s*\)[\s\S]*\binput\.value\s*=\s*["']["']/ },
+      { filePath: 'script.js', label: 'Select the task controls and list', pattern: /\b(?:const|let)\s+input\s*=\s*document\.querySelector\s*\(\s*["']#task-input["']\s*\)[\s\S]*\b(?:const|let)\s+button\s*=\s*document\.querySelector\s*\(\s*["']#add-task["']\s*\)[\s\S]*\b(?:const|let)\s+list\s*=\s*document\.querySelector\s*\(\s*["']#task-list["']\s*\)/ },
+      { filePath: 'script.js', label: 'Create a safe item inside the click handler', pattern: /\bdocument\.createElement\s*\(\s*["']li["']\s*\)[\s\S]*\bitem\.textContent\s*=\s*input\.value\.trim\s*\(\s*\)/, scope: ADD_TASK_HANDLER },
+      { filePath: 'script.js', label: 'Append the item and clear input in the handler', pattern: /\blist\.append\s*\(\s*item\s*\)[\s\S]*\binput\.value\s*=\s*["']["']/, scope: ADD_TASK_HANDLER },
     ],
   },
 ]

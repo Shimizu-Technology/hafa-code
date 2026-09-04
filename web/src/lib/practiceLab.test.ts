@@ -212,6 +212,35 @@ describe('practice challenge catalog', () => {
     expect(error.textContent).toBe('Enter a valid email')
   })
 
+  it.each([
+    {
+      id: 'web-accessible-dialog',
+      source: 'const openButton = document.querySelector("#open-help")\nconst dialog = document.querySelector("#help-dialog")\nopenButton.addEventListener("click", () => {})\ndialog.showModal()\n',
+      labels: ['Open the dialog from its click handler'],
+    },
+    {
+      id: 'web-validated-form',
+      source: 'const form = document.querySelector("form")\nconst submitButton = document.querySelector("#join-updates")\nconst error = document.querySelector("#email-error")\nsubmitButton.addEventListener("click", () => {})\nif (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" }\n',
+      labels: ['Handle and explain an invalid Join action'],
+    },
+    {
+      id: 'web-theme-toggle',
+      source: 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => {})\nconst isDark = document.body.classList.toggle("dark-theme")\ntoggle.setAttribute("aria-pressed", String(isDark))\n',
+      labels: ['Toggle dark-theme from its click handler', 'Synchronize aria-pressed in the handler'],
+    },
+    {
+      id: 'web-dynamic-task-list',
+      source: 'const input = document.querySelector("#task-input")\nconst button = document.querySelector("#add-task")\nconst list = document.querySelector("#task-list")\nbutton.addEventListener("click", () => {})\nconst item = document.createElement("li")\nitem.textContent = input.value.trim()\nlist.append(item)\ninput.value = ""\n',
+      labels: ['Create a safe item inside the click handler', 'Append the item and clear input in the handler'],
+    },
+  ])('rejects disconnected interaction code for $id', ({ id, source, labels }) => {
+    const challenge = practiceChallengeById(id)!
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: source }])
+
+    labels.forEach((label) => expect(result.checks.find((check) => check.label === label)?.passed).toBe(false))
+    expect(result.passed).toBe(false)
+  })
+
   it('accepts district mappings in any order', () => {
     const challenge = practiceChallengeById('java-map-district')!
     const source = 'import java.util.*; class Main { public static void main(String[] args) { Map<String, String> districts = new HashMap<>(); districts.put("D", "Dededo"); districts.put("H", "Hagåtña"); districts.put("T", "Tamuning"); System.out.println("District T: " + districts.get("T")); } }'
