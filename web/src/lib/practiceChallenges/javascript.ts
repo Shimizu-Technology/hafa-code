@@ -2,9 +2,15 @@ import { parse, type Node } from 'acorn'
 
 type SyntaxNode = Node & Record<string, unknown>
 
+type Binding = {
+  callback?: SyntaxNode
+  availableAtStart?: boolean
+  initializedAt?: number
+}
+
 type Scope = {
   parent?: Scope
-  bindings: Map<string, SyntaxNode>
+  bindings: Map<string, Binding[]>
   acceptsVarBindings: boolean
 }
 
@@ -44,11 +50,15 @@ function nearestVarScope(scope: Scope) {
   return current
 }
 
-function bindPattern(pattern: unknown, binding: SyntaxNode, scope: Scope) {
+function addBinding(scope: Scope, name: string, binding: Binding) {
+  scope.bindings.set(name, [...(scope.bindings.get(name) ?? []), binding])
+}
+
+function bindPattern(pattern: unknown, binding: Binding, scope: Scope) {
   if (!isNode(pattern)) return
   const name = identifierName(pattern)
   if (name) {
-    scope.bindings.set(name, binding)
+    addBinding(scope, name, binding)
     return
   }
 
@@ -73,7 +83,7 @@ function indexScopes(root: SyntaxNode) {
   const visit = (node: SyntaxNode, inheritedScope: Scope, declarationKind?: string) => {
     if (node.type === 'FunctionDeclaration') {
       const name = identifierName(node.id)
-      if (name) inheritedScope.bindings.set(name, node)
+      if (name) addBinding(inheritedScope, name, { callback: node, availableAtStart: true })
     }
 
     let scope = inheritedScope
@@ -85,14 +95,24 @@ function indexScopes(root: SyntaxNode) {
     scopes.set(node, scope)
 
     if (isFunction(node) && Array.isArray(node.params)) {
-      node.params.forEach((parameter) => bindPattern(parameter, isNode(parameter) ? parameter : node, scope))
+      node.params.forEach((parameter) => bindPattern(parameter, { availableAtStart: true }, scope))
+      const selfName = identifierName(node.id)
+      if (selfName) addBinding(scope, selfName, { callback: node, availableAtStart: true })
     }
     if (node.type === 'CatchClause') {
-      bindPattern(node.param, isNode(node.param) ? node.param : node, scope)
+      bindPattern(node.param, { availableAtStart: true }, scope)
     }
     if (node.type === 'VariableDeclarator') {
-      const binding = isNode(node.init) && isFunction(node.init) ? node.init : node
+      const initializer = isNode(node.init) ? node.init : undefined
+      const binding = {
+        callback: initializer && isFunction(initializer) ? initializer : undefined,
+        initializedAt: initializer ? node.end : undefined,
+      }
       bindPattern(node.id, binding, declarationKind === 'var' ? nearestVarScope(scope) : scope)
+    }
+    if (node.type === 'ClassDeclaration') {
+      const name = identifierName(node.id)
+      if (name) addBinding(scope, name, { initializedAt: node.end })
     }
 
     const childDeclarationKind = node.type === 'VariableDeclaration' && typeof node.kind === 'string'
@@ -105,11 +125,20 @@ function indexScopes(root: SyntaxNode) {
   return scopes
 }
 
-function resolveBinding(scope: Scope | undefined, name: string) {
+function resolveBinding(scope: Scope | undefined, name: string, position: number) {
   let current = scope
   while (current) {
-    const binding = current.bindings.get(name)
-    if (binding) return binding
+    const bindings = current.bindings.get(name)
+    if (bindings) {
+      let callback: SyntaxNode | undefined
+      bindings.forEach((binding) => {
+        if (binding.availableAtStart) callback = binding.callback
+      })
+      bindings.forEach((binding) => {
+        if (binding.initializedAt !== undefined && binding.initializedAt < position) callback = binding.callback
+      })
+      return callback
+    }
     current = current.parent
   }
   return undefined
@@ -147,7 +176,7 @@ function listenerCallback(
   if (isFunction(callback)) return callback
 
   const callbackName = identifierName(callback)
-  return callbackName ? resolveBinding(scope, callbackName) : undefined
+  return callbackName ? resolveBinding(scope, callbackName, node.start) : undefined
 }
 
 /** Returns bodies from live listeners on the exact receiver, with named callbacks resolved lexically. */
