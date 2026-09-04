@@ -4,6 +4,7 @@ import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceCha
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
+import { eventHandlerBody } from './practiceChallenges/javascript'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -239,6 +240,22 @@ describe('practice challenge catalog', () => {
 
     labels.forEach((label) => expect(result.checks.find((check) => check.label === label)?.passed).toBe(false))
     expect(result.passed).toBe(false)
+  })
+
+  it('extracts every executable handler for a standalone receiver', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = '// openButton.addEventListener("click", () => { fake() })\n/* { openButton.addEventListener("click", () => { fake() }) } */\nother.openButton.addEventListener("click", () => { wrong() })\nopenButton.addEventListener("click", () => { first() })\nopenButton.addEventListener("click", () => { second() })\n'
+
+    expect(clickBodies(source)).toBe(' first() \n second() ')
+  })
+
+  it('accepts required theme operations split across two live click handlers', () => {
+    const challenge = practiceChallengeById('web-theme-toggle')!
+    const source = 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { document.body.classList.toggle("dark-theme") })\ntoggle.addEventListener("click", () => { const isDark = true; toggle.setAttribute("aria-pressed", String(isDark)) })\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: source }])
+
+    expect(result.checks.find((check) => check.label === 'Toggle dark-theme from its click handler')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Synchronize aria-pressed in the handler')?.passed).toBe(true)
   })
 
   it('accepts district mappings in any order', () => {
