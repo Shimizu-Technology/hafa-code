@@ -257,7 +257,7 @@ describe('App language guide practice projects', () => {
     await user.click(screen.getByRole('button', { name: 'Back to Practice Lab' }))
 
     const practicePanel = screen.getByRole('tabpanel', { name: 'Practice lab' })
-    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/11/ }).getAttribute('aria-current')).toBe('page')
+    expect(within(practicePanel).getByRole('button', { name: /Ruby 2\/15/ }).getAttribute('aria-current')).toBe('page')
     expect(within(practicePanel).getByText('Your place')).toBeTruthy()
     expect(container.querySelector('[data-practice-challenge-id="ruby-conditional-access"]')?.classList.contains('current')).toBe(true)
   })
@@ -268,13 +268,13 @@ describe('App language guide practice projects', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Practice' })[0])
     await user.click(within(screen.getByLabelText('Challenge filters')).getByRole('button', { name: 'Stretch' }))
-    await user.click(screen.getByRole('button', { name: 'Start challenge' }))
+    await user.click(screen.getAllByRole('button', { name: 'Start challenge' }).at(-1)!)
     fireEvent.change(screen.getByLabelText('Code editor'), {
-      target: { value: 'def launch_status(tests_passing)\n  if tests_passing\n    "Ready to ship"\n  else\n    "Keep working"\n  end\nend\n\nputs launch_status(true)\n' },
+      target: { value: 'requests = [{ name: "Card question", priority: 1 }, { name: "Password reset", priority: 3 }, { name: "Address update", priority: 2 }]\nranked = requests.sort_by { |request| -request[:priority] }\nputs ranked.map { |request| request[:name] }.join(" > ")\n' },
     })
     await user.click(screen.getByRole('button', { name: 'Check my work' }))
     act(() => runnerHarness.onRunComplete?.({
-      status: 'success', stdout: 'Ready to ship\n', stderr: '', durationMs: 12,
+      status: 'success', stdout: 'Password reset > Address update > Card question\n', stderr: '', durationMs: 12,
     }))
 
     expect(screen.getByText('Up next · Starter')).toBeTruthy()

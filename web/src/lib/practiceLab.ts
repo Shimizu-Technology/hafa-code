@@ -2,6 +2,8 @@ import type { ProjectFile, ProjectKind } from './projectTypes'
 import type { RunnerOutcome } from './runnerOutcome'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
+import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
+import { eventHandlerBody } from './practiceChallenges/javascript'
 
 export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 
@@ -16,7 +18,7 @@ export interface PracticeFileCheck {
   ignoreStrings?: boolean
 }
 
-const CLICK_HANDLER_BODY = (source: string) => extractClickHandlerBody(source)
+const CLICK_HANDLER_BODY = eventHandlerBody('button', 'click')
 
 export interface PracticeChallenge {
   id: string
@@ -249,6 +251,7 @@ export const PRACTICE_CHALLENGES = Object.freeze([
   ...webChallenges,
   ...ADDITIONAL_STARTER_CHALLENGES,
   ...ADDITIONAL_BUILDER_CHALLENGES,
+  ...ADDITIONAL_STRETCH_CHALLENGES,
 ])
 
 /** Returns the ordered Starter, Builder, and Stretch challenges for one project kind. */
@@ -381,103 +384,6 @@ function sourceWithoutStringContents(source: string) {
   }
 
   return result
-}
-
-function extractClickHandlerBody(source: string) {
-  const callbackStart = /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*(?:(?:function(?:\s+[$\w]+)?\s*\([^)]*\))|(?:(?:\([^)]*\)|[$A-Z_a-z][$\w]*)\s*=>))\s*\{/g
-  const match = findExecutableMatch(source, callbackStart)
-  if (match) return extractBracedBody(source, match.index + match[0].lastIndexOf('{'))
-
-  const namedCallback = findExecutableMatch(source, /\bbutton\s*\.\s*addEventListener\s*\(\s*["']click["']\s*,\s*([$A-Z_a-z][$\w]*)\s*\)/g)?.[1]
-  if (!namedCallback) return ''
-  const escapedName = namedCallback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const namedStart = new RegExp(`(?:function\\s+${escapedName}\\s*\\([^)]*\\)|(?:const|let|var)\\s+${escapedName}\\s*=\\s*(?:(?:function\\s*\\([^)]*\\))|(?:(?:\\([^)]*\\)|[$A-Z_a-z][$\\w]*)\\s*=>)))\\s*\\{`, 'g')
-  const namedMatch = findExecutableMatch(source, namedStart)
-  return namedMatch ? extractBracedBody(source, namedMatch.index + namedMatch[0].lastIndexOf('{')) : ''
-}
-
-function findExecutableMatch(source: string, pattern: RegExp) {
-  const structure = sourceWithoutJavaScriptRegexLiterals(sourceWithoutStringContents(source))
-  pattern.lastIndex = 0
-  let match = pattern.exec(source)
-  while (match) {
-    if (structure[match.index] === source[match.index]) return match
-    match = pattern.exec(source)
-  }
-  return null
-}
-
-function sourceWithoutJavaScriptRegexLiterals(source: string) {
-  const structure = source.split('')
-  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
-  let canStartRegex = true
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index]
-    if (/\s/.test(char)) continue
-
-    if (char === '"' || char === "'" || char === '`') {
-      const quote = char
-      index += 1
-      while (index < source.length && source[index] !== quote) index += 1
-      canStartRegex = false
-      continue
-    }
-
-    if (/[$A-Z_a-z]/.test(char)) {
-      const start = index
-      while (index + 1 < source.length && /[$\w]/.test(source[index + 1])) index += 1
-      canStartRegex = regexPrefixKeywords.has(source.slice(start, index + 1))
-      continue
-    }
-
-    if (/\d/.test(char)) {
-      while (index + 1 < source.length && /[\d._]/.test(source[index + 1])) index += 1
-      canStartRegex = false
-      continue
-    }
-
-    if (char === '/' && canStartRegex) {
-      let escaped = false
-      let inCharacterClass = false
-      structure[index] = ' '
-      index += 1
-      while (index < source.length) {
-        const regexChar = source[index]
-        structure[index] = regexChar === '\n' ? '\n' : ' '
-        if (regexChar === '\n') break
-        if (escaped) escaped = false
-        else if (regexChar === '\\') escaped = true
-        else if (regexChar === '[') inCharacterClass = true
-        else if (regexChar === ']') inCharacterClass = false
-        else if (regexChar === '/' && !inCharacterClass) {
-          while (index + 1 < source.length && /[a-z]/i.test(source[index + 1])) {
-            index += 1
-            structure[index] = ' '
-          }
-          break
-        }
-        index += 1
-      }
-      canStartRegex = false
-      continue
-    }
-
-    canStartRegex = !/[\])}]/.test(char) && char !== '.'
-  }
-
-  return structure.join('')
-}
-
-function extractBracedBody(source: string, openingBrace: number) {
-  const structure = sourceWithoutStringContents(source)
-  let depth = 1
-  for (let index = openingBrace + 1; index < structure.length; index += 1) {
-    if (structure[index] === '{') depth += 1
-    if (structure[index] === '}') depth -= 1
-    if (depth === 0) return source.slice(openingBrace + 1, index)
-  }
-  return ''
 }
 
 function normalizeOutput(output: string) {

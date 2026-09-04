@@ -3,6 +3,8 @@ import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
+import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
+import { eventHandlerBody } from './practiceChallenges/javascript'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -18,14 +20,14 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
+  it('offers five exercises at every difficulty for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
-      expect(challenges).toHaveLength(11)
+      expect(challenges).toHaveLength(15)
       expect(challenges.map((challenge) => challenge.difficulty)).toEqual([
         'Starter', 'Starter', 'Starter', 'Starter', 'Starter',
         'Builder', 'Builder', 'Builder', 'Builder', 'Builder',
-        'Stretch',
+        'Stretch', 'Stretch', 'Stretch', 'Stretch', 'Stretch',
       ])
       challenges.forEach((challenge) => {
         expect(challenge.project.files.some((file) => file.path === challenge.project.entryPath)).toBe(true)
@@ -39,7 +41,7 @@ describe('practice challenge catalog', () => {
     const first = practiceChallengeById('java-variables-greeting')!
     const second = practiceChallengeById('java-arithmetic-total')!
     const third = practiceChallengeById('java-conditional-access')!
-    const last = practiceChallengeById('java-method-condition')!
+    const last = practiceChallengeById('java-sort-requests')!
     const everyJavaChallenge = practiceChallengesFor('java').map((challenge) => challenge.id)
 
     expect(nextIncompletePracticeChallenge(first, [first.id])).toBe(second)
@@ -134,6 +136,178 @@ describe('practice challenge catalog', () => {
       } : undefined)
       expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
     })
+  })
+
+  it('gives every additional Stretch an unfinished scaffold and a valid reference solution', () => {
+    const runtimeSolutions: Record<string, string> = {
+      'ruby-ticket-class': 'class SupportTicket\n  def initialize(customer, priority)\n    @customer = customer\n    @priority = priority\n  end\n  def summary\n    "#{@customer} | #{@priority}"\n  end\nend\nticket = SupportTicket.new("Mia", "high")\nputs ticket.summary\n',
+      'ruby-transfer-errors': 'def transfer_status(amount)\n  raise ArgumentError, "Amount must be positive" if amount <= 0\n  "Transfer: $#{amount}"\nend\nputs transfer_status(75)\nbegin\n  transfer_status(-1)\nrescue ArgumentError => error\n  puts "Error: #{error.message}"\nend\n',
+      'ruby-transaction-totals': 'transactions = [{ category: "Food", amount: 12 }, { category: "Travel", amount: 5 }, { category: "Food", amount: 8 }]\ntotals = Hash.new(0)\ntransactions.each do |transaction|\n  totals[transaction[:category]] += transaction[:amount]\nend\nputs "Food: #{totals["Food"]}"\nputs "Travel: #{totals["Travel"]}"\n',
+      'ruby-sort-requests': 'requests = [{ name: "Card question", priority: 1 }, { name: "Password reset", priority: 3 }, { name: "Address update", priority: 2 }]\nranked = requests.sort_by { |request| -request[:priority] }\nputs ranked.map { |request| request[:name] }.join(" > ")\n',
+      'javascript-ticket-class': 'class SupportTicket {\n  constructor(customer, priority) { this.customer = customer; this.priority = priority }\n  summary() { return `${this.customer} | ${this.priority}` }\n}\nconst ticket = new SupportTicket("Mia", "high")\nconsole.log(ticket.summary())\n',
+      'javascript-transfer-errors': 'function transferStatus(amount) {\n  if (amount <= 0) throw new Error("Amount must be positive")\n  return `Transfer: $${amount}`\n}\nconsole.log(transferStatus(75))\ntry { transferStatus(-1) } catch (error) { console.log(`Error: ${error.message}`) }\n',
+      'javascript-transaction-totals': 'const transactions = [{ category: "Food", amount: 12 }, { category: "Travel", amount: 5 }, { category: "Food", amount: 8 }]\nconst totals = {}\nfor (const transaction of transactions) { totals[transaction.category] = (totals[transaction.category] || 0) + transaction.amount }\nconsole.log(`Food: ${totals.Food}`)\nconsole.log(`Travel: ${totals.Travel}`)\n',
+      'javascript-sort-requests': 'const requests = [{ name: "Card question", priority: 1 }, { name: "Password reset", priority: 3 }, { name: "Address update", priority: 2 }]\nconst ranked = requests.sort((a, b) => b.priority - a.priority)\nconsole.log(ranked.map((request) => request.name).join(" > "))\n',
+      'python-ticket-class': 'class SupportTicket:\n    def __init__(self, customer, priority):\n        self.customer = customer\n        self.priority = priority\n    def summary(self):\n        return f"{self.customer} | {self.priority}"\nticket = SupportTicket("Mia", "high")\nprint(ticket.summary())\n',
+      'python-transfer-errors': 'def transfer_status(amount):\n    if amount <= 0:\n        raise ValueError("Amount must be positive")\n    return f"Transfer: ${amount}"\nprint(transfer_status(75))\ntry:\n    transfer_status(-1)\nexcept ValueError as error:\n    print(f"Error: {error}")\n',
+      'python-transaction-totals': 'transactions = [{"category": "Food", "amount": 12}, {"category": "Travel", "amount": 5}, {"category": "Food", "amount": 8}]\ntotals = {}\nfor transaction in transactions:\n    totals[transaction["category"]] = totals.get(transaction["category"], 0) + transaction["amount"]\nprint(f"Food: {totals[\'Food\']}")\nprint(f"Travel: {totals[\'Travel\']}")\n',
+      'python-sort-requests': 'requests = [{"name": "Card question", "priority": 1}, {"name": "Password reset", "priority": 3}, {"name": "Address update", "priority": 2}]\nranked = sorted(requests, key=lambda request: request["priority"], reverse=True)\nprint(" > ".join([request["name"] for request in ranked]))\n',
+      'java-ticket-class': 'public class Main { public static void main(String[] args) { SupportTicket ticket = new SupportTicket("Mia", "high"); System.out.println(ticket.summary()); } }\nclass SupportTicket { String customer; String priority; SupportTicket(String customer, String priority) { this.customer = customer; this.priority = priority; } String summary() { return customer + " | " + priority; } }\n',
+      'java-transfer-errors': 'public class Main {\nstatic String transferStatus(int amount) { if (amount <= 0) throw new IllegalArgumentException("Amount must be positive"); return "Transfer: $" + amount; }\npublic static void main(String[] args) { System.out.println(transferStatus(75)); try { transferStatus(-1); } catch (IllegalArgumentException error) { System.out.println("Error: " + error.getMessage()); } }\n}\n',
+      'java-transaction-totals': 'import java.util.LinkedHashMap; import java.util.Map;\npublic class Main { public static void main(String[] args) { String[] categories = {"Food", "Travel", "Food"}; int[] amounts = {12, 5, 8}; Map<String, Integer> totals = new LinkedHashMap<>(); for (int index = 0; index < categories.length; index++) { totals.put(categories[index], totals.getOrDefault(categories[index], 0) + amounts[index]); } System.out.println("Food: " + totals.get("Food")); System.out.println("Travel: " + totals.get("Travel")); } }\n',
+      'java-sort-requests': 'import java.util.ArrayList; import java.util.Collections; import java.util.List;\npublic class Main { public static void main(String[] args) { List<ServiceRequest> requests = new ArrayList<>(); requests.add(new ServiceRequest("Card question", 1)); requests.add(new ServiceRequest("Password reset", 3)); requests.add(new ServiceRequest("Address update", 2)); Collections.sort(requests); System.out.println(requests.get(0).name + " > " + requests.get(1).name + " > " + requests.get(2).name); } }\nclass ServiceRequest implements Comparable<ServiceRequest> { String name; int priority; ServiceRequest(String name, int priority) { this.name = name; this.priority = priority; } public int compareTo(ServiceRequest other) { return Integer.compare(other.priority, this.priority); } }\n',
+    }
+    const webSolutions: Record<string, Record<string, string>> = {
+      'web-accessible-dialog': {
+        'index.html': '<main><h1>Help center</h1><button id="open-help">Open help</button><dialog id="help-dialog" aria-labelledby="help-title"><h2 id="help-title">Quick help</h2><form method="dialog"><button>Close</button></form></dialog></main>',
+        'script.js': 'const openButton = document.querySelector("#open-help")\nconst dialog = document.querySelector("#help-dialog")\nopenButton.addEventListener("click", () => { dialog.showModal() })',
+      },
+      'web-validated-form': {
+        'index.html': '<main><form novalidate><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button id="join-updates">Join</button></form></main>',
+        'script.js': 'const form = document.querySelector("form")\nconst submitButton = document.querySelector("#join-updates")\nconst error = document.querySelector("#email-error")\nsubmitButton.addEventListener("click", (event) => { if (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" } })',
+      },
+      'web-theme-toggle': {
+        'index.html': '<main><button id="theme-toggle" aria-pressed="false">Dark theme</button></main>',
+        'script.js': 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { const isDark = document.body.classList.toggle("dark-theme"); toggle.setAttribute("aria-pressed", String(isDark)) })',
+      },
+      'web-dynamic-task-list': {
+        'index.html': '<main><label for="task-input">Task</label><input id="task-input"><button id="add-task">Add task</button><ul id="task-list"></ul></main>',
+        'script.js': 'const input = document.querySelector("#task-input")\nconst button = document.querySelector("#add-task")\nconst list = document.querySelector("#task-list")\nbutton.addEventListener("click", () => { const item = document.createElement("li"); item.textContent = input.value.trim(); list.append(item); input.value = "" })',
+      },
+    }
+
+    expect(ADDITIONAL_STRETCH_CHALLENGES).toHaveLength(20)
+    ADDITIONAL_STRETCH_CHALLENGES.forEach((challenge) => {
+      const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(unfinished.passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const source = runtimeSolutions[challenge.id]
+      const files = source
+        ? challenge.project.files.map((file) => file.path === challenge.project.entryPath ? { ...file, content: source } : file)
+        : challenge.project.files.map((file) => ({ ...file, content: webSolutions[challenge.id]?.[file.path] ?? file.content }))
+      const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
+    })
+  })
+
+  it('allows the custom invalid-email Join handler to announce its error', () => {
+    document.body.innerHTML = '<form novalidate><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button id="join-updates">Join</button></form>'
+    const form = document.querySelector('form')!
+    const submitButton = document.querySelector('#join-updates')!
+    const error = document.querySelector('#email-error')!
+    submitButton.addEventListener('click', (event) => {
+      if (!form.checkValidity()) {
+        event.preventDefault()
+        error.textContent = 'Enter a valid email'
+      }
+    })
+
+    const accepted = submitButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+    expect((form as HTMLFormElement).noValidate).toBe(true)
+    expect(accepted).toBe(false)
+    expect(error.textContent).toBe('Enter a valid email')
+  })
+
+  it.each([
+    {
+      id: 'web-accessible-dialog',
+      source: 'const openButton = document.querySelector("#open-help")\nconst dialog = document.querySelector("#help-dialog")\nopenButton.addEventListener("click", () => {})\ndialog.showModal()\n',
+      labels: ['Open the dialog from its click handler'],
+    },
+    {
+      id: 'web-validated-form',
+      source: 'const form = document.querySelector("form")\nconst submitButton = document.querySelector("#join-updates")\nconst error = document.querySelector("#email-error")\nsubmitButton.addEventListener("click", () => {})\nif (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" }\n',
+      labels: ['Handle and explain an invalid Join action'],
+    },
+    {
+      id: 'web-theme-toggle',
+      source: 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => {})\nconst isDark = document.body.classList.toggle("dark-theme")\ntoggle.setAttribute("aria-pressed", String(isDark))\n',
+      labels: ['Toggle dark-theme from its click handler', 'Synchronize aria-pressed in the handler'],
+    },
+    {
+      id: 'web-dynamic-task-list',
+      source: 'const input = document.querySelector("#task-input")\nconst button = document.querySelector("#add-task")\nconst list = document.querySelector("#task-list")\nbutton.addEventListener("click", () => {})\nconst item = document.createElement("li")\nitem.textContent = input.value.trim()\nlist.append(item)\ninput.value = ""\n',
+      labels: ['Create a safe item inside the click handler', 'Append the item and clear input in the handler'],
+    },
+  ])('rejects disconnected interaction code for $id', ({ id, source, labels }) => {
+    const challenge = practiceChallengeById(id)!
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: source }])
+
+    labels.forEach((label) => expect(result.checks.find((check) => check.label === label)?.passed).toBe(false))
+    expect(result.passed).toBe(false)
+  })
+
+  it('extracts every executable handler for a standalone receiver', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = '// openButton.addEventListener("click", () => { fake() })\n/* { openButton.addEventListener("click", () => { fake() }) } */\nother.\n  openButton.addEventListener("click", () => { wrong() })\nopenButton.addEventListener("click", () => { first() })\nopenButton.addEventListener("click", () => { second() })\n'
+
+    expect(clickBodies(source)).toBe(' first() \n second() ')
+  })
+
+  it('resolves named handlers from the listener registration lexical scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() {}\nopenButton.addEventListener("click", handleOpen)\nif (false) { function handleOpen() { dialog.showModal() } }\n'
+
+    expect(clickBodies(source)).toBe('')
+  })
+
+  it('stops named-handler lookup at parameter and local-variable shadows', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nfunction bindParameter(handleOpen) { openButton.addEventListener("click", handleOpen) }\nfunction bindLocal() { const handleOpen = null; openButton.addEventListener("click", handleOpen) }\n'
+
+    expect(clickBodies(source)).toBe('')
+  })
+
+  it('hoists var callback shadows to the nearest function scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nfunction bind() { if (false) { var handleOpen = null } openButton.addEventListener("click", handleOpen) }\n'
+
+    expect(clickBodies(source)).toBe('')
+  })
+
+  it('keeps let callback shadows inside their for-loop scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nfor (let handleOpen = null; false;) { openButton.addEventListener("click", handleOpen) }\nopenButton.addEventListener("click", handleOpen)\n'
+
+    expect(clickBodies(source)).toContain('dialog.showModal()')
+  })
+
+  it('does not use later let or var callback initializers for earlier listeners', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const laterLet = 'openButton.addEventListener("click", handleOpen)\nlet handleOpen = () => { dialog.showModal() }\n'
+    const laterVar = 'openButton.addEventListener("click", handleOpen)\nvar handleOpen = () => { dialog.showModal() }\n'
+
+    expect(clickBodies(laterLet)).toBe('')
+    expect(clickBodies(laterVar)).toBe('')
+  })
+
+  it('preserves function declaration hoisting for named listeners', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'openButton.addEventListener("click", handleOpen)\nfunction handleOpen() { dialog.showModal() }\n'
+
+    expect(clickBodies(source)).toContain('dialog.showModal()')
+  })
+
+  it('keeps switch-case callback bindings inside the switch scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nswitch (mode) { case "local": const handleOpen = () => { wrong() }; break }\nopenButton.addEventListener("click", handleOpen)\n'
+
+    expect(clickBodies(source)).toContain('dialog.showModal()')
+    expect(clickBodies(source)).not.toContain('wrong()')
+  })
+
+  it('accepts required theme operations split across two live click handlers', () => {
+    const challenge = practiceChallengeById('web-theme-toggle')!
+    const source = 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { document.body.classList.toggle("dark-theme") })\ntoggle.addEventListener("click", () => { const isDark = true; toggle.setAttribute("aria-pressed", String(isDark)) })\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'script.js', language: 'javascript', content: source }])
+
+    expect(result.checks.find((check) => check.label === 'Toggle dark-theme from its click handler')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Synchronize aria-pressed in the handler')?.passed).toBe(true)
   })
 
   it('accepts district mappings in any order', () => {

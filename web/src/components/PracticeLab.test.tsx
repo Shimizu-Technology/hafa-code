@@ -21,11 +21,11 @@ describe('PracticeLab', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: /Java 1\/11/i }).getAttribute('aria-current')).toBe('page')
-    expect(screen.getByText('1 of 11 complete')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Java 1\/15/i }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByText('1 of 15 complete')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Python' }))
-    expect(screen.getByText('0 of 11 complete')).toBeTruthy()
+    expect(screen.getByText('0 of 15 complete')).toBeTruthy()
     await user.click(within(screen.getByLabelText('Challenge filters')).getByRole('button', { name: 'Builder' }))
     const loopChallenge = screen.getByRole('heading', { name: 'Count the stops' }).closest('article')!
     await user.click(within(loopChallenge).getByRole('button', { name: 'Start challenge' }))
@@ -76,7 +76,7 @@ describe('PracticeLab', () => {
         />,
       )
 
-      expect(screen.getByRole('button', { name: /Java 1\/11/i }).getAttribute('aria-current')).toBe('page')
+      expect(screen.getByRole('button', { name: /Java 1\/15/i }).getAttribute('aria-current')).toBe('page')
       expect(container.querySelector('[data-practice-challenge-id="java-loop-stops"]')?.classList.contains('current')).toBe(true)
       expect(screen.getByText('Your place')).toBeTruthy()
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
@@ -106,7 +106,7 @@ describe('PracticeLab', () => {
     await user.type(screen.getByRole('searchbox'), 'not-a-real-concept')
     expect(screen.getByRole('heading', { name: /no challenges match/i })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(11)
+    expect(screen.getAllByRole('button', { name: 'Start challenge' })).toHaveLength(15)
     await user.keyboard('{Escape}')
 
     expect(onClose).toHaveBeenCalledOnce()
