@@ -426,6 +426,20 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(false)
   })
 
+  it.each([
+    ['a non-Latin combining mark', 'Haga\u094Dtna'],
+    ['an emoji variation selector', 'Haga\uFE0Ftna'],
+  ])('does not discard %s during source checks', (_description, stopName) => {
+    const challenge = practiceChallengeById('java-array-stops')!
+    const source = `class Main { public static void main(String[] args) { String[] stops = {"${stopName}", "Tamuning", "Dededo"}; System.out.println("First stop: " + stops[0]); System.out.println("Total stops: " + stops.length); } }`
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'First stop: Hagatna\nTotal stops: 3', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Create the three-stop String array')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
   it('requires visible labels for grouped Web contact choices', () => {
     const challenge = practiceChallengeById('web-group-contact-options')!
     const result = evaluatePracticeChallenge(challenge, [{

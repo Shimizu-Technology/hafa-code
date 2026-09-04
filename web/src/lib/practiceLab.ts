@@ -392,7 +392,7 @@ function sourceWithoutStringContents(source: string) {
 function normalizeLearnerText(text: string) {
   return text
     .normalize('NFD')
-    .replace(/\p{M}/gu, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[\u2018\u2019\u201a\u201b\u2032\u2035]/g, "'")
     .replace(/[\u201c\u201d\u201e\u201f\u2033\u2036]/g, '"')
     .replace(/[\u2010-\u2015\u2212]/g, '-')
