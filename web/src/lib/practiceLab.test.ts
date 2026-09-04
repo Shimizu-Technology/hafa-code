@@ -254,6 +254,30 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(false)
   })
 
+  it.each([
+    'note = %q{do}',
+    'note = <<~TEXT\ndo\nTEXT',
+  ])('ignores Ruby string content that looks like a block opener: %s', (literal) => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = `priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  ${literal.replace(/\n/g, '\n  ')}\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n`
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a Ruby heredoc end token before valid loop logic', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  note = <<~TEXT\n  end\n  TEXT\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
   it('requires strict equality when counting JavaScript priorities', () => {
     const challenge = practiceChallengeById('javascript-count-priorities')!
     const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (priority == "high") highCount++; } console.log(`High priority: ${highCount}`);'

@@ -128,11 +128,11 @@ function markHighPriorityComparisons(source: string) {
 const RUBY_SLASH_REGEX_LITERAL = /\/(?:\\.|[^/\n])*\/[a-z]*/gi
 const RUBY_PAIRED_DELIMITERS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '<': '>' }
 
-/** Masks Ruby slash and delimiter-aware percent-regex literals without shifting offsets. */
-function withoutRubyRegexLiterals(source: string) {
+/** Masks selected delimiter-aware Ruby percent literals without shifting source offsets. */
+function withoutRubyPercentLiterals(source: string, literalTypes: string) {
   const structure = source.split('')
   for (let index = 0; index < source.length - 2; index += 1) {
-    if (source[index] !== '%' || source[index + 1] !== 'r') continue
+    if (source[index] !== '%' || !literalTypes.includes(source[index + 1])) continue
     const openingDelimiter = source[index + 2]
     if (/[\w\s]/.test(openingDelimiter)) continue
     const closingDelimiter = RUBY_PAIRED_DELIMITERS[openingDelimiter] ?? openingDelimiter
@@ -162,7 +162,40 @@ function withoutRubyRegexLiterals(source: string) {
     index = end
   }
 
-  return structure.join('').replace(RUBY_SLASH_REGEX_LITERAL, (literal) => literal.replace(/[^\n]/g, ' '))
+  return structure.join('')
+}
+
+/** Masks Ruby slash and delimiter-aware percent-regex literals without shifting offsets. */
+function withoutRubyRegexLiterals(source: string) {
+  const withoutPercentRegexes = withoutRubyPercentLiterals(source, 'r')
+  return withoutPercentRegexes.replace(RUBY_SLASH_REGEX_LITERAL, (literal) => literal.replace(/[^\n]/g, ' '))
+}
+
+/** Masks Ruby heredoc bodies so their prose cannot be interpreted as executable tokens. */
+function withoutRubyHeredocBodies(source: string) {
+  const structure = source.split('')
+  const heredocStart = /<<([-~]?)(?:["'`]([A-Z_a-z]\w*)["'`]|([A-Z_a-z]\w*))/g
+  for (const match of source.matchAll(heredocStart)) {
+    const delimiter = match[2] ?? match[3]
+    const contentStart = source.indexOf('\n', match.index + match[0].length)
+    if (contentStart === -1) continue
+    const escapedDelimiter = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const indentation = match[1] ? '[ \\t]*' : ''
+    const terminator = new RegExp(`^${indentation}${escapedDelimiter}[ \\t]*$`, 'gm')
+    terminator.lastIndex = contentStart + 1
+    const closingMatch = terminator.exec(source)
+    if (!closingMatch) continue
+    const end = closingMatch.index + closingMatch[0].length
+    for (let index = contentStart + 1; index < end; index += 1) {
+      if (structure[index] !== '\n') structure[index] = ' '
+    }
+  }
+  return structure.join('')
+}
+
+/** Masks Ruby percent strings and heredocs while leaving ordinary comparison quotes markable. */
+function withoutRubyNonQuoteStrings(source: string) {
+  return withoutRubyPercentLiterals(withoutRubyHeredocBodies(source), 'qQwWiIxs')
 }
 
 /** Extracts a Ruby block body while balancing nested statement and do/end blocks. */
@@ -196,7 +229,8 @@ function rubyBlockBody(source: string, bodyStart: number) {
 
 /** Reports whether a Ruby priorities loop contains both the comparison and increment. */
 function validRubyPriorityCount(source: string) {
-  const structure = quotedTextStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(source)))
+  const withoutNonQuoteStrings = withoutRubyNonQuoteStrings(source)
+  const structure = quotedTextStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(withoutNonQuoteStrings)))
   const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const bodyStart = match.index + match[0].length
