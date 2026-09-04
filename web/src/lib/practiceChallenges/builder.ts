@@ -136,20 +136,44 @@ function markHighPriorityComparisons(source: string) {
   return source.replace(/(\bpriority\s*==\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
 }
 
-const RUBY_REGEX_LITERALS = [
-  /\/(?:\\.|[^/\n])*\/[a-z]*/gi,
-  /%r\{(?:\\.|[^}\n])*\}[a-z]*/gi,
-  /%r\[(?:\\.|[^\]\n])*\][a-z]*/gi,
-  /%r\((?:\\.|[^)\n])*\)[a-z]*/gi,
-  /%r<(?:\\.|[^>\n])*>[a-z]*/gi,
-  /%r\|(?:\\.|[^|\n])*\|[a-z]*/gi,
-]
+const RUBY_SLASH_REGEX_LITERAL = /\/(?:\\.|[^/\n])*\/[a-z]*/gi
+const RUBY_PAIRED_DELIMITERS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '<': '>' }
 
-/** Masks Ruby slash and common percent-regex literals without shifting source offsets. */
+/** Masks Ruby slash and delimiter-aware percent-regex literals without shifting offsets. */
 function withoutRubyRegexLiterals(source: string) {
-  return RUBY_REGEX_LITERALS.reduce((result, pattern) => (
-    result.replace(pattern, (literal) => literal.replace(/[^\n]/g, ' '))
-  ), source)
+  const structure = source.split('')
+  for (let index = 0; index < source.length - 2; index += 1) {
+    if (source[index] !== '%' || source[index + 1] !== 'r') continue
+    const openingDelimiter = source[index + 2]
+    if (/[\w\s]/.test(openingDelimiter)) continue
+    const closingDelimiter = RUBY_PAIRED_DELIMITERS[openingDelimiter] ?? openingDelimiter
+    const paired = closingDelimiter !== openingDelimiter
+    let depth = 1
+    let escaped = false
+    let end = index + 3
+    for (; end < source.length; end += 1) {
+      const char = source[end]
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (paired && char === openingDelimiter) depth += 1
+      if (char === closingDelimiter) depth -= 1
+      if (depth === 0) break
+    }
+    if (depth !== 0) continue
+    while (end + 1 < source.length && /[a-z]/i.test(source[end + 1])) end += 1
+    for (let maskIndex = index; maskIndex <= end; maskIndex += 1) {
+      if (structure[maskIndex] !== '\n') structure[maskIndex] = ' '
+    }
+    index = end
+  }
+
+  return structure.join('').replace(RUBY_SLASH_REGEX_LITERAL, (literal) => literal.replace(/[^\n]/g, ' '))
 }
 
 /** Reports whether a Ruby priorities loop contains both the comparison and increment. */

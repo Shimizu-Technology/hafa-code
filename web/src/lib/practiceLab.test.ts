@@ -215,6 +215,8 @@ describe('practice challenge catalog', () => {
   it.each([
     '/priority == "high"/',
     '%r{priority == "high"}',
+    '%r!priority == "high"!',
+    '%r{outer{priority == "high"}}',
   ])('ignores a misleading Ruby regex inside the priority loop: %s', (regexLiteral) => {
     const challenge = practiceChallengeById('ruby-count-priorities')!
     const source = `priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if true\n    ${regexLiteral}\n    high_count += 1\n  end\nend\nputs "High priority: 2"\n`
