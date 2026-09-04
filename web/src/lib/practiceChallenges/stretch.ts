@@ -267,20 +267,21 @@ export const ADDITIONAL_STRETCH_CHALLENGES: PracticeChallenge[] = [
     id: 'web-validated-form', kind: 'web', title: 'Explain a form error', difficulty: 'Stretch',
     summary: 'Pair browser validation with a clear, announced error message.',
     concepts: ['forms', 'validation', 'accessibility'],
-    instructions: ['Add a labeled, required email input described by `#email-error`.', 'Make the error element a live status message.', 'On form submission, prevent invalid submission and write "Enter a valid email" into the error element.'],
-    hints: ['Connect the input with `aria-describedby="email-error"`.', 'Use `form.checkValidity()` inside a `submit` listener.'],
+    instructions: ['Add a `novalidate` form with a labeled, required email input described by `#email-error` and a `#join-updates` button.', 'Make the error element a live status message.', 'When Join is clicked, prevent the invalid action and write "Enter a valid email" into the error element.'],
+    hints: ['`novalidate` lets your code provide the custom feedback.', 'Listen for the button’s `click`, then use `form.checkValidity()` before continuing.'],
     project: { title: 'Practice · Validated Email Form', entryPath: 'index.html', files: [
       { path: 'index.html', language: 'html', content: '<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Updates</title></head>\n<body><main><h1>Get updates</h1><!-- Build the email form. --></main><script src="script.js"></script></body>\n</html>\n' },
       { path: 'script.js', language: 'javascript', content: '// Explain invalid form submissions.\n' },
     ] },
     checks: [
       { filePath: 'index.html', label: 'Add a labeled required email input', domCheck: (document) => {
-        const input = document.querySelector('input#email[type="email"][required][aria-describedby~="email-error"]')
-        const label = document.querySelector('label[for="email"]')
-        return Boolean(input && visibleText(label))
+        const form = document.querySelector('form[novalidate]')
+        const input = form?.querySelector('input#email[type="email"][required][aria-describedby~="email-error"]')
+        const label = form?.querySelector('label[for="email"]')
+        return Boolean(form && input && visibleText(label ?? null) && form.querySelector('button#join-updates'))
       } },
       { filePath: 'index.html', label: 'Add a live email error message', domCheck: (document) => Boolean(document.querySelector('#email-error[role="status"]')) },
-      { filePath: 'script.js', label: 'Handle and explain invalid submissions', pattern: /\bform\.addEventListener\s*\(\s*["']submit["'][\s\S]*!\s*form\.checkValidity\s*\(\s*\)[\s\S]*\.preventDefault\s*\([\s\S]*\berror\.textContent\s*=\s*["']Enter a valid email["']/, ignoreStrings: false },
+      { filePath: 'script.js', label: 'Handle and explain an invalid Join action', pattern: /\bsubmitButton\.addEventListener\s*\(\s*["']click["'][\s\S]*!\s*form\.checkValidity\s*\(\s*\)[\s\S]*\.preventDefault\s*\([\s\S]*\berror\.textContent\s*=\s*["']Enter a valid email["']/, ignoreStrings: false },
     ],
   },
   {

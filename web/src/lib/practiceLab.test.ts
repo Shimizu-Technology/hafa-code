@@ -162,8 +162,8 @@ describe('practice challenge catalog', () => {
         'script.js': 'const openButton = document.querySelector("#open-help")\nconst dialog = document.querySelector("#help-dialog")\nopenButton.addEventListener("click", () => { dialog.showModal() })',
       },
       'web-validated-form': {
-        'index.html': '<main><form><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button>Join</button></form></main>',
-        'script.js': 'const form = document.querySelector("form")\nconst error = document.querySelector("#email-error")\nform.addEventListener("submit", (event) => { if (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" } })',
+        'index.html': '<main><form novalidate><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button id="join-updates">Join</button></form></main>',
+        'script.js': 'const form = document.querySelector("form")\nconst submitButton = document.querySelector("#join-updates")\nconst error = document.querySelector("#email-error")\nsubmitButton.addEventListener("click", (event) => { if (!form.checkValidity()) { event.preventDefault(); error.textContent = "Enter a valid email" } })',
       },
       'web-theme-toggle': {
         'index.html': '<main><button id="theme-toggle" aria-pressed="false">Dark theme</button></main>',
@@ -191,6 +191,25 @@ describe('practice challenge catalog', () => {
       } : undefined)
       expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
     })
+  })
+
+  it('allows the custom invalid-email Join handler to announce its error', () => {
+    document.body.innerHTML = '<form novalidate><label for="email">Email</label><input id="email" type="email" required aria-describedby="email-error"><p id="email-error" role="status"></p><button id="join-updates">Join</button></form>'
+    const form = document.querySelector('form')!
+    const submitButton = document.querySelector('#join-updates')!
+    const error = document.querySelector('#email-error')!
+    submitButton.addEventListener('click', (event) => {
+      if (!form.checkValidity()) {
+        event.preventDefault()
+        error.textContent = 'Enter a valid email'
+      }
+    })
+
+    const accepted = submitButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+    expect((form as HTMLFormElement).noValidate).toBe(true)
+    expect(accepted).toBe(false)
+    expect(error.textContent).toBe('Enter a valid email')
   })
 
   it('accepts district mappings in any order', () => {
