@@ -293,6 +293,14 @@ describe('practice challenge catalog', () => {
     expect(clickBodies(source)).toContain('dialog.showModal()')
   })
 
+  it('keeps switch-case callback bindings inside the switch scope', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nswitch (mode) { case "local": const handleOpen = () => { wrong() }; break }\nopenButton.addEventListener("click", handleOpen)\n'
+
+    expect(clickBodies(source)).toContain('dialog.showModal()')
+    expect(clickBodies(source)).not.toContain('wrong()')
+  })
+
   it('accepts required theme operations split across two live click handlers', () => {
     const challenge = practiceChallengeById('web-theme-toggle')!
     const source = 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { document.body.classList.toggle("dark-theme") })\ntoggle.addEventListener("click", () => { const isDark = true; toggle.setAttribute("aria-pressed", String(isDark)) })\n'

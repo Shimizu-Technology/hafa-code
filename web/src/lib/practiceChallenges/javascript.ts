@@ -89,7 +89,7 @@ function indexScopes(root: SyntaxNode) {
     let scope = inheritedScope
     if (node !== root && isFunction(node)) {
       scope = createScope(inheritedScope, true)
-    } else if (node !== root && ['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement'].includes(node.type)) {
+    } else if (node !== root && ['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'SwitchStatement'].includes(node.type)) {
       scope = createScope(inheritedScope)
     }
     scopes.set(node, scope)
