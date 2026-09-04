@@ -385,7 +385,7 @@ describe('practice challenge catalog', () => {
     expect(result.passed).toBe(false)
   })
 
-  it('treats equivalent Unicode and common keyboard punctuation as the same learner text', () => {
+  it('treats equivalent Unicode, spaces, and common keyboard punctuation as the same learner text', () => {
     const base = practiceChallengeById('ruby-variables-greeting')!
     const challenge = {
       ...base,
@@ -394,7 +394,7 @@ describe('practice challenge catalog', () => {
     }
     const result = evaluatePracticeChallenge(challenge, [], {
       status: 'success',
-      stdout: 'Haga\u030Atn\u0303a says: "Ready"-now...',
+      stdout: 'Haga\u030Atn\u0303a\u1680says: "Ready"-now...',
       stderr: '',
       durationMs: 1,
     })
@@ -411,6 +411,16 @@ describe('practice challenge catalog', () => {
     const challenge = { ...base, checks: [], expectedOutput: 'Access granted!' }
     const result = evaluatePracticeChallenge(challenge, [], {
       status: 'success', stdout, stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(false)
+  })
+
+  it('does not fold compatibility characters into semantic values', () => {
+    const base = practiceChallengeById('ruby-variables-greeting')!
+    const challenge = { ...base, checks: [], expectedOutput: 'Stop 2' }
+    const result = evaluatePracticeChallenge(challenge, [], {
+      status: 'success', stdout: 'Stop ²', stderr: '', durationMs: 1,
     })
 
     expect(result.passed).toBe(false)

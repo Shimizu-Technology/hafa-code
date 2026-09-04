@@ -388,17 +388,19 @@ function sourceWithoutStringContents(source: string) {
   return result
 }
 
+/** Folds keyboard-equivalent accents and punctuation without changing semantic characters. */
 function normalizeLearnerText(text: string) {
   return text
-    .normalize('NFKD')
+    .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .replace(/[\u2018\u2019\u201a\u201b\u2032\u2035]/g, "'")
     .replace(/[\u201c\u201d\u201e\u201f\u2033\u2036]/g, '"')
     .replace(/[\u2010-\u2015\u2212]/g, '-')
     .replace(/\u2026/g, '...')
-    .replace(/[\u00a0\u2007\u202f]/g, ' ')
+    .replace(/\p{Zs}/gu, ' ')
 }
 
+/** Normalizes learner-facing output while preserving line and semantic exactness. */
 function normalizeOutput(output: string) {
   return normalizeLearnerText(output)
     .replace(/\r\n/g, '\n')
