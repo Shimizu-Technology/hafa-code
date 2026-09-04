@@ -1,3 +1,4 @@
+import { tokenizer } from 'acorn'
 import type { PracticeChallenge } from '../practiceLab'
 import { isObviouslyHidden } from './dom'
 
@@ -76,88 +77,45 @@ function markStrictHighPriorityComparisons(source: string) {
   return source.replace(/(\bpriority\s*===\s*)["']high["']/g, '$1 HIGH_PRIORITY_LITERAL')
 }
 
-/** Preserves executable JavaScript structure while masking strings and regular expressions. */
+/** Preserves JavaScript structure while masking literal tokens with a standards-based tokenizer. */
 function javascriptExecutableStructure(source: string) {
   const structure = source.split('')
-  const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
-  const controlConditionKeywords = new Set(['catch', 'for', 'if', 'switch', 'while', 'with'])
-  const controlParentheses: boolean[] = []
-  let canStartRegex = true
-  let lastWord = ''
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index]
-    if (/\s/.test(char)) continue
-
-    if (char === '"' || char === "'" || char === '`') {
-      const quote = char
-      let escaped = false
-      structure[index] = ' '
-      index += 1
-      while (index < source.length) {
-        const stringChar = source[index]
-        structure[index] = stringChar === '\n' ? '\n' : ' '
-        if (!escaped && stringChar === quote) break
-        if (escaped) escaped = false
-        else if (stringChar === '\\') escaped = true
-        index += 1
+  try {
+    const tokens = tokenizer(source, { ecmaVersion: 'latest' })
+    while (true) {
+      const token = tokens.getToken()
+      if (token.type.label === 'eof') break
+      if (!['regexp', 'string', 'template'].includes(token.type.label)) continue
+      for (let index = token.start; index < token.end; index += 1) {
+        if (structure[index] !== '\n') structure[index] = ' '
       }
-      canStartRegex = false
-      continue
     }
-
-    if (/[$A-Z_a-z]/.test(char)) {
-      const start = index
-      while (index + 1 < source.length && /[$\w]/.test(source[index + 1])) index += 1
-      lastWord = source.slice(start, index + 1)
-      canStartRegex = regexPrefixKeywords.has(lastWord)
-      continue
-    }
-
-    if (/\d/.test(char)) {
-      while (index + 1 < source.length && /[\d._]/.test(source[index + 1])) index += 1
-      canStartRegex = false
-      continue
-    }
-
-    if (char === '/' && canStartRegex) {
-      let escaped = false
-      let inCharacterClass = false
-      structure[index] = ' '
-      index += 1
-      while (index < source.length) {
-        const regexChar = source[index]
-        structure[index] = regexChar === '\n' ? '\n' : ' '
-        if (regexChar === '\n') break
-        if (escaped) escaped = false
-        else if (regexChar === '\\') escaped = true
-        else if (regexChar === '[') inCharacterClass = true
-        else if (regexChar === ']') inCharacterClass = false
-        else if (regexChar === '/' && !inCharacterClass) {
-          while (index + 1 < source.length && /[a-z]/i.test(source[index + 1])) {
-            index += 1
-            structure[index] = ' '
-          }
-          break
-        }
-        index += 1
-      }
-      canStartRegex = false
-      lastWord = ''
-      continue
-    }
-
-    if (char === '(') {
-      controlParentheses.push(controlConditionKeywords.has(lastWord))
-      canStartRegex = true
-    } else if (char === ')') {
-      canStartRegex = controlParentheses.pop() ?? false
-    } else {
-      canStartRegex = !/[\]}]/.test(char) && char !== '.'
-    }
-    lastWord = ''
+  } catch {
+    return ''
   }
 
+  return structure.join('')
+}
+
+/** Masks quoted text for the non-JavaScript structural validators. */
+function quotedTextStructure(source: string) {
+  const structure = source.split('')
+  let quote: string | null = null
+  let escaped = false
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (!quote) {
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char
+        structure[index] = ' '
+      }
+      continue
+    }
+    structure[index] = char === '\n' ? '\n' : ' '
+    if (escaped) escaped = false
+    else if (char === '\\') escaped = true
+    else if (char === quote) quote = null
+  }
   return structure.join('')
 }
 
@@ -196,7 +154,7 @@ function withoutRubyRegexLiterals(source: string) {
 
 /** Reports whether a Ruby priorities loop contains both the comparison and increment. */
 function validRubyPriorityCount(source: string) {
-  const structure = javascriptExecutableStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(source)))
+  const structure = quotedTextStructure(markHighPriorityComparisons(withoutRubyRegexLiterals(source)))
   const loopStart = /\bpriorities\.each\s+do\s*\|\s*priority\s*\|/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const bodyStart = match.index + match[0].length
@@ -211,7 +169,7 @@ function validRubyPriorityCount(source: string) {
 
 /** Reports whether one Python priorities loop contains both the comparison and increment. */
 function validPythonPriorityCount(source: string) {
-  const structure = javascriptExecutableStructure(markHighPriorityComparisons(source))
+  const structure = quotedTextStructure(markHighPriorityComparisons(source))
   const lines = structure.split('\n')
   const valid = lines.some((line, lineIndex) => {
     const header = /^(\s*)for\s+priority\s+in\s+priorities\s*:\s*(.*)$/.exec(line)
@@ -235,7 +193,7 @@ function validJavaPriorityCount(source: string) {
   const marked = source
     .replace(/["']high["'](\s*\.equals\s*\(\s*priority\s*\))/g, 'HIGH_PRIORITY_LITERAL$1')
     .replace(/(\bpriority\s*\.equals\s*\(\s*)["']high["'](\s*\))/g, '$1HIGH_PRIORITY_LITERAL$2')
-  const structure = javascriptExecutableStructure(marked)
+  const structure = quotedTextStructure(marked)
   const loopStart = /\bfor\s*\(\s*String\s+priority\s*:\s*priorities\s*\)\s*\{/g
   const valid = Array.from(structure.matchAll(loopStart)).some((match) => {
     const openingBrace = match.index + match[0].lastIndexOf('{')
