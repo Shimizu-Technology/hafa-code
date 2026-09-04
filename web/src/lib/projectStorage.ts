@@ -1,8 +1,8 @@
 import { defaultEntryPath, inferFileLanguage, isProjectFileLanguage, isProjectKind, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
 
-const STORAGE_KEY = 'hafa-code-projects-v2'
+export const PROJECT_LIBRARY_STORAGE_KEY = 'hafa-code-projects-v2'
 const LEGACY_STORAGE_KEY = 'hafa-code-project-v1'
-const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
+export const CHECKPOINT_STORAGE_KEY = 'hafa-code-checkpoints-v1'
 const PROJECT_VISIBILITIES = new Set<ProjectVisibility>(['private', 'organization', 'unlisted', 'public'])
 type FileLanguage = SavedProject['files'][number]['language']
 type StoredProjectSnapshot = Partial<ProjectSnapshot> & {
@@ -82,7 +82,7 @@ function normalizeSnapshot(candidate: StoredProjectSnapshot | null | undefined):
 
 function normalizeCheckpoint(candidate: Partial<ProjectCheckpoint> | null | undefined): ProjectCheckpoint | null {
   const snapshot = normalizeSnapshot(candidate?.snapshot)
-  if (!candidate?.id || !candidate.title || !candidate.createdAt || !snapshot) return null
+  if (!candidate?.id || !candidate.title || !candidate.createdAt || Number.isNaN(Date.parse(candidate.createdAt)) || !snapshot) return null
   return {
     id: String(candidate.id),
     title: String(candidate.title),
@@ -93,9 +93,15 @@ function normalizeCheckpoint(candidate: Partial<ProjectCheckpoint> | null | unde
 
 export function normalizeProjectLibrary(candidate: ProjectLibrary | null): ProjectLibrary | null {
   if (!candidate || !Array.isArray(candidate.projects) || candidate.projects.length === 0) return null
+  const seenProjectIds = new Set<string>()
   const projects = candidate.projects
     .map((project) => normalizeProject(project))
     .filter((project): project is SavedProject => Boolean(project))
+    .filter((project) => {
+      if (seenProjectIds.has(project.id)) return false
+      seenProjectIds.add(project.id)
+      return true
+    })
   if (projects.length === 0) return null
   const activeProjectId = projects.some((project) => project.id === candidate.activeProjectId)
     ? candidate.activeProjectId
@@ -104,7 +110,7 @@ export function normalizeProjectLibrary(candidate: ProjectLibrary | null): Proje
 }
 
 export function loadProjectLibrary(): ProjectLibrary {
-  const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(localStorage.getItem(STORAGE_KEY)))
+  const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(localStorage.getItem(PROJECT_LIBRARY_STORAGE_KEY)))
   if (current) return current
 
   const legacyProject = safeParse<SavedProject>(localStorage.getItem(LEGACY_STORAGE_KEY))
@@ -123,7 +129,7 @@ export function loadProjectLibrary(): ProjectLibrary {
 }
 
 export function saveProjectLibrary(library: ProjectLibrary) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(library))
+  localStorage.setItem(PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(library))
 }
 
 export function normalizeCheckpointLibrary(candidate: unknown): CheckpointLibrary {
@@ -136,6 +142,7 @@ export function normalizeCheckpointLibrary(candidate: unknown): CheckpointLibrar
         checkpoints
           .map((checkpoint) => normalizeCheckpoint(checkpoint))
           .filter((checkpoint): checkpoint is ProjectCheckpoint => Boolean(checkpoint))
+          .filter((checkpoint, index, normalized) => normalized.findIndex((candidate) => candidate.id === checkpoint.id) === index)
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
           .slice(0, 30),
       ])

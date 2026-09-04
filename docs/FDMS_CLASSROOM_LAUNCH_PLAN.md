@@ -67,7 +67,7 @@ These checks were performed against the production URLs on July 25, 2026, before
 | Netlify-origin API preflight | Missing `Access-Control-Allow-Origin` | Baseline production cannot use the API from the current origin. The branch fixes the application default; redeployment and a production preflight remain required. |
 | Localhost API preflight | Allowed | Current Render CORS configuration appears to allow localhost instead of production. |
 | Production page rendering | Successful | The signed-out editor, runner controls, project library, visibility UI, and responsive structure load. |
-| Canonical and social metadata | Points to `https://hafacode.com/` | Baseline metadata is stale. The branch aligns canonical, social, robots, and sitemap URLs to Netlify. |
+| Canonical and social metadata | Points to `https://hafacode.com/` | Baseline metadata is stale. The branch aligns canonical, social, robots, and sitemap URLs to `code.shimizu-technology.com`. |
 | API authentication/class workflows | Not production-verifiable while CORS is blocked | Must be tested after the origin configuration is corrected. |
 
 ### Correction to the earlier domain finding
@@ -79,7 +79,7 @@ The earlier concern should be stated precisely:
 - The production Rails API is healthy.
 - The baseline break was that the API did not authorize the production frontend as a CORS origin.
 - `hafacode.com` is a stale or future canonical domain in the baseline metadata, not the URL students should use today.
-- The hardening branch declares the Netlify URL as the production application origin and always includes it in CORS, while preserving an environment override for a future domain.
+- The hardening branch declares `https://code.shimizu-technology.com` as the production application origin. The original Netlify host remains an explicit recovery origin for browser-local workspace transfer.
 
 That makes the finding more actionable: align Render, Netlify, Clerk, invitation links, and metadata around one declared production origin.
 
@@ -174,10 +174,10 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 - [ ] Set Render `ALLOWED_ORIGINS` to include `https://code.shimizu-technology.com` and the `https://hafa-code.netlify.app` recovery origin.
 - [ ] Set Render `FRONTEND_URL` or `APP_URL` to `https://code.shimizu-technology.com` so invitation links use the canonical site.
 - [ ] Verify Netlify `VITE_API_URL` points to `https://hafa-code.onrender.com`.
-- [ ] Verify Clerk production allowed origins and redirect URLs include the Netlify domain.
-- [ ] Decide whether `hafacode.com` will be launched now or later.
+- [ ] Verify Clerk production allowed origins and redirect URLs include `https://code.shimizu-technology.com`; retain the Netlify host only where the recovery flow requires it.
+- [x] Use `code.shimizu-technology.com` as the canonical host; do not depend on `hafacode.com` for this launch.
 - [x] Change canonical, Open Graph, Twitter, JSON-LD, robots, sitemap, and share image URLs to the declared production domain.
-- [ ] If both a custom domain and Netlify domain remain valid, configure redirects and allow both origins deliberately.
+- [ ] Keep the Netlify recovery host available without redirecting it so users can export origin-bound browser data; allow both frontend origins deliberately in Render CORS.
 
 **Acceptance criteria:**
 

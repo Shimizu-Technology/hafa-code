@@ -1,6 +1,6 @@
 import type { ProjectFile } from './projectTypes'
 
-const STORAGE_KEY = 'hafa-code-practice-progress-v1'
+export const PRACTICE_PROGRESS_STORAGE_KEY = 'hafa-code-practice-progress-v1'
 let memoryFallback: PracticeProgress | null = null
 
 export interface PracticeProgress {
@@ -30,7 +30,7 @@ function loadProgress(): PracticeProgress {
     }
   }
   try {
-    const candidate = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<PracticeProgress> | null
+    const candidate = JSON.parse(localStorage.getItem(PRACTICE_PROGRESS_STORAGE_KEY) ?? 'null') as Partial<PracticeProgress> | null
     if (!candidate) return emptyProgress()
     return {
       completedChallengeIds: Array.isArray(candidate.completedChallengeIds)
@@ -65,7 +65,7 @@ export function normalizePracticeProgress(candidate: Partial<PracticeProgress> |
 
 function saveProgress(progress: PracticeProgress) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
+    localStorage.setItem(PRACTICE_PROGRESS_STORAGE_KEY, JSON.stringify(progress))
     memoryFallback = null
     return true
   } catch {

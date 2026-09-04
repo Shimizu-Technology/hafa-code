@@ -1,14 +1,23 @@
-import type { ColorModePreference, ThemePreference } from '../hooks/usePreferences'
 import {
+  COLOR_MODE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  type ColorModePreference,
+  type ThemePreference,
+} from '../hooks/usePreferences'
+import {
+  CHECKPOINT_STORAGE_KEY,
   loadCheckpointLibrary,
   normalizeCheckpointLibrary,
   normalizeProjectLibrary,
+  PROJECT_LIBRARY_STORAGE_KEY,
   type CheckpointLibrary,
   type ProjectLibrary,
 } from './projectStorage'
 import {
   loadPracticeProgress,
   normalizePracticeProgress,
+  PRACTICE_PROGRESS_STORAGE_KEY,
+  resetPracticeProgressCache,
   type PracticeProgress,
 } from './practiceProgress'
 
@@ -117,10 +126,14 @@ export function parseWorkspaceBackup(raw: string): WorkspaceBackup {
 }
 
 export function mergeWorkspaceLibraries(current: ProjectLibrary, imported: ProjectLibrary): ProjectLibrary {
+  const currentById = new Map(current.projects.map((project) => [project.id, project]))
   const importedIds = new Set(imported.projects.map((project) => project.id))
   return {
     activeProjectId: imported.activeProjectId,
-    projects: [...imported.projects, ...current.projects.filter((project) => !importedIds.has(project.id))],
+    projects: [
+      ...imported.projects.map((project) => /^\d+$/.test(project.id) ? currentById.get(project.id) ?? project : project),
+      ...current.projects.filter((project) => !importedIds.has(project.id)),
+    ],
   }
 }
 
@@ -141,4 +154,42 @@ export function mergePracticeProgress(current: PracticeProgress, imported: Pract
     completedChallengeIds: [...new Set([...imported.completedChallengeIds, ...current.completedChallengeIds])],
     projectChallenges: { ...current.projectChallenges, ...imported.projectChallenges },
   }
+}
+
+export type WorkspaceRestoreState = {
+  library: ProjectLibrary
+  checkpoints: CheckpointLibrary
+  practiceProgress: PracticeProgress
+  theme: ThemePreference
+  colorMode: ColorModePreference
+}
+
+/** Writes a restore as one recoverable transaction before React state changes. */
+export function persistWorkspaceRestore(state: WorkspaceRestoreState, storage: Storage = localStorage) {
+  const entries = [
+    [PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(state.library)],
+    [CHECKPOINT_STORAGE_KEY, JSON.stringify(state.checkpoints)],
+    [PRACTICE_PROGRESS_STORAGE_KEY, JSON.stringify(state.practiceProgress)],
+    [THEME_STORAGE_KEY, state.theme],
+    [COLOR_MODE_STORAGE_KEY, state.colorMode],
+  ] as const
+  const previous = new Map(entries.map(([key]) => [key, storage.getItem(key)]))
+
+  try {
+    entries.forEach(([key, value]) => storage.setItem(key, value))
+  } catch (error) {
+    for (const [key] of [...entries].reverse()) {
+      try {
+        const previousValue = previous.get(key)
+        if (previousValue === null || previousValue === undefined) storage.removeItem(key)
+        else storage.setItem(key, previousValue)
+      } catch {
+        // Continue rolling back the remaining keys even if the storage provider fails again.
+      }
+    }
+    resetPracticeProgressCache()
+    throw new Error('This browser could not finish the restore. Your existing workspace was kept.', { cause: error })
+  }
+
+  resetPracticeProgressCache()
 }

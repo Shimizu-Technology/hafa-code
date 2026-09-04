@@ -46,7 +46,6 @@ import {
   loadLocalCheckpoints,
   loadCheckpointLibrary,
   parseImportedProject,
-  saveCheckpointLibrary,
   saveProjectLibrary,
   snapshotToProject,
   type ProjectLibrary,
@@ -80,7 +79,6 @@ import {
   preservePracticeConflictLinks,
   remapPendingPracticeCheck,
   replacePracticeProjectId,
-  savePracticeProgress,
   type PendingPracticeCheck,
 } from './lib/practiceProgress'
 import type { RunnerOutcome } from './lib/runnerOutcome'
@@ -137,6 +135,7 @@ import {
   mergePracticeProgress,
   mergeWorkspaceLibraries,
   parseWorkspaceBackup,
+  persistWorkspaceRestore,
 } from './lib/workspaceBackup'
 
 type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | 'conflict'
@@ -195,6 +194,7 @@ export default function App() {
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const workspaceRestoreInputRef = useRef<HTMLInputElement | null>(null)
+  const skipRestorePersistenceRef = useRef({ library: false, theme: false, colorMode: false })
   const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
   const syncTimersRef = useRef<Map<string, number>>(new Map())
   const syncingProjectIdsRef = useRef<Set<string>>(new Set())
@@ -485,6 +485,10 @@ export default function App() {
 
   useEffect(() => {
     libraryRef.current = library
+    if (skipRestorePersistenceRef.current.library) {
+      skipRestorePersistenceRef.current.library = false
+      return
+    }
     saveProjectLibrary(library)
   }, [library])
 
@@ -494,10 +498,18 @@ export default function App() {
   }, [clearPracticeCheckWatchdog])
 
   useEffect(() => {
+    if (skipRestorePersistenceRef.current.theme) {
+      skipRestorePersistenceRef.current.theme = false
+      return
+    }
     localStorage.setItem(THEME_STORAGE_KEY, themePreference)
   }, [themePreference])
 
   useEffect(() => {
+    if (skipRestorePersistenceRef.current.colorMode) {
+      skipRestorePersistenceRef.current.colorMode = false
+      return
+    }
     localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
   }, [colorModePreference])
 
@@ -1505,8 +1517,16 @@ export default function App() {
       const nextPracticeProgress = mergePracticeProgress(loadPracticeProgress(), backup.data.practiceProgress)
       const nextProject = nextLibrary.projects.find((candidate) => candidate.id === nextLibrary.activeProjectId) ?? nextLibrary.projects[0]
 
-      saveCheckpointLibrary(nextCheckpoints)
-      savePracticeProgress(nextPracticeProgress)
+      persistWorkspaceRestore({
+        library: nextLibrary,
+        checkpoints: nextCheckpoints,
+        practiceProgress: nextPracticeProgress,
+        theme: backup.data.preferences.theme,
+        colorMode: backup.data.preferences.colorMode,
+      })
+      skipRestorePersistenceRef.current.library = true
+      skipRestorePersistenceRef.current.theme = themePreference !== backup.data.preferences.theme
+      skipRestorePersistenceRef.current.colorMode = colorModePreference !== backup.data.preferences.colorMode
       clearPendingPracticeCheck()
       setLibrary(nextLibrary)
       setActivePath(nextProject.files[0].path)
