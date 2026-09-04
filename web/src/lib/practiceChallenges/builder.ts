@@ -95,7 +95,10 @@ function markStrictHighPriorityComparisons(source: string) {
 function javascriptExecutableStructure(source: string) {
   const structure = source.split('')
   const regexPrefixKeywords = new Set(['await', 'case', 'delete', 'do', 'else', 'in', 'instanceof', 'new', 'of', 'return', 'throw', 'typeof', 'void', 'yield'])
+  const controlConditionKeywords = new Set(['catch', 'for', 'if', 'switch', 'while', 'with'])
+  const controlParentheses: boolean[] = []
   let canStartRegex = true
+  let lastWord = ''
 
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]
@@ -121,7 +124,8 @@ function javascriptExecutableStructure(source: string) {
     if (/[$A-Z_a-z]/.test(char)) {
       const start = index
       while (index + 1 < source.length && /[$\w]/.test(source[index + 1])) index += 1
-      canStartRegex = regexPrefixKeywords.has(source.slice(start, index + 1))
+      lastWord = source.slice(start, index + 1)
+      canStartRegex = regexPrefixKeywords.has(lastWord)
       continue
     }
 
@@ -154,10 +158,19 @@ function javascriptExecutableStructure(source: string) {
         index += 1
       }
       canStartRegex = false
+      lastWord = ''
       continue
     }
 
-    canStartRegex = !/[\])}]/.test(char) && char !== '.'
+    if (char === '(') {
+      controlParentheses.push(controlConditionKeywords.has(lastWord))
+      canStartRegex = true
+    } else if (char === ')') {
+      canStartRegex = controlParentheses.pop() ?? false
+    } else {
+      canStartRegex = !/[\]}]/.test(char) && char !== '.'
+    }
+    lastWord = ''
   }
 
   return structure.join('')
