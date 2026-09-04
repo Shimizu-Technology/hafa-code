@@ -37,6 +37,28 @@ function createScope(parent?: Scope): Scope {
   return { parent, bindings: new Map() }
 }
 
+function bindPattern(pattern: unknown, binding: SyntaxNode, scope: Scope) {
+  if (!isNode(pattern)) return
+  const name = identifierName(pattern)
+  if (name) {
+    scope.bindings.set(name, binding)
+    return
+  }
+
+  if (pattern.type === 'RestElement') {
+    bindPattern(pattern.argument, binding, scope)
+  } else if (pattern.type === 'AssignmentPattern') {
+    bindPattern(pattern.left, binding, scope)
+  } else if (pattern.type === 'ArrayPattern' && Array.isArray(pattern.elements)) {
+    pattern.elements.forEach((element) => bindPattern(element, binding, scope))
+  } else if (pattern.type === 'ObjectPattern' && Array.isArray(pattern.properties)) {
+    pattern.properties.forEach((property) => {
+      if (isNode(property) && property.type === 'Property') bindPattern(property.value, binding, scope)
+      if (isNode(property) && property.type === 'RestElement') bindPattern(property.argument, binding, scope)
+    })
+  }
+}
+
 function indexScopes(root: SyntaxNode) {
   const scopes = new WeakMap<SyntaxNode, Scope>()
   const rootScope = createScope()
@@ -48,14 +70,20 @@ function indexScopes(root: SyntaxNode) {
     }
 
     let scope = inheritedScope
-    if (node !== root && (node.type === 'BlockStatement' || isFunction(node))) {
+    if (node !== root && (node.type === 'BlockStatement' || node.type === 'CatchClause' || isFunction(node))) {
       scope = createScope(inheritedScope)
     }
     scopes.set(node, scope)
 
-    if (node.type === 'VariableDeclarator' && isNode(node.init) && isFunction(node.init)) {
-      const name = identifierName(node.id)
-      if (name) scope.bindings.set(name, node.init)
+    if (isFunction(node) && Array.isArray(node.params)) {
+      node.params.forEach((parameter) => bindPattern(parameter, isNode(parameter) ? parameter : node, scope))
+    }
+    if (node.type === 'CatchClause') {
+      bindPattern(node.param, isNode(node.param) ? node.param : node, scope)
+    }
+    if (node.type === 'VariableDeclarator') {
+      const binding = isNode(node.init) && isFunction(node.init) ? node.init : node
+      bindPattern(node.id, binding, scope)
     }
 
     childNodes(node).forEach((child) => visit(child, scope))
@@ -128,6 +156,6 @@ export function eventHandlerBody(receiver: string, eventName: string) {
       childNodes(node).forEach(visit)
     }
     visit(root)
-    return bodies.join('\n')
+    return bodies.filter((body) => body.trim()).join('\n')
   }
 }

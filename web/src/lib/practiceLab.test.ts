@@ -256,6 +256,13 @@ describe('practice challenge catalog', () => {
     expect(clickBodies(source)).toBe('')
   })
 
+  it('stops named-handler lookup at parameter and local-variable shadows', () => {
+    const clickBodies = eventHandlerBody('openButton', 'click')
+    const source = 'function handleOpen() { dialog.showModal() }\nfunction bindParameter(handleOpen) { openButton.addEventListener("click", handleOpen) }\nfunction bindLocal() { const handleOpen = null; openButton.addEventListener("click", handleOpen) }\n'
+
+    expect(clickBodies(source)).toBe('')
+  })
+
   it('accepts required theme operations split across two live click handlers', () => {
     const challenge = practiceChallengeById('web-theme-toggle')!
     const source = 'const toggle = document.querySelector("#theme-toggle")\ntoggle.addEventListener("click", () => { document.body.classList.toggle("dark-theme") })\ntoggle.addEventListener("click", () => { const isDark = true; toggle.setAttribute("aria-pressed", String(isDark)) })\n'
