@@ -4,6 +4,7 @@ import {
   BookOpen,
   Cloud,
   Copy,
+  DatabaseBackup,
   Download,
   Dumbbell,
   Files,
@@ -43,6 +44,7 @@ import {
   encodeProjectForShare,
   exportProject,
   loadLocalCheckpoints,
+  loadCheckpointLibrary,
   parseImportedProject,
   saveProjectLibrary,
   snapshotToProject,
@@ -64,12 +66,14 @@ import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
+import { WorkspaceTransferDialog } from './components/WorkspaceTransferDialog'
 import type { LanguageGuideTopic } from './lib/languageGuides'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
   linkPracticeProject,
+  loadPracticeProgress,
   practiceChallengeIdForProject,
   pendingPracticeCheckMatches,
   preservePracticeConflictLinks,
@@ -123,6 +127,16 @@ import {
   type FileDialogState,
   type MobileTab,
 } from './lib/workspace'
+import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
+import {
+  createWorkspaceBackup,
+  downloadWorkspaceBackup,
+  mergeCheckpointLibraries,
+  mergePracticeProgress,
+  mergeWorkspaceLibraries,
+  parseWorkspaceBackup,
+  persistWorkspaceRestore,
+} from './lib/workspaceBackup'
 
 type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | 'conflict'
 
@@ -143,6 +157,7 @@ export default function App() {
   const [fileDialog, setFileDialog] = useState<FileDialogState | null>(null)
   const [fileDialogError, setFileDialogError] = useState('')
   const [shareDialog, setShareDialog] = useState<ShareDialogState>(null)
+  const [workspaceTransferOpen, setWorkspaceTransferOpen] = useState(false)
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
   const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
   const [orgInvitations, setOrgInvitations] = useState<CloudOrgInvitation[]>([])
@@ -178,6 +193,8 @@ export default function App() {
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const workspaceRestoreInputRef = useRef<HTMLInputElement | null>(null)
+  const skipRestorePersistenceRef = useRef({ library: false, theme: false, colorMode: false })
   const checkpointMenuRef = useRef<HTMLDetailsElement | null>(null)
   const syncTimersRef = useRef<Map<string, number>>(new Map())
   const syncingProjectIdsRef = useRef<Set<string>>(new Set())
@@ -234,6 +251,7 @@ export default function App() {
     setFileDialogError('')
   })
   const shareDialogRef = useModalFocus<HTMLElement>(Boolean(shareDialog), () => setShareDialog(null))
+  const workspaceTransferDialogRef = useModalFocus<HTMLElement>(workspaceTransferOpen, () => setWorkspaceTransferOpen(false))
   const orgDialogRef = useModalFocus<HTMLElement>(orgCreateOpen, () => setOrgCreateOpen(false))
   const projectActionsDialogRef = useModalFocus<HTMLElement>(projectActionsOpen, () => setProjectActionsOpen(false))
   const confirmDialogRef = useModalFocus<HTMLElement>(Boolean(confirmAction), () => {
@@ -300,6 +318,7 @@ export default function App() {
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
     : themePreference
+  const legacySite = isLegacySiteHost()
 
   const updateCloudSaveStatus = useCallback((projectId: string, status: CloudSaveStatus) => {
     setCloudSaveStatuses((current) => current[projectId] === status ? current : { ...current, [projectId]: status })
@@ -466,6 +485,10 @@ export default function App() {
 
   useEffect(() => {
     libraryRef.current = library
+    if (skipRestorePersistenceRef.current.library) {
+      skipRestorePersistenceRef.current.library = false
+      return
+    }
     saveProjectLibrary(library)
   }, [library])
 
@@ -475,10 +498,18 @@ export default function App() {
   }, [clearPracticeCheckWatchdog])
 
   useEffect(() => {
+    if (skipRestorePersistenceRef.current.theme) {
+      skipRestorePersistenceRef.current.theme = false
+      return
+    }
     localStorage.setItem(THEME_STORAGE_KEY, themePreference)
   }, [themePreference])
 
   useEffect(() => {
+    if (skipRestorePersistenceRef.current.colorMode) {
+      skipRestorePersistenceRef.current.colorMode = false
+      return
+    }
     localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
   }, [colorModePreference])
 
@@ -1464,6 +1495,56 @@ export default function App() {
     }
   }
 
+  const downloadCompleteWorkspace = () => {
+    try {
+      downloadWorkspaceBackup(createWorkspaceBackup({
+        library: libraryRef.current,
+        theme: themePreference,
+        colorMode: colorModePreference,
+      }))
+      setNotice('Complete workspace backup downloaded.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Workspace backup failed.')
+    }
+  }
+
+  const restoreCompleteWorkspace = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const backup = parseWorkspaceBackup(await file.text())
+      const nextLibrary = mergeWorkspaceLibraries(libraryRef.current, backup.data.library)
+      const nextCheckpoints = mergeCheckpointLibraries(loadCheckpointLibrary(), backup.data.checkpoints)
+      const nextPracticeProgress = mergePracticeProgress(loadPracticeProgress(), backup.data.practiceProgress)
+      const nextProject = nextLibrary.projects.find((candidate) => candidate.id === nextLibrary.activeProjectId) ?? nextLibrary.projects[0]
+
+      persistWorkspaceRestore({
+        library: nextLibrary,
+        checkpoints: nextCheckpoints,
+        practiceProgress: nextPracticeProgress,
+        theme: backup.data.preferences.theme,
+        colorMode: backup.data.preferences.colorMode,
+      })
+      skipRestorePersistenceRef.current.library = true
+      skipRestorePersistenceRef.current.theme = themePreference !== backup.data.preferences.theme
+      skipRestorePersistenceRef.current.colorMode = colorModePreference !== backup.data.preferences.colorMode
+      clearPendingPracticeCheck()
+      setLibrary(nextLibrary)
+      setActivePath(nextProject.files[0].path)
+      setCheckpoints(nextCheckpoints[nextProject.id] ?? [])
+      setCompletedPracticeIds(nextPracticeProgress.completedChallengeIds)
+      setThemePreference(backup.data.preferences.theme)
+      setColorModePreference(backup.data.preferences.colorMode)
+      setShowArchived(isArchived(nextProject))
+      setMobileTab('code')
+      setWorkspaceTransferOpen(false)
+      setNotice(`Workspace restored: ${backup.data.library.projects.length} project${backup.data.library.projects.length === 1 ? '' : 's'} and your learning progress were added.`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Workspace restore failed.')
+    } finally {
+      if (workspaceRestoreInputRef.current) workspaceRestoreInputRef.current.value = ''
+    }
+  }
+
   return (
     <main
       className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${editorExpanded ? 'editor-expanded' : ''} ${inviteRequiresAuth ? 'invite-auth-mode' : ''} mobile-tab-${mobileTab}`}
@@ -1492,8 +1573,9 @@ export default function App() {
         </div>
         <div className="hero-actions desktop-hero-actions">
           <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-          <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
-          <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
+          <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export project</button>
+          <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
+          <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
           <button
             onClick={copyShareLink}
             disabled={Boolean(project.organizationId)}
@@ -1510,8 +1592,9 @@ export default function App() {
           </summary>
           <div className="mobile-actions-content">
             <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-            <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export</button>
-            <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import</button>
+            <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export project</button>
+            <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
+            <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
             <button
               onClick={copyShareLink}
               disabled={Boolean(project.organizationId)}
@@ -1522,6 +1605,19 @@ export default function App() {
           </div>
         </details>
       </header>
+
+      {legacySite && (
+        <section className="domain-move-banner" aria-label="Håfa Code has moved">
+          <div>
+            <strong>Håfa Code has a new home.</strong>
+            <span>Save a workspace backup before moving so browser-only projects and Practice Lab progress come with you.</span>
+          </div>
+          <div className="domain-move-actions">
+            <button type="button" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Back up first</button>
+            <a href={PUBLIC_SITE_URL}>Open the new site</a>
+          </div>
+        </section>
+      )}
 
       {notice && (
         <div className="notice" role="status">
@@ -2014,6 +2110,17 @@ export default function App() {
         >
           <TriangleAlert size={17} /> Fix this error
         </button>
+      )}
+
+      {workspaceTransferOpen && (
+        <WorkspaceTransferDialog
+          dialogRef={workspaceTransferDialogRef}
+          isLegacyHost={legacySite}
+          restoreInputRef={workspaceRestoreInputRef}
+          onClose={() => setWorkspaceTransferOpen(false)}
+          onDownloadBackup={downloadCompleteWorkspace}
+          onRestoreFile={restoreCompleteWorkspace}
+        />
       )}
 
       <WorkspaceDialogs

@@ -1,5 +1,5 @@
 # Hafa Code
-# https://hafa-code.netlify.app
+# https://code.shimizu-technology.com
 
 User-agent: *
 Allow: /
@@ -7,4 +7,4 @@ Disallow: /api/
 Disallow: /admin/
 Disallow: /rails/
 
-Sitemap: https://hafa-code.netlify.app/sitemap.xml
+Sitemap: https://code.shimizu-technology.com/sitemap.xml

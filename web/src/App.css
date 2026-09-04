@@ -374,6 +374,42 @@ h2 {
   flex: 0 0 auto;
 }
 
+.domain-move-banner {
+  align-items: center;
+  background: #14110f;
+  border: 1px solid rgba(248, 184, 78, 0.5);
+  border-radius: 1.2rem;
+  color: #fffaf1;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+}
+
+.domain-move-banner > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.domain-move-banner span {
+  color: #d8cbbb;
+  line-height: 1.4;
+}
+
+.domain-move-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+}
+
+.domain-move-actions a {
+  color: #fffaf1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .context-bar {
   align-items: center;
   display: grid;
@@ -3015,6 +3051,43 @@ button.context-chip.active,
   width: 100%;
 }
 
+.workspace-transfer-sheet {
+  width: min(590px, 100%);
+}
+
+.domain-move-instructions,
+.transfer-callout {
+  background: rgba(248, 184, 78, 0.16);
+  border: 1px solid rgba(248, 184, 78, 0.5);
+  border-radius: 1rem;
+  color: var(--ink);
+  line-height: 1.5;
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+}
+
+.domain-move-instructions ol {
+  margin: 0.55rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.domain-move-instructions a {
+  color: var(--lagoon);
+  font-weight: 800;
+}
+
+.workspace-transfer-actions {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.workspace-transfer-actions button {
+  border-radius: 1rem;
+  min-height: 52px;
+}
+
 .confirm-copy {
   color: var(--muted);
   line-height: 1.5;
@@ -3153,6 +3226,27 @@ button.context-chip.active,
 }
 
 @media (max-width: 640px) {
+  .domain-move-banner {
+    align-items: stretch;
+    flex-direction: column;
+    font-size: 0.88rem;
+  }
+
+  .domain-move-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .domain-move-actions a {
+    padding: 0.45rem;
+    text-align: center;
+  }
+
+  .workspace-transfer-actions {
+    grid-template-columns: 1fr;
+  }
+
   :root { --workspace-pane-height: clamp(380px, 68vh, 560px); }
 
   .app-shell {
