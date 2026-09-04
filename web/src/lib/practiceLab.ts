@@ -1,6 +1,7 @@
 import type { ProjectFile, ProjectKind } from './projectTypes'
 import type { RunnerOutcome } from './runnerOutcome'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
+import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 
 export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 
@@ -243,7 +244,12 @@ const webChallenges: PracticeChallenge[] = [
   },
 ]
 
-export const PRACTICE_CHALLENGES = Object.freeze([...runtimeChallenges, ...webChallenges, ...ADDITIONAL_STARTER_CHALLENGES])
+export const PRACTICE_CHALLENGES = Object.freeze([
+  ...runtimeChallenges,
+  ...webChallenges,
+  ...ADDITIONAL_STARTER_CHALLENGES,
+  ...ADDITIONAL_BUILDER_CHALLENGES,
+])
 
 /** Returns the ordered Starter, Builder, and Stretch challenges for one project kind. */
 export function practiceChallengesFor(kind: ProjectKind) {

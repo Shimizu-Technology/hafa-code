@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_KINDS } from './codeRunner'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, practiceChallengesFor } from './practiceLab'
 import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
+import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -17,12 +18,14 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 describe('practice challenge catalog', () => {
-  it('offers five Starter exercises before Builder and Stretch for every supported project kind', () => {
+  it('offers five Starter and five Builder exercises before Stretch for every supported project kind', () => {
     PROJECT_KINDS.forEach((kind) => {
       const challenges = practiceChallengesFor(kind)
-      expect(challenges).toHaveLength(7)
+      expect(challenges).toHaveLength(11)
       expect(challenges.map((challenge) => challenge.difficulty)).toEqual([
-        'Starter', 'Starter', 'Starter', 'Starter', 'Starter', 'Builder', 'Stretch',
+        'Starter', 'Starter', 'Starter', 'Starter', 'Starter',
+        'Builder', 'Builder', 'Builder', 'Builder', 'Builder',
+        'Stretch',
       ])
       challenges.forEach((challenge) => {
         expect(challenge.project.files.some((file) => file.path === challenge.project.entryPath)).toBe(true)
@@ -85,8 +88,327 @@ describe('practice challenge catalog', () => {
       const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
         status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
       } : undefined)
-      expect(result.passed, `${challenge.id} should accept its reference solution`).toBe(true)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
     })
+  })
+
+  it('gives every additional Builder an unfinished scaffold and a valid reference solution', () => {
+    const runtimeSolutions: Record<string, string> = {
+      'ruby-filter-scores': 'scores = [88, 72, 95, 61]\npassing = scores.select { |score| score >= 80 }\nputs "Passing: #{passing.join(", ")}"\n',
+      'ruby-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n',
+      'ruby-hash-district': 'districts = { "H" => "Hagåtña", "T" => "Tamuning", "D" => "Dededo" }\nputs "District T: #{districts["T"]}"\n',
+      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nnames = ["Ana", "Ben"]\nformatted = names.map { |name| format_name(name) }\nputs "Roster: #{formatted.join(", ")}"\n',
+      'javascript-filter-scores': 'const scores = [88, 72, 95, 61]\nconst passing = scores.filter((score) => score >= 80)\nconsole.log(`Passing: ${passing.join(", ")}`)\n',
+      'javascript-count-priorities': 'const priorities = ["high", "low", "high", "medium"]\nlet highCount = 0\nfor (const priority of priorities) {\n  if (priority === "high") highCount++\n}\nconsole.log(`High priority: ${highCount}`)\n',
+      'javascript-object-district': 'const districts = { H: "Hagåtña", T: "Tamuning", D: "Dededo" }\nconsole.log(`District T: ${districts.T}`)\n',
+      'javascript-format-roster': 'function formatName(name) {\n  return name.toUpperCase()\n}\nconst names = ["Ana", "Ben"]\nconst formatted = names.map(formatName)\nconsole.log(`Roster: ${formatted.join(", ")}`)\n',
+      'python-filter-scores': 'scores = [88, 72, 95, 61]\npassing = [score for score in scores if score >= 80]\nprint(f"Passing: {\', \'.join(str(score) for score in passing)}")\n',
+      'python-count-priorities': 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\nfor priority in priorities:\n    if priority == "high":\n        high_count += 1\nprint(f"High priority: {high_count}")\n',
+      'python-dict-district': 'districts = { "H": "Hagåtña", "T": "Tamuning", "D": "Dededo" }\nprint(f"District T: {districts[\'T\']}")\n',
+      'python-format-roster': 'def format_name(name):\n    return name.upper()\nnames = ["Ana", "Ben"]\nformatted = [format_name(name) for name in names]\nprint(f"Roster: {\', \'.join(formatted)}")\n',
+      'java-filter-scores': 'import java.util.ArrayList;\nimport java.util.List;\nclass Main { public static void main(String[] args) {\nint[] scores = {88, 72, 95, 61};\nList<Integer> passing = new ArrayList<>();\nfor (int score : scores) { if (score >= 80) passing.add(score); }\nSystem.out.println("Passing: " + passing);\n} }\n',
+      'java-count-priorities': 'class Main { public static void main(String[] args) {\nString[] priorities = {"high", "low", "high", "medium"};\nint highCount = 0;\nfor (String priority : priorities) { if ("high".equals(priority)) highCount++; }\nSystem.out.println("High priority: " + highCount);\n} }\n',
+      'java-map-district': 'import java.util.HashMap;\nimport java.util.Map;\nclass Main { public static void main(String[] args) {\nMap<String, String> districts = new HashMap<>();\ndistricts.put("H", "Hagåtña");\ndistricts.put("T", "Tamuning");\ndistricts.put("D", "Dededo");\nSystem.out.println("District T: " + districts.get("T"));\n} }\n',
+      'java-format-roster': 'class Main {\nstatic String formatName(String name) { return name.toUpperCase(); }\npublic static void main(String[] args) {\nString[] names = {"Ana", "Ben"};\nSystem.out.println("Roster: " + formatName(names[0]) + ", " + formatName(names[1]));\n}\n}\n',
+    }
+    const webSolutions: Record<string, Record<string, string>> = {
+      'web-group-contact-options': { 'index.html': '<main><form><fieldset><legend>Preferred contact</legend><input id="email" type="radio" name="contact"><label for="email">Email</label><input id="phone" type="radio" name="contact"><label for="phone">Phone</label></fieldset></form></main>' },
+      'web-flexible-navigation': { 'style.css': '.site-nav { display: flex; flex-wrap: wrap; gap: 0.75rem; }' },
+      'web-native-disclosure': { 'index.html': '<main><details><summary>What should I bring?</summary><p>Bring water and sun protection.</p></details></main>' },
+      'web-responsive-breakpoint': { 'style.css': '.card-grid { display: grid; grid-template-columns: 1fr; } @media (min-width: 40rem) { .card-grid { grid-template-columns: repeat(2, 1fr); } }' },
+    }
+
+    expect(ADDITIONAL_BUILDER_CHALLENGES).toHaveLength(20)
+    ADDITIONAL_BUILDER_CHALLENGES.forEach((challenge) => {
+      const unfinished = evaluatePracticeChallenge(challenge, challenge.project.files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(unfinished.passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const source = runtimeSolutions[challenge.id]
+      const files = source
+        ? challenge.project.files.map((file) => file.path === challenge.project.entryPath ? { ...file, content: source } : file)
+        : challenge.project.files.map((file) => ({ ...file, content: webSolutions[challenge.id]?.[file.path] ?? file.content }))
+      const result = evaluatePracticeChallenge(challenge, files, challenge.expectedOutput ? {
+        status: 'success', stdout: challenge.expectedOutput, stderr: '', durationMs: 1,
+      } : undefined)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
+    })
+  })
+
+  it('accepts district mappings in any order', () => {
+    const challenge = practiceChallengeById('java-map-district')!
+    const source = 'import java.util.*; class Main { public static void main(String[] args) { Map<String, String> districts = new HashMap<>(); districts.put("D", "Dededo"); districts.put("H", "Hagåtña"); districts.put("T", "Tamuning"); System.out.println("District T: " + districts.get("T")); } }'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'District T: Tamuning', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('requires visible labels for grouped Web contact choices', () => {
+    const challenge = practiceChallengeById('web-group-contact-options')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<fieldset><legend hidden>Preferred contact</legend><input id="email" type="radio" name="contact"><label hidden for="email">Email</label><input id="phone" type="radio" name="contact"><label hidden for="phone">Phone</label></fieldset>',
+    }])
+
+    expect(result.checks).toHaveLength(2)
+    expect(result.checks).toEqual([
+      { label: 'Add the Preferred contact group label', passed: false },
+      { label: 'Add Email and Phone radio choices', passed: false },
+    ])
+
+    const nonRenderedText = evaluatePracticeChallenge(challenge, [{
+      path: 'index.html',
+      language: 'html',
+      content: '<fieldset><legend><script>Preferred contact</script></legend><input id="email" type="radio" name="contact"><label for="email"><style>Email</style></label><input id="phone" type="radio" name="contact"><label for="phone"><template>Phone</template></label></fieldset>',
+    }])
+    expect(nonRenderedText.checks).toEqual([
+      { label: 'Add the Preferred contact group label', passed: false },
+      { label: 'Add Email and Phone radio choices', passed: false },
+    ])
+  })
+
+  it('does not mistake roster formatter declarations for calls', () => {
+    const declarationOnly: Record<string, string> = {
+      'ruby-format-roster': 'def format_name(name)\n  name.upcase\nend\nputs "Roster: ANA, BEN"\n',
+      'javascript-format-roster': 'function formatName(name) { return name.toUpperCase() }\nconsole.log("Roster: ANA, BEN")\n',
+      'python-format-roster': 'def format_name(name):\n    return name.upper()\nprint("Roster: ANA, BEN")\n',
+      'java-format-roster': 'class Main { public static String formatName(final String name) { return name.toUpperCase(); } public static void main(String[] args) { System.out.println("Roster: ANA, BEN"); } }',
+    }
+
+    Object.entries(declarationOnly).forEach(([challengeId, content]) => {
+      const challenge = practiceChallengeById(challengeId)!
+      const result = evaluatePracticeChallenge(challenge, [{
+        path: challenge.project.entryPath,
+        language: challenge.project.files[0].language,
+        content,
+      }], { status: 'success', stdout: 'Roster: ANA, BEN', stderr: '', durationMs: 1 })
+
+      expect(result.checks.find((check) => check.label.includes('Call format'))?.passed, challengeId).toBe(false)
+      expect(result.passed).toBe(false)
+    })
+  })
+
+  it.each([
+    ['ruby-count-priorities', 'main.rb', 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n'],
+    ['python-count-priorities', 'main.py', 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\nfor priority in priorities:\n    pass\nif priority == "high":\n    high_count += 1\nprint("High priority: 2")\n'],
+    ['java-count-priorities', 'Main.java', 'class Main { public static void main(String[] args) { String[] priorities = {"high", "low", "high", "medium"}; int highCount = 0; for (String priority : priorities) {} if ("high".equals(priority)) highCount++; System.out.println("High priority: 2"); } }'],
+  ])('requires %s priority counting to happen inside one loop', (challengeId, path, content) => {
+    const challenge = practiceChallengeById(challengeId)!
+    const language = challenge.project.files.find((file) => file.path === path)!.language
+    const result = evaluatePracticeChallenge(challenge, [{ path, language, content }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it.each([
+    '/priority == "high"/',
+    '%r{priority == "high"}',
+    '%r!priority == "high"!',
+    '%r{outer{priority == "high"}}',
+  ])('ignores a misleading Ruby regex inside the priority loop: %s', (regexLiteral) => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = `priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if true\n    ${regexLiteral}\n    high_count += 1\n  end\nend\nputs "High priority: 2"\n`
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('accepts Java value comparison with priority as the receiver', () => {
+    const challenge = practiceChallengeById('java-count-priorities')!
+    const source = 'class Main { public static void main(String[] args) { String[] priorities = {"high", "low", "high", "medium"}; int highCount = 0; for (String priority : priorities) { if (priority.equals("high")) highCount++; } System.out.println("High priority: " + highCount); } }'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'Main.java', language: 'java', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('accepts priority counting after a nested Ruby block', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  unless priority.nil?\n    note = priority\n  end\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('closes inline Ruby blocks before checking code after the loop', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  if true then priority end\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it.each([
+    'note = %q{do}',
+    'note = %{do}',
+    'note = <<~TEXT\ndo\nTEXT',
+    "note = <<~'TEXT-END'\ndo\nTEXT-END",
+  ])('ignores Ruby string content that looks like a block opener: %s', (literal) => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = `priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  ${literal.replace(/\n/g, '\n  ')}\nend\nif priority == "high"\n  high_count += 1\nend\nputs "High priority: 2"\n`
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label.includes('inside the loop'))?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a Ruby heredoc end token before valid loop logic', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  note = <<~TEXT\n  end\n  TEXT\n  if priority == "high"\n    high_count += 1\n  end\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('ignores nested heredoc-like text without masking code after the outer terminator', () => {
+    const challenge = practiceChallengeById('ruby-count-priorities')!
+    const source = 'priorities = ["high", "low", "high", "medium"]\nhigh_count = 0\npriorities.each do |priority|\n  note = <<~OUTER\n  <<~\'MARK-DONE\'\n  OUTER\n  if priority == "high"\n    high_count += 1\n  end\nMARK-DONE\nend\nputs "High priority: #{high_count}"\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.rb', language: 'ruby', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(true)
+  })
+
+  it('requires strict equality when counting JavaScript priorities', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (priority == "high") highCount++; } console.log(`High priority: ${highCount}`);'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a quoted JavaScript priority-counting example', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; const example = \'priority === "high" highCount++\'; for (const priority of priorities) {} console.log("High priority: 2");'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Loop over priorities')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('requires JavaScript priority counting to happen inside the loop', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) {} if (priority === "high") highCount++; console.log("High priority: 2");'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Loop over priorities')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a priority-counting regex literal inside the JavaScript loop', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { const example = /priority === "high" highCount++/; } console.log("High priority: 2");'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Loop over priorities')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a JavaScript regex literal after a control condition', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (true) /priority === "high"/; highCount++; } console.log("High priority: 2");'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Loop over priorities')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('ignores a JavaScript regex literal after a control block', () => {
+    const challenge = practiceChallengeById('javascript-count-priorities')!
+    const source = 'const priorities = ["high", "low", "high", "medium"]; let highCount = 0; for (const priority of priorities) { if (true) {} /priority === "high"/; highCount++; } console.log("High priority: 2");'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.js', language: 'javascript', content: source }], {
+      status: 'success', stdout: 'High priority: 2', stderr: '', durationMs: 1,
+    })
+
+    expect(result.checks.find((check) => check.label === 'Loop over priorities')?.passed).toBe(true)
+    expect(result.checks.find((check) => check.label === 'Count only high priorities')?.passed).toBe(false)
+    expect(result.passed).toBe(false)
+  })
+
+  it('requires the multi-column layout to be inside the Web breakpoint', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '@media screen and (min-width: 40rem) {}\n.card-grid { grid-template-columns: repeat(2, 1fr); }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: false },
+      { label: 'Start with one column', passed: false },
+      { label: 'Add a min-width media query', passed: true },
+      { label: 'Create multiple columns inside the breakpoint', passed: false },
+    ])
+  })
+
+  it('rejects a multi-column default even when the Web breakpoint is correct', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.card-grid { display: grid; grid-template-columns: repeat(2, 1fr); }\n@media (min-width: 40rem) { .card-grid { grid-template-columns: repeat(3, 1fr); } }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: true },
+      { label: 'Start with one column', passed: false },
+      { label: 'Add a min-width media query', passed: true },
+      { label: 'Create multiple columns inside the breakpoint', passed: true },
+    ])
+    expect(result.passed).toBe(false)
+  })
+
+  it('rejects a negated Web min-width query that never applies at wider sizes', () => {
+    const challenge = practiceChallengeById('web-responsive-breakpoint')!
+    const result = evaluatePracticeChallenge(challenge, [{
+      path: 'style.css',
+      language: 'css',
+      content: '.card-grid { display: grid; grid-template-columns: 1fr; }\n@media not all and (min-width: 40rem) { .card-grid { grid-template-columns: repeat(2, 1fr); } }',
+    }])
+
+    expect(result.checks).toEqual([
+      { label: 'Use a grid by default', passed: true },
+      { label: 'Start with one column', passed: true },
+      { label: 'Add a min-width media query', passed: false },
+      { label: 'Create multiple columns inside the breakpoint', passed: false },
+    ])
+    expect(result.passed).toBe(false)
   })
 
   it('keeps every challenge id unique', () => {
@@ -107,6 +429,7 @@ describe('practice challenge catalog', () => {
     expect(labelPassed('<label for="email" style="/* note */ display: none">Email</label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email"><span hidden>Email</span></label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<div hidden><label for="email">Email</label></div><input id="email" name="email" type="email">')).toBe(false)
+    expect(labelPassed('<label for="email"><script>Email</script><style>Email</style><template>Email</template></label><input id="email" name="email" type="email">')).toBe(false)
     expect(labelPassed('<label for="email">Email</label><input id="email" name="email" type="email">')).toBe(true)
   })
 

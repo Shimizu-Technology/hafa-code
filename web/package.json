@@ -16,6 +16,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@ruby/3.3-wasm-wasi": "^2.9.3-2.9.4",
     "@ruby/wasm-wasi": "^2.9.3-2.9.4",
+    "acorn": "^8.18.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "monaco-editor": "0.55.1",
