@@ -164,3 +164,11 @@ Auth follows the CSG LMS Clerk pattern: frontend gets a Clerk JWT, API verifies 
 The Playwright suite runs the React application and Rails API together against a dedicated PostgreSQL database ending in `_e2e`. A Vite mode named `e2e` selects a fixed classroom persona and sends Rails' existing `test_token_<user-id>` credential. Both sides reject accidental production use: Vite requires development mode plus `VITE_E2E_AUTH=true`, Rails accepts these tokens only in the test environment, and the reset task exits unless the database name ends in `_e2e`.
 
 These tests exercise the real API client, authorization policies, persistence, classroom UI, and browser behavior. They do not replace a production-safe smoke test with real Clerk accounts, deployed Render/Netlify configuration, and a staging or isolated test tenant.
+
+## Storage and accessibility signals
+
+Rails enforces a 2,000,000-byte combined-source limit per project. The frontend measures the same UTF-8 source bytes and shows usage in the project toolbar before the server rejects a save. At 80%, the interface gives cleanup and workspace-backup guidance. This is a source-code limit, not a promise about total browser, student, or organization storage; those broader quotas remain an operational policy decision.
+
+Local project and checkpoint writes treat browser-storage rejection as a recoverable state. The workspace stops claiming that a local backup or checkpoint succeeded, keeps the in-memory project available, and directs the learner to free browser storage or download a backup before closing the tab.
+
+The Playwright gate runs axe against personal and classroom workspaces in default and dark color-safe modes. It also exercises keyboard activation and focus behavior for sharing, projects, files, history, and classroom tabs; a 640 CSS-pixel viewport as the layout equivalent of a 1280-pixel display at 200% browser zoom; horizontal overflow at mobile sizes; and 44-pixel primary mobile targets. These checks reduce regressions, but they do not replace hands-on VoiceOver/other screen-reader testing or validation on the school's actual devices and network.

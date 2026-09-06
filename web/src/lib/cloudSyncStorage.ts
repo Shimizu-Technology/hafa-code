@@ -16,12 +16,17 @@ function loadPendingSyncMap(): PendingSyncMap {
 }
 
 function savePendingSyncMap(pending: PendingSyncMap) {
-  if (Object.keys(pending).length === 0) {
-    localStorage.removeItem(PENDING_SYNC_STORAGE_KEY)
-    return
-  }
+  try {
+    if (Object.keys(pending).length === 0) {
+      localStorage.removeItem(PENDING_SYNC_STORAGE_KEY)
+      return true
+    }
 
-  localStorage.setItem(PENDING_SYNC_STORAGE_KEY, JSON.stringify(pending))
+    localStorage.setItem(PENDING_SYNC_STORAGE_KEY, JSON.stringify(pending))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function pendingCloudProjectIds() {
@@ -31,18 +36,18 @@ export function pendingCloudProjectIds() {
 export function markProjectPendingCloudSync(projectId: string, updatedAt: string) {
   const pending = loadPendingSyncMap()
   pending[projectId] = updatedAt
-  savePendingSyncMap(pending)
+  return savePendingSyncMap(pending)
 }
 
 export function clearProjectPendingCloudSync(projectId: string) {
   const pending = loadPendingSyncMap()
   delete pending[projectId]
-  savePendingSyncMap(pending)
+  return savePendingSyncMap(pending)
 }
 
 export function replacePendingCloudProjectId(previousId: string, nextId: string, updatedAt: string) {
   const pending = loadPendingSyncMap()
   delete pending[previousId]
   pending[nextId] = updatedAt
-  savePendingSyncMap(pending)
+  return savePendingSyncMap(pending)
 }

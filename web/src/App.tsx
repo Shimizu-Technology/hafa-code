@@ -150,6 +150,7 @@ export default function App() {
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
+  const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null)
   const [showArchived, setShowArchived] = useState(isArchived(initialProject))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
@@ -286,7 +287,11 @@ export default function App() {
   const activeContextProjects = activeProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
   const archivedContextProjects = archivedProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
   const visibleProjects = showArchived ? archivedContextProjects : activeContextProjects
-  const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
+  const checkpointMenuIsOpen = checkpointMenuOpen
+  const changeMobileTab = (nextTab: MobileTab) => {
+    setMobileTab(nextTab)
+    setCheckpointMenuOpen(nextTab === 'history')
+  }
   const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
     ? {
         id: pendingInvitation.organization.id,
@@ -334,11 +339,22 @@ export default function App() {
       ? 'Waiting to save'
       : currentCloudSaveStatus === 'offline'
         ? 'Offline · local copy safe'
-      : currentCloudSaveStatus === 'failed'
-        ? 'Cloud save failed · local copy safe'
-        : currentCloudSaveStatus === 'conflict'
-          ? 'Save conflict · local copy safe'
-          : 'Saved to cloud + local backup'
+        : currentCloudSaveStatus === 'failed'
+          ? 'Cloud save failed · local copy safe'
+          : currentCloudSaveStatus === 'conflict'
+            ? 'Save conflict · local copy safe'
+            : currentCloudSaveStatus === 'saved'
+              ? 'Saved to cloud + local backup'
+              : 'Checking cloud save'
+  const workspaceSaveLabel = reviewProject
+    ? 'Cloud project'
+    : localBackupAvailable === null
+      ? 'Checking local backup…'
+      : localBackupAvailable
+        ? (isSignedIn ? cloudSaveLabel : 'Autosaved locally')
+        : isSignedIn
+          ? `${currentCloudSaveStatus === 'saved' ? 'Saved to cloud' : cloudSaveLabel.split(' · ')[0]} · local backup unavailable`
+          : 'Local backup unavailable'
   const canAccessProjectFeedback = canViewProjectFeedback(project, isSignedIn, user?.id, canUseInstructorPanel)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
@@ -516,7 +532,7 @@ export default function App() {
       skipRestorePersistenceRef.current.library = false
       return
     }
-    saveProjectLibrary(library)
+    setLocalBackupAvailable(saveProjectLibrary(library))
   }, [library])
 
   useEffect(() => () => {
@@ -529,7 +545,11 @@ export default function App() {
       skipRestorePersistenceRef.current.theme = false
       return
     }
-    localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+    } catch {
+      // Preferences can fall back to their defaults without interrupting the workspace.
+    }
   }, [themePreference])
 
   useEffect(() => {
@@ -537,7 +557,11 @@ export default function App() {
       skipRestorePersistenceRef.current.colorMode = false
       return
     }
-    localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+    try {
+      localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+    } catch {
+      // Preferences can fall back to their defaults without interrupting the workspace.
+    }
   }, [colorModePreference])
 
   useEffect(() => {
@@ -782,7 +806,7 @@ export default function App() {
     const nextProject = library.projects.find((candidate) => candidate.id === projectId)
     if (!nextProject) return
     activateProject(nextProject)
-    setMobileTab('code')
+    changeMobileTab('code')
   }
 
   const openClassroomReviewProject = (nextProject: SavedProject) => {
@@ -790,7 +814,7 @@ export default function App() {
     setReviewProject(nextProject)
     setActivePath(nextProject.files[0].path)
     setShowArchived(isArchived(nextProject))
-    setMobileTab('code')
+    changeMobileTab('code')
     setInstructorPanelOpen(false)
     setNotice(`Opened ${nextProject.title} in read-only review mode.`)
   }
@@ -812,7 +836,7 @@ export default function App() {
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
-    setMobileTab('code')
+    changeMobileTab('code')
     setNotice(`${next.title} created.`)
   }
 
@@ -836,7 +860,7 @@ export default function App() {
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
-    setMobileTab('code')
+    changeMobileTab('code')
     setLearningSidecarOpen(false)
     setNotice(`${topic.title} opened in a new practice project. Your previous project is unchanged.`)
   }
@@ -862,7 +886,7 @@ export default function App() {
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
-    setMobileTab('code')
+    changeMobileTab('code')
     setLearningSidecarOpen(false)
     setNotice(progressSaved
       ? `${challenge.title} is ready. Your previous project is unchanged.`
@@ -912,7 +936,7 @@ export default function App() {
       setNotice('The practice check ended before a result arrived. Your code is safe — try checking again.')
     }, maximumRunMs)
     setPracticeChecking(true)
-    setMobileTab('output')
+    changeMobileTab('output')
     window.dispatchEvent(new Event('hafa-code-run-active-project'))
   }
 
@@ -1331,7 +1355,7 @@ export default function App() {
       setReviewProject(null)
       setActivePath(copy.files[0].path)
       setShowArchived(false)
-      setMobileTab('code')
+      changeMobileTab('code')
       setCopyDialogOpen(false)
       setNotice(`Project duplicated into ${destinationLabel}.`)
     } finally {
@@ -1504,7 +1528,7 @@ export default function App() {
   }
 
   const runFromMobileCode = () => {
-    setMobileTab('output')
+    changeMobileTab('output')
     if (project.kind !== 'web') window.setTimeout(() => window.dispatchEvent(new CustomEvent('hafa-code-run-active-project')), 0)
   }
 
@@ -1545,7 +1569,17 @@ export default function App() {
     }
 
     const checkpoint = createLocalCheckpoint(checkpointProject, title)
+    if (!checkpoint) {
+      setLocalBackupAvailable(false)
+      if (isCurrentCheckpointProject()) {
+        setNotice(cloudCheckpointError
+          ? `Cloud checkpoint failed: ${cloudCheckpointError}. The local checkpoint also could not be saved because browser storage is unavailable.`
+          : 'Checkpoint could not be saved because browser storage is unavailable. Free space or download a workspace backup.')
+      }
+      return
+    }
     if (isCurrentCheckpointProject()) {
+      setLocalBackupAvailable(true)
       setCheckpoints((current) => [checkpoint, ...current].slice(0, 30))
       setNotice(cloudCheckpointError
         ? `Cloud checkpoint failed: ${cloudCheckpointError}. Saved locally instead.`
@@ -1565,7 +1599,7 @@ export default function App() {
         }))
         setActivePath(res.data.files[0].path)
         setShowArchived(isArchived(res.data))
-        setMobileTab('code')
+        changeMobileTab('code')
         setNotice(`Restored ${checkpoint.title}.`)
         return
       }
@@ -1586,7 +1620,7 @@ export default function App() {
     }))
     setActivePath(restored.files[0].path)
     setShowArchived(false)
-    setMobileTab('code')
+    changeMobileTab('code')
     setNotice(`Restored ${checkpoint.title}.`)
   }
 
@@ -1654,13 +1688,14 @@ export default function App() {
       const nextPracticeProgress = mergePracticeProgress(loadPracticeProgress(), backup.data.practiceProgress)
       const nextProject = nextLibrary.projects.find((candidate) => candidate.id === nextLibrary.activeProjectId) ?? nextLibrary.projects[0]
 
-      persistWorkspaceRestore({
+      const localRestoreAvailable = persistWorkspaceRestore({
         library: nextLibrary,
         checkpoints: nextCheckpoints,
         practiceProgress: nextPracticeProgress,
         theme: backup.data.preferences.theme,
         colorMode: backup.data.preferences.colorMode,
       })
+      setLocalBackupAvailable(localRestoreAvailable)
       skipRestorePersistenceRef.current.library = true
       skipRestorePersistenceRef.current.theme = themePreference !== backup.data.preferences.theme
       skipRestorePersistenceRef.current.colorMode = colorModePreference !== backup.data.preferences.colorMode
@@ -1672,7 +1707,7 @@ export default function App() {
       setThemePreference(backup.data.preferences.theme)
       setColorModePreference(backup.data.preferences.colorMode)
       setShowArchived(isArchived(nextProject))
-      setMobileTab('code')
+      changeMobileTab('code')
       setWorkspaceTransferOpen(false)
       setNotice(`Workspace restored: ${backup.data.library.projects.length} project${backup.data.library.projects.length === 1 ? '' : 's'} and your learning progress were added.`)
     } catch (error) {
@@ -1869,40 +1904,70 @@ export default function App() {
               Close
             </button>
           </div>
-          <div className="classroom-tabs" role="tablist" aria-label="Classroom tools">
+          <div
+            className="classroom-tabs"
+            role="tablist"
+            aria-label="Classroom tools"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+              const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+              const currentIndex = tabs.indexOf(event.target as HTMLButtonElement)
+              if (currentIndex < 0) return
+              event.preventDefault()
+              const nextIndex = event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? tabs.length - 1
+                  : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+              tabs[nextIndex].focus()
+              tabs[nextIndex].click()
+            }}
+          >
             <button
+              id="classroom-review-tab"
               className={classroomTab === 'review' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-review-panel"
               aria-selected={classroomTab === 'review'}
+              tabIndex={classroomTab === 'review' ? 0 : -1}
               onClick={() => setClassroomTab('review')}
             >
               Review work
             </button>
             <button
+              id="classroom-people-tab"
               className={classroomTab === 'people' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-people-panel"
               aria-selected={classroomTab === 'people'}
+              tabIndex={classroomTab === 'people' ? 0 : -1}
               onClick={() => setClassroomTab('people')}
             >
               People
             </button>
             <button
+              id="classroom-invitations-tab"
               className={classroomTab === 'invitations' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-invitations-panel"
               aria-selected={classroomTab === 'invitations'}
+              tabIndex={classroomTab === 'invitations' ? 0 : -1}
               onClick={() => setClassroomTab('invitations')}
             >
               Invitations
             </button>
             {canManageOrgMembers && (
               <button
+                id="classroom-settings-tab"
                 className={classroomTab === 'settings' ? 'active' : 'secondary'}
                 type="button"
                 role="tab"
+                aria-controls="classroom-settings-panel"
                 aria-selected={classroomTab === 'settings'}
+                tabIndex={classroomTab === 'settings' ? 0 : -1}
                 onClick={() => {
                   setSchoolYearDraft(activeOrganization.school_year || '')
                   setClassroomTab('settings')
@@ -1921,19 +1986,32 @@ export default function App() {
               This classroom is archived. Projects, roster changes, invitations, and settings are read-only until an owner restores it.
             </p>
           )}
-          {classroomTab === 'review' && (
-            <ClassroomReviewPanel
-              key={activeOrganization.id}
-              organizationId={String(activeOrganization.id)}
-              members={orgMembers}
-              membersError={orgMembersError}
-              membersLoading={orgMembersLoading}
-              onOpenProject={openClassroomReviewProject}
-              onRefreshMembers={() => setOrgMembersReloadRevision((current) => current + 1)}
-            />
-          )}
-          {classroomTab === 'settings' && canManageOrgMembers && (
-            <div className="classroom-settings">
+          <div
+            id="classroom-review-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-review-tab"
+            hidden={classroomTab !== 'review'}
+          >
+            {classroomTab === 'review' && (
+              <ClassroomReviewPanel
+                key={activeOrganization.id}
+                organizationId={String(activeOrganization.id)}
+                members={orgMembers}
+                membersError={orgMembersError}
+                membersLoading={orgMembersLoading}
+                onOpenProject={openClassroomReviewProject}
+                onRefreshMembers={() => setOrgMembersReloadRevision((current) => current + 1)}
+              />
+            )}
+          </div>
+          {canManageOrgMembers && (
+            <div
+              id="classroom-settings-panel"
+              className="classroom-settings"
+              role="tabpanel"
+              aria-labelledby="classroom-settings-tab"
+              hidden={classroomTab !== 'settings'}
+            >
               <label className="file-path-field" htmlFor="school-year">
                 <span>School year or term</span>
                 <input
@@ -1970,6 +2048,12 @@ export default function App() {
               </div>
             </div>
           )}
+          <div
+            id="classroom-invitations-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-invitations-tab"
+            hidden={classroomTab !== 'invitations'}
+          >
           {classroomTab === 'invitations' && canInviteOrgMembers && (
             <div className="invite-workflow">
               <form className="invite-form" onSubmit={inviteOrgMember}>
@@ -2040,6 +2124,13 @@ export default function App() {
               ))}
             </div>
           )}
+          </div>
+          <div
+            id="classroom-people-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-people-tab"
+            hidden={classroomTab !== 'people'}
+          >
           {classroomTab === 'people' && (
           <div className="people-panel">
             <label className="classroom-search" htmlFor="member-search">
@@ -2095,6 +2186,7 @@ export default function App() {
             </div>
           </div>
           )}
+          </div>
         </section>
       )}
       </>
@@ -2121,14 +2213,14 @@ export default function App() {
           ))}
         </div>
         <div className="mobile-home-actions">
-          <button type="button" onClick={() => setMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
+          <button type="button" onClick={() => changeMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
           <button className="secondary" type="button" onClick={openPracticeLab}><Dumbbell size={16} /> Practice lab</button>
           <button className="secondary" type="button" onClick={() => openLanguageGuide()}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
           <button className="secondary" type="button" onClick={runFromMobileCode}>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : 'Run project'}
           </button>
-          <button className="secondary" type="button" onClick={() => setMobileTab('projects')}><Files size={16} /> Projects</button>
+          <button className="secondary" type="button" onClick={() => changeMobileTab('projects')}><Files size={16} /> Projects</button>
         </div>
       </section>
 
@@ -2160,9 +2252,9 @@ export default function App() {
               checkpointMenuIsOpen={checkpointMenuIsOpen}
               checkpointMenuRef={checkpointMenuRef}
               checkpoints={checkpoints}
-              cloudSaveLabel={reviewProject ? 'Cloud project' : isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
+              cloudSaveLabel={workspaceSaveLabel}
               currentProjectOwnerLabel={currentProjectOwnerLabel}
-              mobileHistoryOpen={mobileTab === 'history'}
+              localBackupAvailable={localBackupAvailable}
               project={project}
               projectCount={activeContextProjects.length}
               onArchive={requestArchiveProject}
@@ -2245,7 +2337,7 @@ export default function App() {
         />
       </div>
 
-      <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={setMobileTab} />
+      <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={changeMobileTab} />
 
       {learningCoachContext && !learningSidecarOpen && (
         <button

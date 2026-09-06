@@ -92,21 +92,22 @@ describe('workspace presentation components', () => {
     const project = createProject('web', 'Portfolio')
     const onRename = vi.fn()
     const onMobileChange = vi.fn()
+    const onCheckpointMenuChange = vi.fn()
 
     const { rerender } = render(
       <ProjectToolbar
         activeOrganizationId={null}
         canEditProject
-        checkpointMenuIsOpen={false}
+        checkpointMenuIsOpen
         checkpointMenuRef={createRef<HTMLDetailsElement>()}
         checkpoints={[]}
         cloudSaveLabel="Autosaved locally"
         currentProjectOwnerLabel=""
-        mobileHistoryOpen={false}
+        localBackupAvailable
         project={project}
         projectCount={1}
         onArchive={vi.fn()}
-        onCheckpointMenuChange={vi.fn()}
+        onCheckpointMenuChange={onCheckpointMenuChange}
         onDelete={vi.fn()}
         onDuplicate={vi.fn()}
         onOpenGuide={vi.fn()}
@@ -122,6 +123,14 @@ describe('workspace presentation components', () => {
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Site' } })
     expect(onRename).toHaveBeenLastCalledWith('Site')
+    expect(screen.getByRole('meter', { name: /project source uses/i }).getAttribute('max')).toBe('2000000')
+    expect(screen.getByText(/of 2.00 MB/)).toBeDefined()
+    const historySummary = screen.getByText('History').closest('summary')!
+    historySummary.focus()
+    fireEvent.keyDown(historySummary, { key: 'Escape' })
+    expect(onCheckpointMenuChange).toHaveBeenLastCalledWith(false)
+    expect(historySummary.parentElement?.hasAttribute('open')).toBe(false)
+    expect(document.activeElement).toBe(historySummary)
 
     rerender(<MobileWorkspaceNav activeTab="code" projectKind="web" onChange={onMobileChange} />)
     expect(screen.getByRole('button', { name: 'Code' }).getAttribute('aria-current')).toBe('page')

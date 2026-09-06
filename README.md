@@ -71,7 +71,7 @@ bin/rails server -p 3000
 ./scripts/gate.sh
 ```
 
-The full gate includes an isolated Playwright classroom suite. It creates and resets only a PostgreSQL database whose name ends in `_e2e`; it refuses to run against any other database. Install Chromium once with `cd web && npx playwright install chromium` if Playwright has not already downloaded it.
+The full gate includes an isolated Playwright classroom suite plus automated accessibility, keyboard, zoom-equivalent layout, contrast, and mobile-target checks. It creates and resets only a PostgreSQL database whose name ends in `_e2e`; it refuses to run against any other database. Install Chromium once with `cd web && npx playwright install chromium` if Playwright has not already downloaded it.
 
 ## Clerk Setup
 

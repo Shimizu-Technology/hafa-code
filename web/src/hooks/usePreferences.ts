@@ -40,10 +40,18 @@ export function useResponsiveEditorFontSize() {
 }
 
 export function loadThemePreference(): ThemePreference {
-  const value = localStorage.getItem(THEME_STORAGE_KEY)
-  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY)
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+  } catch {
+    return 'system'
+  }
 }
 
 export function loadColorModePreference(): ColorModePreference {
-  return localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'colorblind' ? 'colorblind' : 'default'
+  try {
+    return localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'colorblind' ? 'colorblind' : 'default'
+  } catch {
+    return 'default'
+  }
 }

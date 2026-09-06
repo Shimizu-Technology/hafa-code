@@ -192,4 +192,5 @@ export function persistWorkspaceRestore(state: WorkspaceRestoreState, storage: S
   }
 
   resetPracticeProgressCache()
+  return true
 }

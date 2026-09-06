@@ -6,6 +6,9 @@ import {
   formatCheckpointTime,
   formatUpdatedAt,
   isArchived,
+  formatSourceBytes,
+  PROJECT_SOURCE_LIMIT_BYTES,
+  projectSourceUsage,
   visibilityDescriptions,
   visibilityLabels,
 } from '../lib/workspace'
@@ -18,7 +21,7 @@ type ProjectToolbarProps = {
   checkpoints: ProjectCheckpoint[]
   cloudSaveLabel: string
   currentProjectOwnerLabel: string
-  mobileHistoryOpen: boolean
+  localBackupAvailable: boolean | null
   project: SavedProject
   projectCount: number
   onArchive: () => void
@@ -44,7 +47,7 @@ export function ProjectToolbar({
   checkpoints,
   cloudSaveLabel,
   currentProjectOwnerLabel,
-  mobileHistoryOpen,
+  localBackupAvailable,
   project,
   projectCount,
   onArchive,
@@ -60,6 +63,8 @@ export function ProjectToolbar({
   onSaveCheckpoint,
   onVisibilityChange,
 }: ProjectToolbarProps) {
+  const sourceUsage = projectSourceUsage(project)
+
   return (
     <div className="project-toolbar panel surface-grid">
       <div className="title-field">
@@ -72,6 +77,31 @@ export function ProjectToolbar({
           {!canEditProject ? ' · read-only instructor view' : ''}
           {' · updated '}{formatUpdatedAt(project.updatedAt)}
         </small>
+        <div className="source-usage" data-state={sourceUsage.state}>
+          <div className="source-usage-summary">
+            <span>Project source</span>
+            <strong>{formatSourceBytes(sourceUsage.bytes)} of {formatSourceBytes(PROJECT_SOURCE_LIMIT_BYTES)}</strong>
+          </div>
+          <meter
+            aria-label={`Project source uses ${formatSourceBytes(sourceUsage.bytes)} of the ${formatSourceBytes(PROJECT_SOURCE_LIMIT_BYTES)} limit`}
+            min={0}
+            max={PROJECT_SOURCE_LIMIT_BYTES}
+            low={PROJECT_SOURCE_LIMIT_BYTES * 0.6}
+            high={PROJECT_SOURCE_LIMIT_BYTES * 0.8}
+            optimum={0}
+            value={Math.min(sourceUsage.bytes, PROJECT_SOURCE_LIMIT_BYTES)}
+          />
+          {sourceUsage.state !== 'comfortable' && (
+            <p role="status">
+              {sourceUsage.state === 'full'
+                ? 'This project is at the source limit. Remove unused code or files before saving again.'
+                : 'This project is getting full. Remove unused code or download a backup before making a large change.'}
+            </p>
+          )}
+          {localBackupAvailable === false && (
+            <p role="alert">Local backup is unavailable. Free browser storage or download a workspace backup before closing this tab.</p>
+          )}
+        </div>
         <div className="visibility-section">
           <div className="visibility-row">
             <span>Visibility</span>
@@ -101,9 +131,21 @@ export function ProjectToolbar({
         <button className="secondary guide-toolbar-button" type="button" onClick={onOpenGuide}>
           <BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide
         </button>
-        <details ref={checkpointMenuRef} className="checkpoint-menu" open={checkpointMenuIsOpen} onToggle={(event) => {
-          if (!mobileHistoryOpen) onCheckpointMenuChange(event.currentTarget.open)
-        }}>
+        <details
+          ref={checkpointMenuRef}
+          className="checkpoint-menu"
+          open={checkpointMenuIsOpen}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !event.currentTarget.open) return
+            event.preventDefault()
+            event.currentTarget.open = false
+            onCheckpointMenuChange(false)
+            event.currentTarget.querySelector('summary')?.focus()
+          }}
+          onToggle={(event) => {
+            onCheckpointMenuChange(event.currentTarget.open)
+          }}
+        >
           <summary>
             <History size={16} />
             <span>History</span>

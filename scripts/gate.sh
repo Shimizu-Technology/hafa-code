@@ -2,7 +2,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-export PATH="$HOME/.rbenv/shims:$PATH"
+for toolchain_shims in "$HOME/.nodenv/shims" "$HOME/.rbenv/shims"; do
+  if [ -d "$toolchain_shims" ]; then
+    PATH="$toolchain_shims:$PATH"
+  fi
+done
+export PATH
 
 echo "== Hafa Code gate =="
 

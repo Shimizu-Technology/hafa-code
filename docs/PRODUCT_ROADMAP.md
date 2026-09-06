@@ -50,8 +50,9 @@ Finish these before broad FDMS enrollment:
 
 - [x] Add repeatable local browser coverage for session resolution, invitations, cloud save/reload, role boundaries, class duplication, feedback, archive/removal, export, dual-class switching, and mobile actions.
 - [ ] Run a smaller post-deploy suite with real Clerk accounts against staging or a production-safe test tenant, including reconnect recovery.
-- add storage-usage visibility before a learner reaches a hard quota;
-- verify keyboard operation, 200% zoom, status contrast, screen-reader behavior, school-device performance, and software-keyboard input;
+- [x] Show per-project UTF-8 source usage and recovery guidance before the 2 MB source limit rejects a save.
+- [x] Gate core personal/classroom flows on automated WCAG checks, keyboard operation, dark/color-safe contrast, a 200%-zoom-equivalent layout, mobile overflow, and practical 44 px primary targets.
+- [ ] Complete hands-on VoiceOver plus a second screen-reader/browser pass and validate the exact school devices, browser versions, content filters, network, and software keyboards.
 - publish privacy and acceptable-use information approved by FDMS;
 - prove backups with a non-production restore drill;
 - configure release-aware error monitoring, uptime checks, alerts, staging/test tenancy, support ownership, and an incident runbook;

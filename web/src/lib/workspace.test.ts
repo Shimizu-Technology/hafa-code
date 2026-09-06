@@ -2,7 +2,14 @@ import { describe, expect, test, vi } from 'vitest'
 import type { SavedProject } from './codeRunner'
 import { markProjectPendingCloudSync } from './cloudSyncStorage'
 import { createConflictCopy, duplicateProject, type ProjectLibrary } from './projectStorage'
-import { canViewProjectFeedback, mergeCloudAndLocalProjects } from './workspace'
+import {
+  PROJECT_SOURCE_LIMIT_BYTES,
+  canViewProjectFeedback,
+  formatSourceBytes,
+  mergeCloudAndLocalProjects,
+  projectSourceBytes,
+  projectSourceUsage,
+} from './workspace'
 
 function project(id: string, updatedAt: string, organizationId: string | null = '10'): SavedProject {
   return {
@@ -162,5 +169,37 @@ describe('archived classroom feedback access', () => {
     expect(canViewProjectFeedback(archived, true, archived.owner?.id, false)).toBe(true)
     expect(canViewProjectFeedback(archived, true, 999, false)).toBe(false)
     expect(canViewProjectFeedback(archived, true, 999, true)).toBe(true)
+  })
+})
+
+describe('project source usage', () => {
+  test('counts UTF-8 bytes instead of JavaScript code units', () => {
+    const candidate = project('42', '2026-07-25T01:00:00.000Z')
+    candidate.files = [
+      { path: 'main.rb', language: 'ruby', content: 'Håfa' },
+      { path: 'helper.rb', language: 'ruby', content: '🌺' },
+    ]
+
+    expect(projectSourceBytes(candidate)).toBe(9)
+  })
+
+  test('warns before the server source limit and marks the limit as full', () => {
+    const candidate = project('42', '2026-07-25T01:00:00.000Z')
+    candidate.files[0].content = 'a'.repeat((PROJECT_SOURCE_LIMIT_BYTES * 0.8) - 1)
+    expect(projectSourceUsage(candidate).state).toBe('comfortable')
+
+    candidate.files[0].content = 'a'.repeat(PROJECT_SOURCE_LIMIT_BYTES * 0.8)
+    expect(projectSourceUsage(candidate).state).toBe('warning')
+
+    candidate.files[0].content += 'a'.repeat(PROJECT_SOURCE_LIMIT_BYTES * 0.2)
+    expect(projectSourceUsage(candidate).state).toBe('full')
+  })
+
+  test('formats source sizes for quick scanning', () => {
+    expect(formatSourceBytes(999)).toBe('999 B')
+    expect(formatSourceBytes(1_000)).toBe('1 KB')
+    expect(formatSourceBytes(1_001)).toBe('2 KB')
+    expect(formatSourceBytes(1_000_000)).toBe('1.00 MB')
+    expect(formatSourceBytes(PROJECT_SOURCE_LIMIT_BYTES)).toBe('2.00 MB')
   })
 })
