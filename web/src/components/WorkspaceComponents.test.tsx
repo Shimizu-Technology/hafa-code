@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -180,5 +180,70 @@ describe('workspace presentation components', () => {
 
     fireEvent.keyDown(screen.getByLabelText('Path'), { key: 'Enter' })
     expect(onSubmitFileDialog).toHaveBeenCalledOnce()
+  })
+
+  it('makes personal and cross-class copy destinations explicit', async () => {
+    const user = userEvent.setup()
+    const project = createProject('ruby', 'Class starter')
+    const onCloseProjectCopy = vi.fn()
+    const onConfirmProjectCopy = vi.fn()
+    const onProjectCopyDestinationChange = vi.fn()
+
+    render(
+      <WorkspaceDialogs
+        activeProjectCount={1}
+        confirmAction={null}
+        confirmDialogRef={createRef<HTMLElement>()}
+        copyDestinationId="10"
+        copyDestinations={[
+          { id: null, label: 'Personal projects', description: 'Only you can access this copy.' },
+          { id: '10', label: 'Computer Science', description: 'Private to you and this classroom’s instructors.' },
+          { id: '20', label: 'Robotics', description: 'Private to you and this classroom’s instructors.' },
+        ]}
+        copyDialogOpen
+        copyDialogRef={createRef<HTMLElement>()}
+        copySubmitting={false}
+        fileDialog={null}
+        fileDialogError=""
+        fileDialogRef={createRef<HTMLElement>()}
+        isSignedIn
+        orgCreateOpen={false}
+        orgDialogRef={createRef<HTMLElement>()}
+        orgNameDraft=""
+        pendingCheckpoint={null}
+        project={project}
+        projectActionsDialogRef={createRef<HTMLElement>()}
+        projectActionsOpen={false}
+        shareDialog={null}
+        shareDialogRef={createRef<HTMLElement>()}
+        onArchiveProject={vi.fn()}
+        onCloseConfirm={vi.fn()}
+        onCloseFileDialog={vi.fn()}
+        onCloseOrganizationDialog={vi.fn()}
+        onCloseProjectActions={vi.fn()}
+        onCloseProjectCopy={onCloseProjectCopy}
+        onCloseShareDialog={vi.fn()}
+        onConfirmProjectAction={vi.fn()}
+        onConfirmProjectCopy={onConfirmProjectCopy}
+        onCopyShareLink={vi.fn()}
+        onCreateOrganization={vi.fn()}
+        onDuplicateProject={vi.fn()}
+        onProjectCopyDestinationChange={onProjectCopyDestinationChange}
+        onFilePathChange={vi.fn()}
+        onOrganizationNameChange={vi.fn()}
+        onRequestDeleteProject={vi.fn()}
+        onRestoreProject={vi.fn()}
+        onSubmitFileDialog={vi.fn()}
+      />,
+    )
+
+    const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
+    expect(within(dialog).getByRole('radio', { name: /Computer Science/ })).toHaveProperty('checked', true)
+    await user.click(within(dialog).getByRole('radio', { name: /Robotics/ }))
+    expect(onProjectCopyDestinationChange).toHaveBeenCalledWith('20')
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
+    expect(onConfirmProjectCopy).toHaveBeenCalledOnce()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(onCloseProjectCopy).toHaveBeenCalledOnce()
   })
 })
