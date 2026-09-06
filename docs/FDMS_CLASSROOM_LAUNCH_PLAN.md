@@ -510,11 +510,11 @@ This is an order of operations, not a guaranteed calendar estimate. Each phase m
 ### Before the pilot
 
 - [ ] Production origin and invitation URLs are correct.
-- [ ] High-severity dependency audits are clear.
-- [ ] CI runs on every pull request.
-- [ ] Save failure and recovery scenarios pass.
-- [ ] Class-preserving duplication passes.
-- [ ] Teacher feedback workflow is implemented or FDMS accepts the documented LMS fallback.
+- [x] High-severity dependency audits are clear.
+- [x] CI runs on every pull request.
+- [x] Save failure and recovery scenarios pass.
+- [x] Class-preserving duplication passes.
+- [x] Teacher feedback workflow is implemented or FDMS accepts the documented LMS fallback.
 - [ ] Public sharing is disabled or governed by an approved policy.
 - [ ] Test accounts for every role exist.
 - [ ] Backup restore and monitoring checks pass.
@@ -588,8 +588,8 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | --- | --- |
 | `npm --prefix web run lint` | Pass |
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
-| `npm --prefix web test` | Pass: 22 files, 203 tests |
-| `bundle exec rails test` | Pass: 52 runs, 410 assertions |
+| `npm --prefix web test` | Pass: 22 files, 205 tests |
+| `bundle exec rails test` | Pass: 54 runs, 425 assertions |
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
