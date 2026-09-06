@@ -33,11 +33,12 @@ const basicsTopic: Record<ProjectKind, string> = {
   typescript: 'typescript-output-types',
   python: 'python-output-comments',
   java: 'java-output-comments',
+  sql: 'sql-select',
   web: 'web-dom-events',
 }
 
 const loopsTopic: Record<Exclude<ProjectKind, 'web'>, string> = {
-  ruby: 'ruby-loops', javascript: 'javascript-loops', typescript: 'typescript-functions', python: 'python-loops', java: 'java-loops',
+  ruby: 'ruby-loops', javascript: 'javascript-loops', typescript: 'typescript-functions', python: 'python-loops', java: 'java-loops', sql: 'sql-filter-sort',
 }
 
 const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
@@ -74,6 +75,13 @@ const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
     { pattern: /TS7006|implicitly has an 'any' type/i, title: 'TypeScript needs a parameter type', explanation: 'Strict checking could not infer a safe type for this parameter.', steps: ['Decide what values the function should accept.', 'Add an annotation after the parameter name.', 'Use a union when more than one type is intentional.'], topic: 'typescript-functions' },
     { pattern: /SyntaxError|error TS1\d{3}/i, title: 'TypeScript could not read this syntax', explanation: 'A delimiter, keyword, or expression is incomplete near the first diagnostic.', steps: ['Open the first reported file and line.', 'Match every opening bracket, quote, and parenthesis.', 'Fix the first diagnostic, then run again.'], topic: 'typescript-output-types' },
   ],
+  sql: [
+    { pattern: /no such table/i, title: 'SQLite cannot find that table', explanation: 'The table name does not match a table created by schema.sql.', steps: ['Compare the name with the CREATE TABLE statement in schema.sql.', 'Check spelling and underscores.', 'Reset the database after fixing the schema.'], topic: 'sql-schema-data' },
+    { pattern: /no such column|has no column named/i, title: 'SQLite cannot find that column', explanation: 'The column is missing, misspelled, or needs a table alias.', steps: ['Compare the column with schema.sql.', 'Check the table alias before the dot.', 'Run a simple SELECT * to inspect the available columns.'], topic: 'sql-select' },
+    { pattern: /syntax error|incomplete input/i, title: 'SQLite could not read this SQL', explanation: 'A keyword, comma, quote, parenthesis, or clause is incomplete near the named token.', steps: ['Read the word after “near” in the error.', 'Check the clause immediately before it.', 'Match quotes and parentheses, then run again.'], topic: 'sql-select' },
+    { pattern: /constraint failed|UNIQUE constraint|NOT NULL constraint|FOREIGN KEY constraint/i, title: 'A database rule rejected this change', explanation: 'The new or updated row violates a rule declared in schema.sql.', steps: ['Read which constraint and column failed.', 'Inspect the row values being inserted or updated.', 'Change the data, or adjust the schema only if the rule is wrong.'], topic: 'sql-change-data' },
+    { pattern: /ambiguous column name/i, title: 'SQLite needs the table for this column', explanation: 'More than one joined table has a column with this name.', steps: ['Give each table a short alias.', 'Prefix the column with its alias, such as `l.name`.', 'Use clear aliases in SELECT, JOIN, and ORDER BY.'], topic: 'sql-joins' },
+  ],
   web: [
     { pattern: /Failed to load/i, title: 'The page could not load a file', explanation: 'A script, stylesheet, image, or other resource points to a path the preview cannot resolve.', steps: ['Compare the path with the file name in the project.', 'Check spelling, capitalization, and relative folders.', 'Refresh the preview after correcting the reference.'], topic: 'web-links-images' },
     { pattern: /ReferenceError/i, title: 'The page script cannot find that name', explanation: 'JavaScript in the preview is using a variable or function that is not available.', steps: ['Check spelling and capitalization.', 'Declare it before the code that uses it.', 'Refresh the preview to run the updated script.'], topic: 'web-dom-events' },
@@ -93,8 +101,8 @@ export function errorCoachGuideTopicIds(kind: ProjectKind) {
 function errorLocation(message: string, entryPath: string) {
   const candidates = [
     /File ["']([^"']+)["'], line (\d+)/,
-    /([^\s():]+\.(?:java|rb|js|ts|py|html)):(\d+)(?::\d+)?/,
-    /\(([^\s():]+\.(?:java|rb|js|ts|py|html)):(\d+)(?::\d+)?\)/,
+    /([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?/,
+    /\(([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?\)/,
   ]
   for (const pattern of candidates) {
     const match = pattern.exec(message)

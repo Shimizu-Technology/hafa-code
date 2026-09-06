@@ -1,8 +1,8 @@
-export type RunnerLanguage = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java'
+export type RunnerLanguage = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql'
 
 export type ProjectKind = RunnerLanguage | 'web'
 export type ProjectVisibility = 'private' | 'organization' | 'unlisted' | 'public'
-export type ProjectFileLanguage = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'html' | 'css' | 'json' | 'plain'
+export type ProjectFileLanguage = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql' | 'html' | 'css' | 'json' | 'plain'
 
 export interface ProjectFile {
   path: string

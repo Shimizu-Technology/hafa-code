@@ -85,6 +85,12 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     extensions: ['java'],
     starterContent: '// Write Java here\n',
   },
+  sql: {
+    label: 'SQL',
+    monacoLanguage: 'sql',
+    extensions: ['sql'],
+    starterContent: '-- Write SQL here\n',
+  },
   html: {
     label: 'HTML',
     monacoLanguage: 'html',
@@ -222,6 +228,29 @@ export const PROJECT_KIND_DEFINITIONS = {
       startupTimeoutMs: 120_000,
       executionTimeoutMs: 30_000,
       startupNote: 'The first Java run downloads the browser compiler and may take longer on a mobile connection.',
+    },
+  },
+  sql: {
+    kind: 'sql',
+    label: 'SQL',
+    shortLabel: 'SQL',
+    starterTitle: 'SQL Data Playground',
+    entryPath: 'main.sql',
+    starterFiles: [
+      { path: 'main.sql', language: 'sql', content: 'SELECT name, village, completed_lessons\nFROM learners\nORDER BY completed_lessons DESC;\n' },
+      { path: 'schema.sql', language: 'sql', content: 'CREATE TABLE learners (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  village TEXT NOT NULL,\n  completed_lessons INTEGER NOT NULL DEFAULT 0\n);\n' },
+      { path: 'seed.sql', language: 'sql', content: "INSERT INTO learners (name, village, completed_lessons) VALUES\n  ('Lina', 'Hagåtña', 6),\n  ('Mia', 'Dededo', 4),\n  ('Kai', 'Yigo', 2);\n" },
+    ],
+    preferredEntryPaths: ['main.sql', 'query.sql'],
+    defaultFileLanguage: 'sql',
+    fallbackFileLanguage: 'sql',
+    newFileCandidates: ['query.sql', 'schema-extra.sql', 'seed-extra.sql'],
+    defaultExtension: 'sql',
+    runner: {
+      language: 'sql',
+      runLabel: 'SQL',
+      terminalCommand: (entryPath) => `sqlite3 :memory: < ${shellArgument(entryPath)}`,
+      createWorker: () => new Worker(new URL('../workers/sqlRunner.worker.ts', import.meta.url), { type: 'module' }),
     },
   },
   web: {

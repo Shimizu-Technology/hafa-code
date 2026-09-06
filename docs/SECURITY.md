@@ -66,6 +66,19 @@ third-party runtime dependency; deployment eligibility must continue to be
 checked against CheerpJ's current license terms. Hafa provides visible
 attribution and does not self-host CheerpJ Core.
 
+### SQL
+
+SQL runs through the official SQLite WebAssembly distribution in a dedicated Web Worker. Rails stores the source files but never receives or executes the database.
+
+- The worker creates only a transient `:memory:` database and does not initialize OPFS or another persistent VFS
+- Every new database connection enables SQLite defensive mode before schema or seed SQL runs, preventing learner SQL from writing directly to internal shadow tables while preserving normal virtual-table operations
+- `schema.sql` and `seed.sql` are explicit project inputs; no host files, uploaded databases, remote URLs, or credentials are accepted
+- SQLite extensions and a remote database protocol are not exposed
+- Project validation retains the shared 50-file and 2,000,000-byte source limits
+- The visible result is limited to 500 rows, 50 columns, and 256 KiB of transferred values; BLOBs are represented by byte count rather than copied into the UI
+- Stop, timeout, or leaving the project terminates the worker and its in-memory database
+- The SQL worker CSP permits same-origin scripts, WebAssembly, and the same-origin fetch needed to load the SQLite asset; the runner exposes no API or network bridge to learner SQL, and third-party origins such as Clerk or remote databases remain blocked
+
 ### HTML/CSS/JS Preview
 
 Web projects render in a sandboxed iframe.
@@ -100,7 +113,7 @@ runner is a narrower exception: ruby.wasm's `js` bridge evaluates a small amount
 of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
 asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
 `javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
-that broader exception. The TypeScript and Python workers follow the same stricter pattern.
+that broader exception. The TypeScript, SQL, and Python workers follow the same stricter pattern.
 Like ruby.wasm, CheerpJ requires `'unsafe-eval'` for its trusted JavaScript
 bridge. That exception is limited to the generated Java worker response. The
 Java worker also allows the pinned CheerpJ script host and the two exact
@@ -134,6 +147,7 @@ This is a test seam, not an alternate production login. Production and preview b
 - TypeScript adds a compiler worker and ES2020 declaration libraries on first use; it is intended for focused learning projects, not large application builds.
 - Java's first run downloads CheerpJ plus an approximately 18 MiB Java 8 compiler archive; slower connections can take noticeably longer.
 - Java is currently a Java 8, default-package learning environment without Maven, Gradle, external JARs, desktop GUIs, or arbitrary networking.
+- SQL database state is intentionally memory-only and project-session scoped; a page reload, Stop, or worker failure rebuilds it from `schema.sql` and `seed.sql` on the next run.
 - CheerpJ production use must remain within the Community License or move to an appropriate commercial license; technical evaluation alone does not cover normal organizational use.
 - Python package installation is intentionally unavailable in the initial release.
 - Browsers without WebAssembly JSPI can run Python but receive a clear runtime error when a program calls `input()`.

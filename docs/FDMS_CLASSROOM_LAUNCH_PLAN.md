@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
+Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, TypeScript, Python, Java, SQL, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
 
 The application already has a credible classroom foundation:
 
@@ -22,15 +22,15 @@ The application already has a credible classroom foundation:
 
 The current `main` branch includes durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
 
-The remaining launch gates are primarily repeatable browser automation and external operations:
+The remaining launch gates are deployed-provider, school, and operating evidence rather than unimplemented classroom fundamentals:
 
-1. Run the new repeatable multi-role browser coverage in required CI and add a production-safe Clerk smoke suite on an isolated deployed tenant.
+1. Keep the repeatable multi-role browser coverage required in CI and add a production-safe Clerk smoke suite on an isolated deployed tenant.
 2. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
 3. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
 4. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
 5. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
 
-The core architecture does not need to be replaced. The next move is to close the remaining code-backed launch gaps, complete the external gates, and run the controlled pilot before full enrollment.
+The core architecture does not need to be replaced. The next move is to maintain the code-backed release gates, complete the external evidence, and run the controlled pilot before full enrollment.
 
 ## 2. What Hafa Code Is — and Why It Exists
 
@@ -39,7 +39,7 @@ Hafa Code is best understood as a **classroom coding workspace**, not a complete
 It solves several specific problems:
 
 - Students can write and run beginner code on school devices without installing Ruby, Node, compilers, or an IDE.
-- Ruby, JavaScript, TypeScript, Python, and Java run in browser workers with time guardrails.
+- Ruby, JavaScript, TypeScript, Python, Java, and SQL run in browser workers with time guardrails.
 - Web projects render inside nested sandboxed frames.
 - Rails stores users, memberships, project metadata, source files, checkpoints, and share snapshots; it does not execute student code.
 - The product is small enough to remain understandable and approachable for Code School of Guam and FDMS students who may eventually contribute to it.
@@ -439,7 +439,7 @@ The baseline production service worker precaches 102 generated assets. The harde
 
 - [ ] Measure first visit, repeat visit, offline start, and update behavior on the FDMS network.
 - [x] Load language runtimes only when needed. Runner workers and their runtime assets are created on Run rather than during the application-shell load.
-- [x] Import only the supported Monaco grammars and language services, with JSON, CSS, HTML, JavaScript/TypeScript, and the base editor worker rather than the full language catalog.
+- [x] Import only the supported Monaco grammars and language services, with JSON, CSS, HTML, SQL, JavaScript/TypeScript, and the base editor worker rather than the full language catalog.
 - [x] Avoid precaching every generated language asset.
 - [x] Display separate preparing/running states, first-run notes where needed, startup timeouts, and actionable runtime-loading/network errors.
 - [ ] Verify service-worker updates do not leave students on mismatched frontend assets.

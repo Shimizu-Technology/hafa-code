@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## SQLite WebAssembly
+
+Hafa Code includes the official SQLite WebAssembly distribution in its on-demand SQL worker.
+
+- Project: <https://sqlite.org/wasm>
+- Package source: <https://github.com/sqlite/sqlite-wasm>
+- License: Apache License 2.0
+
+The runtime is used only for transient, in-memory learner databases. Hafa Code does not expose OPFS persistence, extension loading, remote database access, or persistent SQLite storage through this integration.
+
 ## TypeScript
 
 Hafa Code includes the TypeScript compiler and a focused set of its standard declaration libraries in the on-demand TypeScript worker.

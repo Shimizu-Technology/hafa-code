@@ -20,6 +20,7 @@ web/src/
     ProjectSidebar.tsx        Desktop and mobile project navigation
     ProjectToolbar.tsx        Project metadata, visibility, history, and primary actions
     RunnerPanel.tsx           Ruby/JavaScript/TypeScript/Python/Java terminal runner UI
+    SqlRunnerPanel.tsx        Persistent in-memory SQLite controls and accessible result tables
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
     WorkspaceDialogs.tsx      Controlled file, share, organization, action, and confirmation dialogs
   contexts/
@@ -49,6 +50,9 @@ web/src/
     typescriptCompiler.ts     In-memory multi-file TypeScript compiler host
     commonJsBundle.ts         Trusted relative-module loader emitted for QuickJS
     typescriptRunner.worker.ts TypeScript compilation and QuickJS execution
+    sqlRunnerCore.ts          SQL validation, bootstrap, result bounds, and serialization
+    sqlRunnerProtocol.ts      SQL worker request and structured result contract
+    sqlRunner.worker.ts       Official SQLite WASM project-session runtime
     pythonRunner.worker.ts    Browser-side Pyodide execution
     javaRunner.worker.ts      Browser-side CheerpJ compiler and runtime bridge
 ```

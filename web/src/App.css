@@ -1825,6 +1825,124 @@ button.context-chip.active,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.sql-runner-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.sql-runner-actions button {
+  white-space: nowrap;
+}
+
+.sql-result-stage {
+  background: var(--terminal);
+  color: #f3eadc;
+  min-height: calc(var(--workspace-pane-height) - 94px);
+  max-height: calc(var(--workspace-pane-height) - 94px);
+  overflow: auto;
+  padding: 1rem;
+}
+
+.sql-result-stage .runner-progress {
+  min-height: calc(var(--workspace-pane-height) - 140px);
+  align-items: center;
+  justify-content: center;
+}
+
+.sql-result-stage .empty-output {
+  min-height: calc(var(--workspace-pane-height) - 140px);
+}
+
+.sql-table-region {
+  border: 1px solid rgba(255, 250, 241, 0.14);
+  border-radius: 0.75rem;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.sql-table-region:focus-visible {
+  outline: 3px solid #7dd3c7;
+  outline-offset: 2px;
+}
+
+.sql-table-region table {
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  min-width: 100%;
+  text-align: left;
+}
+
+.sql-table-region caption {
+  background: #211c18;
+  color: #b9aa99;
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+}
+
+.sql-table-region th,
+.sql-table-region td {
+  border-bottom: 1px solid rgba(255, 250, 241, 0.1);
+  padding: 0.65rem 0.75rem;
+  white-space: nowrap;
+}
+
+.sql-table-region th {
+  background: #2b241f;
+  color: #ffd38a;
+  font-weight: 900;
+  position: sticky;
+  top: 0;
+}
+
+.sql-table-region tbody tr:nth-child(even) {
+  background: rgba(255, 250, 241, 0.035);
+}
+
+.sql-null {
+  color: #9f9185;
+  font-style: italic;
+}
+
+.sql-empty-result {
+  color: #b9aa99;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+}
+
+.sql-message {
+  border: 1px solid rgba(125, 211, 199, 0.28);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+}
+
+.sql-message.success {
+  background: rgba(125, 211, 199, 0.08);
+  color: #a5e5dc;
+}
+
+.sql-message.error {
+  background: rgba(255, 179, 167, 0.08);
+  border-color: rgba(255, 179, 167, 0.3);
+  color: #ffb3a7;
+}
+
+.sql-message pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .output-panel > .panel-header > button {
   white-space: nowrap;
 }
@@ -3780,6 +3898,20 @@ button.context-chip.active,
 
   .terminal-input-row input {
     font-size: 1rem;
+  }
+
+  .sql-runner-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .sql-runner-actions button {
+    min-width: 0;
+  }
+
+  .sql-result-stage {
+    padding: 0.75rem;
   }
 
   .mobile-tab-home .layout-grid {

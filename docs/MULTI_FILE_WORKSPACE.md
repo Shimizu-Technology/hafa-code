@@ -4,7 +4,7 @@
 
 Hafa Code should stay welcoming for first-time students, but it should not trap growing students in one-file exercises. A better Replit-like experience for this project is a workspace that starts simple and opens up naturally:
 
-- Beginners still get a ready-to-run `main.rb`, `main.js`, `main.ts`, `main.py`, `Main.java`, or `index.html` project.
+- Beginners still get a ready-to-run `main.rb`, `main.js`, `main.ts`, `main.py`, `Main.java`, `main.sql`, or `index.html` project.
 - Intermediate users can create helper files, folders, data files, and multiple pages.
 - Advanced users can organize real small projects without leaving the browser.
 - The backend remains a storage API only; student code still runs in browser sandboxes.
@@ -15,7 +15,7 @@ The goal is not to copy Replit's container platform in one step. The goal is to 
 
 Each project has:
 
-- A `kind`: `ruby`, `javascript`, `typescript`, `python`, `java`, or `web`.
+- A `kind`: `ruby`, `javascript`, `typescript`, `python`, `java`, `sql`, or `web`.
 - A list of source files with normalized relative paths.
 - An `entryPath`, which is the file Run or Preview treats as the project entrypoint.
 
@@ -26,6 +26,7 @@ The default projects remain intentionally small:
 - TypeScript: `main.ts` plus `greeting.ts`
 - Python: `main.py`
 - Java: `Main.java`
+- SQL: `main.sql`, `schema.sql`, `seed.sql`
 - Web: `index.html`, `style.css`, `script.js`
 
 The user can then opt into more structure by creating files and folders.
@@ -108,6 +109,10 @@ Mount the complete project in Pyodide's in-memory filesystem for each run, then 
 ### Java
 
 Compile `Main.java` and default-package helper classes into a run-scoped CheerpJ filesystem directory. Packages, external JARs, Maven, and Gradle remain outside the focused Java mode.
+
+### SQL
+
+Create a project-scoped `:memory:` SQLite database inside a dedicated worker. Execute `schema.sql` and `seed.sql` as explicit bootstrap inputs, then run the selected SQL entry file. Preserve data changes while the project worker remains active, and rebuild predictably after Reset database or a bootstrap-file edit. Other `.sql` files can become the entry without being executed automatically.
 
 ## Future Advanced Runtime
 

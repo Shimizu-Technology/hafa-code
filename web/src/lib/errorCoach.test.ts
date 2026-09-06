@@ -29,6 +29,11 @@ describe('contextual error coach', () => {
     expect(advice?.location).toBe('index.html · line 12')
   })
 
+  it('explains SQLite INSERT target-column errors', () => {
+    const advice = coachRunnerError('sql', 'main.sql', failure('table learners has no column named nickname'))
+    expect(advice).toMatchObject({ title: 'SQLite cannot find that column', guideTopicId: 'sql-select' })
+  })
+
   it('preserves a trusted source path when no line is available', () => {
     const advice = coachRunnerError('web', 'index.html', failure('ReferenceError: helper is not defined'), { path: 'helpers.js' })
     expect(advice?.location).toBe('helpers.js')

@@ -51,3 +51,53 @@ test('TypeScript stays usable without horizontal overflow on a phone viewport', 
   await expect(page.locator('.terminal-footer')).toContainText('success')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
+
+test('SQL runs seeded queries, preserves deliberate changes, resets, and explains errors', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'EditContext', { configurable: true, value: undefined })
+  })
+  await openStudent(page)
+  await page.locator('.sidebar-content').getByRole('button', { name: 'SQL', exact: true }).click()
+
+  await expect(page.getByLabel('Project name')).toHaveValue('SQL Data Playground')
+  await expect(page.getByRole('button', { name: 'schema.sql' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'seed.sql' })).toBeVisible()
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+  const initialResult = page.getByRole('region', { name: 'Query result, 3 rows' })
+  await expect(initialResult.getByRole('columnheader')).toHaveText(['name', 'village', 'completed_lessons'])
+  await expect(initialResult.getByRole('row').nth(1)).toContainText('Lina')
+
+  const editor = page.getByRole('textbox', { name: 'Editor content' })
+  await page.locator('.monaco-editor .view-lines').click()
+  await expect(editor).toBeFocused()
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue("UPDATE learners SET completed_lessons = completed_lessons + 1 WHERE name = 'Kai';"))).toBe(true)
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+  await expect(page.getByText('1 row changed across 1 statement.')).toBeVisible()
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue("SELECT completed_lessons FROM learners WHERE name = 'Kai';"))).toBe(true)
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+  await expect(page.getByRole('region', { name: 'Query result, 1 row' })).toContainText('3')
+
+  await page.getByRole('button', { name: 'Reset database' }).click()
+  await expect(page.getByText(/Database reset from schema\.sql and seed\.sql/)).toBeVisible()
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+  await expect(page.getByRole('region', { name: 'Query result, 1 row' })).toContainText('2')
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('SELECT * FROM missing_table;'))).toBe(true)
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+  await expect(page.locator('.sql-message.error')).toContainText('no such table')
+  await expect(page.getByText('SQLite cannot find that table')).toBeVisible()
+})
+
+test('SQL results remain usable without page overflow on a phone viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openStudent(page)
+  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Projects' }).click()
+  await page.getByRole('button', { name: 'SQL', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Output' }).click()
+  await page.getByRole('button', { name: 'Run SQL' }).click()
+
+  await expect(page.getByRole('region', { name: 'Query result, 3 rows' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reset database' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})

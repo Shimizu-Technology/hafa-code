@@ -50,6 +50,22 @@ describe('practice challenge catalog', () => {
     expect(nextIncompletePracticeChallenge(last, everyJavaChallenge)).toBeNull()
   })
 
+  it('does not accept SQL syntax copied only into comments', () => {
+    const challenge = practiceChallengeById('sql-update-kai')!
+    const files = challenge.project.files.map((file) => file.path === 'main.sql' ? {
+      ...file,
+      content: "-- SET completed_lessons = completed_lessons + 1\n/* WHERE name = 'Kai' */\nUPDATE learners SET completed_lessons = completed_lessons;",
+    } : file)
+
+    const result = evaluatePracticeChallenge(challenge, files, {
+      status: 'success', stdout: challenge.expectedOutput!, stderr: '', durationMs: 1,
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.checks.slice(0, 2).every((check) => check.passed === false)).toBe(true)
+    expect(result.checks.at(-1)?.passed).toBe(true)
+  })
+
   it('gives every additional Starter an unfinished scaffold and a valid reference solution', () => {
     const runtimeSolutions: Record<string, string> = {
       'ruby-arithmetic-total': 'price = 6\nquantity = 3\ntotal = price * quantity\nputs "Total: #{total}"\n',

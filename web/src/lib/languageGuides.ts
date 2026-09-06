@@ -36,6 +36,7 @@ const ENTRY_PATHS: Record<Exclude<ProjectKind, 'web'>, string> = {
   typescript: 'main.ts',
   python: 'main.py',
   java: 'Main.java',
+  sql: 'main.sql',
 }
 
 const FILE_LANGUAGES = {
@@ -44,6 +45,7 @@ const FILE_LANGUAGES = {
   typescript: 'typescript',
   python: 'python',
   java: 'java',
+  sql: 'sql',
 } as const
 
 function runnableTopic(kind: Exclude<ProjectKind, 'web'>, input: TopicInput): LanguageGuideTopic {
@@ -840,6 +842,111 @@ function webFiles(html: string, css = webBaseCss.content, script = webEmptyScrip
   ]
 }
 
+const sqlSchemaFile: ProjectFile = {
+  path: 'schema.sql',
+  language: 'sql',
+  content: 'CREATE TABLE learners (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  village TEXT NOT NULL,\n  completed_lessons INTEGER NOT NULL DEFAULT 0\n);\n',
+}
+
+const sqlSeedFile: ProjectFile = {
+  path: 'seed.sql',
+  language: 'sql',
+  content: "INSERT INTO learners (name, village, completed_lessons) VALUES\n  ('Lina', 'Hagåtña', 6),\n  ('Mia', 'Dededo', 4),\n  ('Kai', 'Yigo', 2);\n",
+}
+
+function sqlTopic(input: TopicInput) {
+  const entryPath = input.entryPath ?? 'main.sql'
+  return runnableTopic('sql', {
+    ...input,
+    entryPath,
+    files: input.files ?? [
+      { path: entryPath, language: 'sql', content: input.code },
+      sqlSchemaFile,
+      sqlSeedFile,
+    ],
+  })
+}
+
+const sqlTopics = [
+  sqlTopic({
+    id: 'sql-select',
+    title: 'Select columns',
+    summary: '`SELECT` chooses the columns to return. `FROM` names the table that supplies the rows.',
+    keywords: ['select', 'from', 'column', 'alias', 'query'],
+    code: 'SELECT name, village\nFROM learners;\n',
+    expectedOutput: 'Three rows with the name and village columns.',
+    commonMistake: 'Separate column names with commas. A trailing comma before `FROM` causes a syntax error.',
+  }),
+  sqlTopic({
+    id: 'sql-filter-sort',
+    title: 'Filter and sort rows',
+    summary: '`WHERE` keeps matching rows. `ORDER BY` sorts the result, with `DESC` placing larger values first.',
+    keywords: ['where', 'order by', 'asc', 'desc', 'filter', 'sort'],
+    code: 'SELECT name, completed_lessons\nFROM learners\nWHERE completed_lessons >= 4\nORDER BY completed_lessons DESC;\n',
+    expectedOutput: 'Lina with 6 lessons, followed by Mia with 4.',
+    commonMistake: '`WHERE` comes before `ORDER BY`, even though sorting happens after filtering.',
+  }),
+  sqlTopic({
+    id: 'sql-expressions-null',
+    title: 'Expressions and NULL',
+    summary: 'Expressions calculate values in a result. Use `IS NULL` or `IS NOT NULL` for missing values.',
+    keywords: ['expression', 'null', 'coalesce', 'case', 'as'],
+    code: "SELECT name,\n       completed_lessons * 2 AS practice_points,\n       CASE WHEN completed_lessons >= 5 THEN 'ready' ELSE 'growing' END AS status\nFROM learners;\n",
+    expectedOutput: 'Each learner has calculated practice_points and a ready/growing status.',
+    commonMistake: '`NULL` is not equal to anything, including itself. Write `IS NULL`, not `= NULL`.',
+  }),
+  sqlTopic({
+    id: 'sql-aggregates',
+    title: 'Count and summarize',
+    summary: 'Aggregate functions such as `COUNT`, `SUM`, and `AVG` turn many rows into summary values.',
+    keywords: ['count', 'sum', 'avg', 'min', 'max', 'aggregate'],
+    code: 'SELECT COUNT(*) AS learner_count,\n       SUM(completed_lessons) AS total_lessons,\n       ROUND(AVG(completed_lessons), 1) AS average_lessons\nFROM learners;\n',
+    expectedOutput: '3 learners, 12 total lessons, and an average of 4.0.',
+    commonMistake: '`COUNT(*)` counts rows. `COUNT(column)` skips rows where that column is NULL.',
+  }),
+  sqlTopic({
+    id: 'sql-grouping',
+    title: 'Group summaries',
+    summary: '`GROUP BY` creates one group for each distinct value. `HAVING` filters the completed groups.',
+    keywords: ['group by', 'having', 'aggregate', 'count'],
+    code: 'SELECT village, COUNT(*) AS learners\nFROM learners\nGROUP BY village\nHAVING COUNT(*) >= 1\nORDER BY village;\n',
+    expectedOutput: 'One summary row for each village in the starter data.',
+    commonMistake: 'Use `WHERE` to filter rows before grouping and `HAVING` to filter aggregate groups afterward.',
+  }),
+  sqlTopic({
+    id: 'sql-joins',
+    title: 'Join related tables',
+    summary: 'A `JOIN` connects rows whose key values match. Table aliases keep repeated column names clear.',
+    keywords: ['join', 'inner join', 'left join', 'on', 'alias', 'foreign key'],
+    code: "WITH badges(learner_id, badge) AS (\n  VALUES (1, 'First Query'), (1, 'Data Helper'), (2, 'First Query')\n)\nSELECT l.name, b.badge\nFROM learners AS l\nJOIN badges AS b ON b.learner_id = l.id\nORDER BY l.name, b.badge;\n",
+    expectedOutput: 'Lina has two badge rows and Mia has one.',
+    commonMistake: 'Without an `ON` condition, every row can pair with every other row and produce an unexpectedly large result.',
+  }),
+  sqlTopic({
+    id: 'sql-schema-data',
+    title: 'Create a schema and seed data',
+    summary: '`schema.sql` defines tables and rules. `seed.sql` inserts the predictable starting rows restored by Reset database.',
+    keywords: ['create table', 'schema', 'seed', 'primary key', 'not null', 'reset'],
+    code: 'CREATE TABLE learners (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  completed_lessons INTEGER NOT NULL DEFAULT 0\n);\n',
+    expectedOutput: 'A learners table with required names and a default lesson count.',
+    commonMistake: 'After changing schema.sql or seed.sql, run the query again or press Reset database so the in-memory database uses the new setup.',
+    files: [
+      { path: 'main.sql', language: 'sql', content: 'SELECT * FROM learners;\n' },
+      { path: 'schema.sql', language: 'sql', content: 'CREATE TABLE learners (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  completed_lessons INTEGER NOT NULL DEFAULT 0\n);\n' },
+      { path: 'seed.sql', language: 'sql', content: "INSERT INTO learners (name, completed_lessons) VALUES ('Lina', 6), ('Mia', 4);\n" },
+    ],
+  }),
+  sqlTopic({
+    id: 'sql-change-data',
+    title: 'Insert, update, and delete',
+    summary: '`INSERT`, `UPDATE`, and `DELETE` change rows. The project database keeps those changes until it is reset.',
+    keywords: ['insert', 'update', 'delete', 'values', 'set', 'transaction'],
+    code: "UPDATE learners\nSET completed_lessons = completed_lessons + 1\nWHERE name = 'Kai';\n",
+    expectedOutput: 'One row changed. A later SELECT shows Kai with 3 completed lessons.',
+    commonMistake: 'Before `UPDATE` or `DELETE`, test the same `WHERE` clause with `SELECT`. Missing it can change every row.',
+  }),
+] as const
+
 const webTopics = [
   webTopic({
     id: 'web-html-structure',
@@ -1082,6 +1189,12 @@ export const LANGUAGE_GUIDES = {
     label: 'Java',
     introduction: 'A statically typed, object-oriented language whose structure and syntax provide a strong bridge toward Salesforce Apex.',
     topics: javaTopics,
+  },
+  sql: {
+    kind: 'sql',
+    label: 'SQL',
+    introduction: 'A focused SQLite workspace for asking questions of structured data and practicing safe, predictable changes.',
+    topics: sqlTopics,
   },
   web: {
     kind: 'web',
