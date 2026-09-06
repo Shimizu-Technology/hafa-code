@@ -8,6 +8,7 @@ A focused alternative to Replit that removes installation and account friction f
 
 - Ruby snippets powered by `ruby.wasm`
 - JavaScript snippets powered by QuickJS in a Web Worker
+- TypeScript projects compiled in the browser and executed through QuickJS
 - Python projects powered by a self-hosted Pyodide runtime in a Web Worker
 - Java 8 projects compiled and run through CheerpJ in a Web Worker
 - HTML/CSS/JS projects with a sandboxed live preview
@@ -34,7 +35,8 @@ hafa-code/
 - [Architecture](docs/ARCHITECTURE.md)
 - [Frontend structure](docs/FRONTEND_STRUCTURE.md)
 - [Security model](docs/SECURITY.md)
-- [Multi-file workspace plan](docs/MULTI_FILE_WORKSPACE.md)
+- [TypeScript runtime](docs/TYPESCRIPT_RUNTIME.md)
+- [Multi-file workspace](docs/MULTI_FILE_WORKSPACE.md)
 - [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)
 - [FDMS classroom launch readiness and action plan](docs/FDMS_CLASSROOM_LAUNCH_PLAN.md)
 - [Classroom operations and incident runbook](docs/CLASSROOM_OPERATIONS_RUNBOOK.md)
@@ -45,12 +47,15 @@ Run untrusted code in the browser, not on Rails.
 
 - Ruby runs in WebAssembly inside a worker.
 - JavaScript runs in QuickJS inside a worker with memory/time limits.
+- TypeScript is type-checked and compiled in a worker, then the emitted JavaScript runs in QuickJS with the same memory/time boundary.
 - Python runs in Pyodide inside a worker with a standard-library-only project filesystem.
 - Java runs in CheerpJ inside a dedicated worker. The Java runtime and compiler are downloaded only when Java is first run.
 - HTML/CSS/JS preview runs in a sandboxed iframe.
 - Rails stores users, project metadata, and source files only.
 
 Java is intentionally a focused practice environment rather than a full desktop JDK. It supports `Main.java`, helper classes in the default package, compiler diagnostics, standard input, stdout/stderr, and stop/time limits. Maven, Gradle, third-party dependencies, packages, GUI apps, and arbitrary network access are not part of the first release. See [Java runtime](docs/JAVA_RUNTIME.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+TypeScript is similarly focused: it supports typed multi-file projects and relative imports, but not npm packages, browser DOM APIs, Node APIs, or an application server. See [TypeScript runtime](docs/TYPESCRIPT_RUNTIME.md).
 
 ## Development
 

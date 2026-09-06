@@ -32,6 +32,7 @@ Hafa Code currently supports:
 
 - Ruby through Ruby WebAssembly;
 - JavaScript through QuickJS;
+- multi-file TypeScript through the browser compiler API and QuickJS;
 - multi-file Python through self-hosted Pyodide;
 - Java 8 compilation and execution through CheerpJ;
 - HTML/CSS/JavaScript through a sandboxed preview;
@@ -60,17 +61,17 @@ Finish these before broad FDMS enrollment:
 
 Repository changes can make those flows testable and document their operation. They cannot substitute for school approval, named support owners, production-service access, or a completed restore drill.
 
-## P1: TypeScript
+## Shipped: TypeScript
 
 Add TypeScript as a first-class, beginner-focused project rather than disguising it as JavaScript.
 
-- `.ts` files and TypeScript-aware Monaco editing;
-- semantic diagnostics across project files;
-- JavaScript execution in a dedicated worker after compilation;
-- clear separation between type errors and runtime errors;
-- no npm packages, DOM application server, or unrestricted Node APIs in the first version;
-- a complete guide, fifteen challenges, error coaching, starter projects, import/export support, and mobile testing;
-- measured compiler download, first run, and warm run behavior.
+- [x] `.ts` files and TypeScript-aware Monaco editing.
+- [x] Semantic diagnostics across project files.
+- [x] JavaScript execution in a dedicated worker after compilation.
+- [x] Clear separation between type errors and runtime errors.
+- [x] No npm packages, DOM application server, or Node APIs.
+- [x] A complete guide, fifteen challenges, error coaching, starter projects, import/export support, and mobile coverage.
+- [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
 
 ## P1: SQL
 

@@ -87,6 +87,24 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal %w[helper.py main.py], response.parsed_body.dig("project", "files").pluck("path")
   end
 
+  test "creates TypeScript projects and chooses main.ts as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "TypeScript Playground",
+        kind: "typescript",
+        files: [
+          { path: "greeting.ts", language: "typescript", content: "export const greeting: string = 'Hafa adai'" },
+          { path: "main.ts", language: "typescript", content: "import { greeting } from './greeting'\nconsole.log(greeting)" }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "typescript", response.parsed_body.dig("project", "kind")
+    assert_equal "main.ts", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[greeting.ts main.ts], response.parsed_body.dig("project", "files").pluck("path")
+  end
+
   test "creates Java projects and chooses Main.java as the default entry" do
     post "/api/v1/projects",
       params: {

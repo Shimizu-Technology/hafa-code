@@ -6,9 +6,11 @@ const DIST_DIRECTORY = new URL('../dist/', import.meta.url)
 const HEADERS_PATH = new URL('_headers', DIST_DIRECTORY)
 const ASSETS_DIRECTORY = new URL('assets/', DIST_DIRECTORY)
 const PREVIEW_FRAME_PATH = new URL('preview-frame.html', DIST_DIRECTORY)
+const SERVICE_WORKER_PATH = new URL('sw.js', DIST_DIRECTORY)
 const RUNNER_HEADERS = {
   ruby: '/assets/rubyRunner.worker-*.js',
   javascript: '/assets/javascriptRunner.worker-*.js',
+  typescript: '/assets/typescriptRunner.worker-*.js',
   python: '/assets/pythonRunner.worker-*.js',
   java: '/assets/javaRunner.worker-*.js',
 }
@@ -57,9 +59,11 @@ function wildcardPathMatches(pattern, candidate) {
 
 const headers = parseHeaderRules(await readFile(HEADERS_PATH, 'utf8'))
 const previewFrame = await readFile(PREVIEW_FRAME_PATH, 'utf8')
+const serviceWorker = await readFile(SERVICE_WORKER_PATH, 'utf8')
 const applicationPolicy = headers.get('/*')?.get('content-security-policy')
 const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security-policy')
 const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
+const typescriptRunnerPolicy = headers.get(RUNNER_HEADERS.typescript)?.get('content-security-policy')
 const pythonRunnerPolicy = headers.get(RUNNER_HEADERS.python)?.get('content-security-policy')
 const javaRunnerPolicy = headers.get(RUNNER_HEADERS.java)?.get('content-security-policy')
 const javaBootstrapPolicy = headers.get(JAVA_BOOTSTRAP_HEADER)?.get('content-security-policy')
@@ -67,6 +71,7 @@ const javaBootstrapPolicy = headers.get(JAVA_BOOTSTRAP_HEADER)?.get('content-sec
 assert(applicationPolicy, 'Missing application Content-Security-Policy')
 assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
 assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Security-Policy')
+assert(typescriptRunnerPolicy, 'Missing TypeScript runner worker Content-Security-Policy')
 assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
 assert(javaBootstrapPolicy, 'Missing Java bootstrap worker Content-Security-Policy')
@@ -96,6 +101,12 @@ assert(javascriptRunnerScripts.includes("'wasm-unsafe-eval'"), 'JavaScript runne
 assert(!javascriptRunnerScripts.includes("'unsafe-eval'"), 'JavaScript runner CSP must not permit JavaScript string evaluation')
 assert.deepEqual(directiveSources(javascriptRunnerPolicy, 'connect-src'), ["'self'"])
 assert(!javascriptRunnerPolicy.includes('clerk'), 'JavaScript runner CSP must not inherit application third-party script origins')
+
+const typescriptRunnerScripts = directiveSources(typescriptRunnerPolicy, 'script-src')
+assert(typescriptRunnerScripts.includes("'wasm-unsafe-eval'"), 'TypeScript runner CSP must permit WebAssembly compilation')
+assert(!typescriptRunnerScripts.includes("'unsafe-eval'"), 'TypeScript runner CSP must not permit browser JavaScript string evaluation')
+assert.deepEqual(directiveSources(typescriptRunnerPolicy, 'connect-src'), ["'self'"])
+assert(!typescriptRunnerPolicy.includes('clerk'), 'TypeScript runner CSP must not inherit application third-party script origins')
 
 const pythonRunnerScripts = directiveSources(pythonRunnerPolicy, 'script-src')
 assert(pythonRunnerScripts.includes("'wasm-unsafe-eval'"), 'Python runner CSP must permit WebAssembly compilation')
@@ -137,6 +148,7 @@ for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
 
   const runnerAssetPath = path.posix.join('/assets', runnerAssets[0])
   assert(wildcardPathMatches(headerPath, runnerAssetPath), `${runnerAssetPath} is not covered by ${headerPath}`)
+  assert(!serviceWorker.includes(runnerAssetPath), `${runnerAssetPath} must remain lazy and outside the service-worker app shell`)
   console.log(`Verified production CSP coverage for ${runnerAssetPath}`)
 }
 

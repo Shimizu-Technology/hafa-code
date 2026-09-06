@@ -14,7 +14,8 @@ Rails API + React SPA
       ├─ Componentized workspace shell
       ├─ Language-specific runner workers
       │   ├─ Ruby WASM
-      │   ├─ QuickJS WASM
+      │   ├─ QuickJS WASM for JavaScript
+      │   ├─ TypeScript compiler + QuickJS WASM
       │   ├─ Pyodide Python WASM
       │   └─ CheerpJ Java runtime
       ├─ HTML preview iframe
@@ -54,6 +55,19 @@ Use `quickjs-emscripten` in a Web Worker.
 - capture `console.log/info/warn/error`
 - set memory limit
 - interrupt after timeout
+
+### TypeScript
+
+Use the official TypeScript compiler API and QuickJS in a dedicated Web Worker.
+
+- load only the ES2020 declaration-library closure needed by the configured compiler target
+- type-check all project `.ts` and `.d.ts` files together so relative imports receive semantic diagnostics
+- reject unsafe paths, missing entries, more than 50 files, or more than 2,000,000 UTF-8 source bytes before compilation
+- compile strict Node16-style modules to CommonJS without packages, DOM declarations, Node declarations, or ambient host APIs
+- execute only the emitted project modules inside QuickJS with memory, stack, output, and time limits
+- keep the compiler and runner worker out of the service-worker application shell so they load only for TypeScript work
+
+The TypeScript worker never executes emitted JavaScript in the browser worker itself. Its small trusted module loader is part of the string evaluated inside QuickJS. See [TypeScript runtime](TYPESCRIPT_RUNTIME.md) for the exact learner-facing boundary.
 
 ### Python
 
@@ -104,7 +118,7 @@ Do not allow same-origin unless there is a specific reason.
 ## Data Model Draft
 
 ```ts
-type ProjectKind = 'ruby' | 'javascript' | 'python' | 'java' | 'web'
+type ProjectKind = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'web'
 
 type Project = {
   id: string
@@ -121,7 +135,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  language: 'ruby' | 'javascript' | 'python' | 'java' | 'html' | 'css'
+  language: 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'html' | 'css'
   content: string
 }
 ```

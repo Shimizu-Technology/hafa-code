@@ -33,6 +33,7 @@ type TopicInput = Omit<LanguageGuideTopic, 'practiceProject'> & {
 const ENTRY_PATHS: Record<Exclude<ProjectKind, 'web'>, string> = {
   ruby: 'main.rb',
   javascript: 'main.js',
+  typescript: 'main.ts',
   python: 'main.py',
   java: 'Main.java',
 }
@@ -40,6 +41,7 @@ const ENTRY_PATHS: Record<Exclude<ProjectKind, 'web'>, string> = {
 const FILE_LANGUAGES = {
   ruby: 'ruby',
   javascript: 'javascript',
+  typescript: 'typescript',
   python: 'python',
   java: 'java',
 } as const
@@ -348,6 +350,129 @@ try {
 }\n`,
     expectedOutput: 'Use a positive number',
     commonMistake: 'Throw an `Error` object rather than a loose string so callers receive a message and useful stack information.',
+  }),
+] as const
+
+const typescriptTopics = [
+  runnableTopic('typescript', {
+    id: 'typescript-output-types',
+    title: 'Output and type annotations',
+    summary: 'TypeScript checks declared types before the JavaScript runs. `console.log` prints values in the browser runner.',
+    keywords: ['console', 'type', 'annotation', 'string', 'number', 'boolean', 'output'],
+    code: `const learner: string = "Mia"
+const lessons: number = 4
+const ready: boolean = true
+
+console.log(\`Hafa adai, \${learner}!\`)
+console.log(\`Lessons: \${lessons}\`)
+console.log(ready)\n`,
+    expectedOutput: 'Hafa adai, Mia!\nLessons: 4\ntrue',
+    commonMistake: 'A type annotation comes after the variable name: `const score: number = 10`. TypeScript stops before running when the value does not match.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-inference-unions',
+    title: 'Inference and union types',
+    summary: 'TypeScript often infers a type from the first value. A union allows one value to hold one of several named types.',
+    keywords: ['inference', 'union', 'literal', 'undefined', 'null'],
+    code: `let status: "draft" | "ready" = "draft"
+const attempts = 2 // inferred as number
+
+if (attempts >= 2) status = "ready"
+console.log(status)\n`,
+    expectedOutput: 'ready',
+    commonMistake: 'Separate union choices with `|`, not a comma. Values outside the declared choices are type errors.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-functions',
+    title: 'Typed functions',
+    summary: 'Parameter and return annotations document a function and let the compiler check every call.',
+    keywords: ['function', 'parameter', 'return', 'optional', 'void'],
+    code: `function welcome(name: string, visits = 1): string {
+  return \`Welcome, \${name}! Visit \${visits}.\`
+}
+
+console.log(welcome("Lina", 3))\n`,
+    expectedOutput: 'Welcome, Lina! Visit 3.',
+    commonMistake: 'The return type follows the parameter list. `function total(): number` promises that every path returns a number.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-objects-interfaces',
+    title: 'Objects and interfaces',
+    summary: 'An interface names the required shape of an object. Arrays add `[]` after the item type.',
+    keywords: ['interface', 'object', 'array', 'property', 'readonly', 'optional'],
+    code: `interface Learner {
+  name: string
+  lessons: number
+  mentor?: string
+}
+
+const learners: Learner[] = [
+  { name: "Kai", lessons: 3 },
+  { name: "Ana", lessons: 5, mentor: "Mia" },
+]
+
+console.log(learners[1].name)\n`,
+    expectedOutput: 'Ana',
+    commonMistake: 'An optional property uses `?` after its name. Without it, every object must provide that property.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-narrowing',
+    title: 'Narrowing safely',
+    summary: 'A check such as `typeof` narrows a union so each branch can use the correct operations.',
+    keywords: ['narrowing', 'typeof', 'union', 'guard', 'condition'],
+    code: `function formatId(id: string | number): string {
+  if (typeof id === "number") return \`#\${id.toFixed(0)}\`
+  return id.toUpperCase()
+}
+
+console.log(formatId(42))
+console.log(formatId("guam"))\n`,
+    expectedOutput: '#42\nGUAM',
+    commonMistake: 'A union does not guarantee every operation exists on every choice. Narrow the value before using type-specific methods.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-generics',
+    title: 'Generic helpers',
+    summary: 'A generic type parameter preserves a caller’s type while sharing one implementation.',
+    keywords: ['generic', 'type parameter', 'array', 'reusable'],
+    code: `function first<T>(items: T[]): T | undefined {
+  return items[0]
+}
+
+console.log(first<string>(["Hagåtña", "Dededo"]))
+console.log(first<number>([7, 8, 9]))\n`,
+    expectedOutput: 'Hagåtña\n7',
+    commonMistake: '`T` is a type placeholder, not a runtime variable. The compiler replaces it with the caller’s actual type.',
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-modules',
+    title: 'Project modules',
+    summary: '`export` shares a value from one project file and a relative `import` uses it from another.',
+    keywords: ['import', 'export', 'module', 'relative', 'multi-file'],
+    code: `import { greeting } from "./greeting"
+
+console.log(greeting("Guam"))\n`,
+    expectedOutput: 'Hafa adai, Guam!',
+    commonMistake: 'Hafa Code supports relative project imports, not npm packages. Start a path with `./` or `../` and keep the target inside the project.',
+    files: [
+      { path: 'main.ts', language: 'typescript', content: 'import { greeting } from "./greeting"\n\nconsole.log(greeting("Guam"))\n' },
+      { path: 'greeting.ts', language: 'typescript', content: 'export function greeting(place: string): string {\n  return `Hafa adai, ${place}!`\n}\n' },
+    ],
+  }),
+  runnableTopic('typescript', {
+    id: 'typescript-errors-unknown',
+    title: 'Errors and unknown values',
+    summary: '`unknown` requires a check before use, making it safer than `any` for values whose type is not yet known.',
+    keywords: ['error', 'unknown', 'any', 'try', 'catch', 'safe'],
+    code: `function message(value: unknown): string {
+  if (value instanceof Error) return value.message
+  if (typeof value === "string") return value
+  return "Unknown problem"
+}
+
+console.log(message(new Error("Try again")))\n`,
+    expectedOutput: 'Try again',
+    commonMistake: '`any` turns off useful checks. Prefer `unknown`, then narrow it with `typeof`, `instanceof`, or another guard.',
   }),
 ] as const
 
@@ -939,6 +1064,12 @@ export const LANGUAGE_GUIDES = {
     label: 'JavaScript',
     introduction: 'The language of browser behavior, also useful for general programming and server-side applications.',
     topics: javascriptTopics,
+  },
+  typescript: {
+    kind: 'typescript',
+    label: 'TypeScript',
+    introduction: 'JavaScript with compile-time type checking, focused here on clear data shapes, safe functions, and relative project modules.',
+    topics: typescriptTopics,
   },
   python: {
     kind: 'python',

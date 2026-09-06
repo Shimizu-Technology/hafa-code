@@ -22,6 +22,19 @@ JavaScript runs in QuickJS inside a Web Worker.
 - Memory limit and stack limit are set in the QuickJS runtime
 - Interrupt handler stops long-running code
 
+### TypeScript
+
+TypeScript is compiled and executed entirely inside a dedicated Web Worker. Rails stores source but never compiles or runs it.
+
+- The worker accepts at most 50 files and 2,000,000 bytes of UTF-8 source per run
+- Hidden, absolute, traversal, backslash, duplicate, missing, and non-`.ts` entry paths are rejected
+- The embedded compiler environment exposes ES2020 plus Hafa's `console` and `print` declarations; it deliberately omits DOM, Node, package, and network declarations
+- Compilation uses strict checks and `noEmitOnError`, so code with compiler errors is not executed
+- Bare package imports are rejected; relative emitted modules are loaded by a small trusted CommonJS loader inside QuickJS
+- Emitted JavaScript receives the same 8 MiB QuickJS memory limit, 512 KiB stack limit, execution deadline, and 256 KiB output cap as the focused runner boundary
+- Stop or timeout terminates the whole worker
+- The worker CSP allows only same-origin loading and WebAssembly compilation; it cannot contact the Hafa API, Clerk, or arbitrary remote origins
+
 ### Python
 
 Python runs in-browser through a pinned, self-hosted Pyodide runtime inside a
@@ -87,7 +100,7 @@ runner is a narrower exception: ruby.wasm's `js` bridge evaluates a small amount
 of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
 asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
 `javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
-that broader exception. The Python worker follows the same stricter pattern.
+that broader exception. The TypeScript and Python workers follow the same stricter pattern.
 Like ruby.wasm, CheerpJ requires `'unsafe-eval'` for its trusted JavaScript
 bridge. That exception is limited to the generated Java worker response. The
 Java worker also allows the pinned CheerpJ script host and the two exact
@@ -118,6 +131,7 @@ This is a test seam, not an alternate production login. Production and preview b
 - Browser-side execution is appropriate for learning snippets and simple web pages, not production backend apps.
 - Ruby WASM is large and first-run startup can be slow on older devices.
 - Pyodide adds another sizable first-run download; the UI keeps its startup and execution guardrails separate.
+- TypeScript adds a compiler worker and ES2020 declaration libraries on first use; it is intended for focused learning projects, not large application builds.
 - Java's first run downloads CheerpJ plus an approximately 18 MiB Java 8 compiler archive; slower connections can take noticeably longer.
 - Java is currently a Java 8, default-package learning environment without Maven, Gradle, external JARs, desktop GUIs, or arbitrary networking.
 - CheerpJ production use must remain within the Community License or move to an appropriate commercial license; technical evaluation alone does not cover normal organizational use.

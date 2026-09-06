@@ -1,10 +1,10 @@
-# Multi-File Workspace Plan
+# Multi-File Workspace
 
 ## Why This Matters
 
 Hafa Code should stay welcoming for first-time students, but it should not trap growing students in one-file exercises. A better Replit-like experience for this project is a workspace that starts simple and opens up naturally:
 
-- Beginners still get a ready-to-run `main.rb`, `main.js`, or `index.html` project.
+- Beginners still get a ready-to-run `main.rb`, `main.js`, `main.ts`, `main.py`, `Main.java`, or `index.html` project.
 - Intermediate users can create helper files, folders, data files, and multiple pages.
 - Advanced users can organize real small projects without leaving the browser.
 - The backend remains a storage API only; student code still runs in browser sandboxes.
@@ -15,7 +15,7 @@ The goal is not to copy Replit's container platform in one step. The goal is to 
 
 Each project has:
 
-- A `kind`: `ruby`, `javascript`, or `web`.
+- A `kind`: `ruby`, `javascript`, `typescript`, `python`, `java`, or `web`.
 - A list of source files with normalized relative paths.
 - An `entryPath`, which is the file Run or Preview treats as the project entrypoint.
 
@@ -23,6 +23,9 @@ The default projects remain intentionally small:
 
 - Ruby: `main.rb`
 - JavaScript: `main.js`
+- TypeScript: `main.ts` plus `greeting.ts`
+- Python: `main.py`
+- Java: `Main.java`
 - Web: `index.html`, `style.css`, `script.js`
 
 The user can then opt into more structure by creating files and folders.
@@ -46,7 +49,7 @@ Those are separate product tiers. This pass should make multi-file browser execu
 3. Store the entry file explicitly.
 4. Validate file paths on both client and server.
 5. Make web preview resolve local project files by path.
-6. Make Ruby and JavaScript runners execute the configured entry file.
+6. Make every runner execute the configured entry file and receive the complete project snapshot.
 7. Preserve export, import, share, checkpoint, duplicate, archive, and cloud sync behavior.
 
 ## Path Rules
@@ -94,18 +97,29 @@ console.log(greet("Guam"))
 
 This keeps JavaScript useful without introducing a full bundler or package manager yet.
 
+### TypeScript
+
+Compile the complete TypeScript project in memory and execute its emitted relative modules inside QuickJS. The workspace supplies semantic Monaco models for every `.ts` file, so editor feedback and Run use the same project shape. Packages, Node APIs, DOM APIs, and a browser application server remain outside this mode.
+
+### Python
+
+Mount the complete project in Pyodide's in-memory filesystem for each run, then execute the configured entry with normal local imports. Keep the warmed language runtime, but reset project files and imported project modules between runs.
+
+### Java
+
+Compile `Main.java` and default-package helper classes into a run-scoped CheerpJ filesystem directory. Packages, external JARs, Maven, and Gradle remain outside the focused Java mode.
+
 ## Future Advanced Runtime
 
 After the browser-native workspace is solid, evaluate an optional advanced web-app mode using Sandpack, Nodebox, or WebContainers. That should be separate because WebContainers require modern browser capabilities such as cross-origin isolation and SharedArrayBuffer, and large projects can be constrained on mobile devices.
 
 ## Rollout Checklist
 
-- Add `entry_path` to cloud project persistence.
-- Normalize imported/local/cloud project data.
-- Add file tree controls: create file, create folder, rename, duplicate, delete, set as entry.
-- Add client path validation and user-facing errors.
-- Add server path validation and project file count limits.
-- Upgrade web preview to resolve arbitrary local paths.
-- Upgrade runners to receive project files and entry path.
-- Update API tests for entry paths, invalid paths, and multi-file projects.
-- Run full gate before merging.
+- [x] Add `entry_path` to cloud project persistence.
+- [x] Normalize imported, local, and cloud project data.
+- [x] Add file controls for create, rename, duplicate, delete, and set as entry.
+- [x] Add client path validation and user-facing errors.
+- [x] Add server path validation and project file/count/source limits.
+- [x] Upgrade web preview to resolve arbitrary local paths.
+- [x] Upgrade runners to receive project files and entry path.
+- [x] Cover entry paths, invalid paths, and multi-file projects in API and browser tests.

@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, Python, Java, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
+Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
 
 The application already has a credible classroom foundation:
 
@@ -39,7 +39,7 @@ Hafa Code is best understood as a **classroom coding workspace**, not a complete
 It solves several specific problems:
 
 - Students can write and run beginner code on school devices without installing Ruby, Node, compilers, or an IDE.
-- Ruby, JavaScript, Python, and Java run in browser workers with time guardrails.
+- Ruby, JavaScript, TypeScript, Python, and Java run in browser workers with time guardrails.
 - Web projects render inside nested sandboxed frames.
 - Rails stores users, memberships, project metadata, source files, checkpoints, and share snapshots; it does not execute student code.
 - The product is small enough to remain understandable and approachable for Code School of Guam and FDMS students who may eventually contribute to it.

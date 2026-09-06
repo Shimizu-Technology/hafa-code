@@ -30,13 +30,14 @@ type ErrorRule = {
 const basicsTopic: Record<ProjectKind, string> = {
   ruby: 'ruby-output-comments',
   javascript: 'javascript-output-variables',
+  typescript: 'typescript-output-types',
   python: 'python-output-comments',
   java: 'java-output-comments',
   web: 'web-dom-events',
 }
 
 const loopsTopic: Record<Exclude<ProjectKind, 'web'>, string> = {
-  ruby: 'ruby-loops', javascript: 'javascript-loops', python: 'python-loops', java: 'java-loops',
+  ruby: 'ruby-loops', javascript: 'javascript-loops', typescript: 'typescript-functions', python: 'python-loops', java: 'java-loops',
 }
 
 const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
@@ -65,6 +66,14 @@ const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
     { pattern: /TypeError/i, title: 'JavaScript cannot use that value this way', explanation: 'A method, property, or operation does not fit the value it received.', steps: ['Find the first line from your file in the error.', 'Inspect the value immediately before the dot or operation.', 'Handle missing values before using them.'], topic: 'javascript-errors' },
     { pattern: /SyntaxError/i, title: 'JavaScript could not read this syntax', explanation: 'A bracket, quote, comma, or expression is incomplete near the error.', steps: ['Check the reported line and the line above it.', 'Match every opening bracket or quote with a closing one.', 'Fix the first syntax error, then run again.'], topic: 'javascript-output-variables' },
   ],
+  typescript: [
+    { pattern: /TS2322|not assignable to type/i, title: 'This value does not match the TypeScript type', explanation: 'The compiler found a value whose type differs from the variable, property, parameter, or return type.', steps: ['Read the two types named in the first diagnostic.', 'Open the reported file, line, and column.', 'Correct the value or the annotation so they describe the same intent.'], topic: 'typescript-output-types' },
+    { pattern: /TS2304|Cannot find name/i, title: 'TypeScript cannot find that name', explanation: 'The name is misspelled, out of scope, or uses an API that the browser runner does not provide.', steps: ['Compare spelling and capitalization with the declaration.', 'Declare or import the name before using it.', 'Remember that Hafa Code does not provide DOM or Node globals.'], topic: 'typescript-output-types' },
+    { pattern: /TS2307|Cannot find module/i, title: 'TypeScript cannot find that module', explanation: 'The import does not resolve to a TypeScript file inside this project.', steps: ['Use a relative path beginning with `./` or `../`.', 'Compare its spelling and folders with the Files list.', 'Do not import npm packages in the browser learning runner.'], topic: 'typescript-modules' },
+    { pattern: /TS2339|does not exist on type/i, title: 'That property is not on this TypeScript type', explanation: 'The current type does not declare the property or method used after the dot.', steps: ['Read the type named in the diagnostic.', 'Check the property spelling and object interface.', 'Narrow a union before using properties that belong to only one choice.'], topic: 'typescript-objects-interfaces' },
+    { pattern: /TS7006|implicitly has an 'any' type/i, title: 'TypeScript needs a parameter type', explanation: 'Strict checking could not infer a safe type for this parameter.', steps: ['Decide what values the function should accept.', 'Add an annotation after the parameter name.', 'Use a union when more than one type is intentional.'], topic: 'typescript-functions' },
+    { pattern: /SyntaxError|error TS1\d{3}/i, title: 'TypeScript could not read this syntax', explanation: 'A delimiter, keyword, or expression is incomplete near the first diagnostic.', steps: ['Open the first reported file and line.', 'Match every opening bracket, quote, and parenthesis.', 'Fix the first diagnostic, then run again.'], topic: 'typescript-output-types' },
+  ],
   web: [
     { pattern: /Failed to load/i, title: 'The page could not load a file', explanation: 'A script, stylesheet, image, or other resource points to a path the preview cannot resolve.', steps: ['Compare the path with the file name in the project.', 'Check spelling, capitalization, and relative folders.', 'Refresh the preview after correcting the reference.'], topic: 'web-links-images' },
     { pattern: /ReferenceError/i, title: 'The page script cannot find that name', explanation: 'JavaScript in the preview is using a variable or function that is not available.', steps: ['Check spelling and capitalization.', 'Declare it before the code that uses it.', 'Refresh the preview to run the updated script.'], topic: 'web-dom-events' },
@@ -84,8 +93,8 @@ export function errorCoachGuideTopicIds(kind: ProjectKind) {
 function errorLocation(message: string, entryPath: string) {
   const candidates = [
     /File ["']([^"']+)["'], line (\d+)/,
-    /([^\s():]+\.(?:java|rb|js|py|html)):(\d+)(?::\d+)?/,
-    /\(([^\s():]+\.(?:java|rb|js|py|html)):(\d+)(?::\d+)?\)/,
+    /([^\s():]+\.(?:java|rb|js|ts|py|html)):(\d+)(?::\d+)?/,
+    /\(([^\s():]+\.(?:java|rb|js|ts|py|html)):(\d+)(?::\d+)?\)/,
   ]
   for (const pattern of candidates) {
     const match = pattern.exec(message)
