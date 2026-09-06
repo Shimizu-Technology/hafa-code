@@ -37,39 +37,48 @@ function usefulViolations(violations: Awaited<ReturnType<AxeBuilder['analyze']>>
   }))
 }
 
-test('personal and classroom workspaces pass automated WCAG checks', async ({ page }) => {
-  await openPersona(page, 'student')
-  const personalResults = await new AxeBuilder({ page })
+async function expectNoWcagViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()
-  expect(usefulViolations(personalResults.violations)).toEqual([])
+  expect(usefulViolations(results.violations)).toEqual([])
+}
+
+test('personal and classroom workspaces pass automated WCAG checks', async ({ page }) => {
+  await openPersona(page, 'student')
+  await expectNoWcagViolations(page)
 
   await page.getByRole('button', { name: 'Dark', exact: true }).click()
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
   await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveCSS('text-decoration-line', /underline/)
-  const darkColorSafeResults = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
-  expect(usefulViolations(darkColorSafeResults.violations)).toEqual([])
+  await expectNoWcagViolations(page)
 
   await page.getByRole('button', { name: 'Light', exact: true }).click()
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
   await switchToClassroom(page)
-  const classroomResults = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
-  expect(usefulViolations(classroomResults.violations)).toEqual([])
+  await expectNoWcagViolations(page)
 
   await page.getByRole('button', { name: 'Dark', exact: true }).click()
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
-  const darkColorSafeClassroomResults = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
-  expect(usefulViolations(darkColorSafeClassroomResults.violations)).toEqual([])
+  await expectNoWcagViolations(page)
+
+  await openPersona(page, 'teacher')
+  await switchToClassroom(page)
+  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
+  await page.getByRole('button', { name: 'Classroom' }).click()
+
+  for (const panelName of ['Review work', 'People', 'Invitations', 'Settings']) {
+    await page.getByRole('tab', { name: panelName }).click()
+    await expect(page.getByRole('tabpanel', { name: panelName })).toBeVisible()
+    await expectNoWcagViolations(page)
+  }
 })
 
 test('project, file, history, sharing, and classroom controls work from the keyboard', async ({ page }) => {

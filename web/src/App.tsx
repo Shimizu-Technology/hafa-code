@@ -339,20 +339,22 @@ export default function App() {
       ? 'Waiting to save'
       : currentCloudSaveStatus === 'offline'
         ? 'Offline · local copy safe'
-      : currentCloudSaveStatus === 'failed'
-        ? 'Cloud save failed · local copy safe'
-        : currentCloudSaveStatus === 'conflict'
-          ? 'Save conflict · local copy safe'
-          : 'Saved to cloud + local backup'
+        : currentCloudSaveStatus === 'failed'
+          ? 'Cloud save failed · local copy safe'
+          : currentCloudSaveStatus === 'conflict'
+            ? 'Save conflict · local copy safe'
+            : currentCloudSaveStatus === 'saved'
+              ? 'Saved to cloud + local backup'
+              : 'Checking cloud save'
   const workspaceSaveLabel = reviewProject
     ? 'Cloud project'
     : localBackupAvailable === null
       ? 'Checking local backup…'
       : localBackupAvailable
-      ? (isSignedIn ? cloudSaveLabel : 'Autosaved locally')
-      : isSignedIn
-        ? `${currentCloudSaveStatus === 'saved' || !currentCloudSaveStatus ? 'Saved to cloud' : cloudSaveLabel.split(' · ')[0]} · local backup unavailable`
-        : 'Local backup unavailable'
+        ? (isSignedIn ? cloudSaveLabel : 'Autosaved locally')
+        : isSignedIn
+          ? `${currentCloudSaveStatus === 'saved' ? 'Saved to cloud' : cloudSaveLabel.split(' · ')[0]} · local backup unavailable`
+          : 'Local backup unavailable'
   const canAccessProjectFeedback = canViewProjectFeedback(project, isSignedIn, user?.id, canUseInstructorPanel)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')

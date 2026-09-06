@@ -156,6 +156,31 @@ describe('App language guide practice projects', () => {
     expect(await screen.findByText(/Workspace restored: 1 project/)).toBeTruthy()
   })
 
+  it('does not claim an unconfirmed cloud save when local storage is unavailable', async () => {
+    authHarness.value = {
+      isSignedIn: true,
+      isLoading: false,
+      user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
+      organizations: [],
+      syncSession: vi.fn(),
+    }
+    vi.spyOn(api, 'getProjects').mockResolvedValue({ data: null, error: 'offline' })
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+
+    render(<App />)
+
+    await screen.findByRole('alert')
+    await waitFor(() => expect(
+      [...document.querySelectorAll('.title-field small')]
+        .some((element) => element.textContent?.includes('Checking cloud save · local backup unavailable')),
+    ).toBe(true))
+  })
+
   it('opens desktop error advice directly in the docked Coach', () => {
     render(<App />)
 
