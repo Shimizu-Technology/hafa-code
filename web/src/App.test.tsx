@@ -522,4 +522,77 @@ describe('App language guide practice projects', () => {
     expect(duplicateCloudProject).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('status').textContent).toMatch(/duplicated into Robotics/i)
   })
+
+  it('keeps student source out of teacher workspace storage until a review is opened', async () => {
+    const user = userEvent.setup()
+    const organization = { id: 20, name: 'Robotics', slug: 'robotics', role: 'instructor' as const }
+    const student = {
+      id: 8,
+      membership_id: 18,
+      email: 'student@example.com',
+      first_name: 'Student',
+      last_name: 'One',
+      full_name: 'Student One',
+      role: 'user',
+      organization_role: 'student' as const,
+      joined_at: '2026-09-01T00:00:00Z',
+    }
+    const summary = {
+      id: '42',
+      title: 'Student loops',
+      kind: 'ruby' as const,
+      entryPath: 'main.rb',
+      visibility: 'private' as const,
+      organizationId: '20',
+      owner: { id: 8, fullName: 'Student One' },
+      organization: { id: 20, name: 'Robotics', slug: 'robotics' },
+      archivedAt: null,
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-05T00:00:00Z',
+      fileCount: 1,
+      unresolvedFeedbackCount: 1,
+    }
+    const reviewedProject = {
+      ...createProject('ruby'),
+      id: '42',
+      title: 'Student loops',
+      organizationId: '20',
+      organization,
+      owner: { id: 8, fullName: 'Student One' },
+      files: [{ path: 'main.rb', language: 'ruby' as const, content: 'puts "student secret"' }],
+    }
+    authHarness.value = {
+      isSignedIn: true,
+      isLoading: false,
+      user: { id: 7, email: 'teacher@example.com', first_name: 'Tess', last_name: 'Teacher', full_name: 'Tess Teacher', role: 'user' },
+      organizations: [organization],
+      syncSession: vi.fn(),
+    }
+    const getProjects = vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
+    vi.spyOn(api, 'getOrgMembers').mockResolvedValue({ data: [student], error: null })
+    vi.spyOn(api, 'getOrgInvitations').mockResolvedValue({ data: [], error: null })
+    vi.spyOn(api, 'getOrganizationProjects').mockResolvedValue({ data: [summary], error: null })
+    const getProject = vi.spyOn(api, 'getProject').mockResolvedValue({ data: reviewedProject, error: null })
+    vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    vi.spyOn(api, 'getCheckpoints').mockResolvedValue({ data: [], error: null })
+
+    render(<App />)
+    await user.selectOptions(screen.getByLabelText('Switch workspace'), '20')
+    await waitFor(() => expect(getProjects).toHaveBeenCalledWith('20', { ownedOnly: true }))
+    await user.click(screen.getByRole('button', { name: 'Classroom' }))
+    expect(await screen.findByText('Student loops')).toBeTruthy()
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain('student secret')
+
+    await user.click(screen.getByRole('button', { name: 'Open review' }))
+    await waitFor(() => expect(getProject).toHaveBeenCalledWith('42'))
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Student loops')
+    expect(screen.getByLabelText('Project name')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('Code editor')).toHaveProperty('value', 'puts "student secret"')
+    await user.click(screen.getByRole('button', { name: 'Actions' }))
+    const actions = screen.getByRole('dialog', { name: 'Actions' })
+    expect(within(actions).getByRole('button', { name: 'Archive' })).toHaveProperty('disabled', true)
+    expect(within(actions).getByRole('button', { name: 'Delete' })).toHaveProperty('disabled', true)
+    expect(within(actions).getByRole('button', { name: 'Duplicate' })).toHaveProperty('disabled', false)
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain('student secret')
+  })
 })

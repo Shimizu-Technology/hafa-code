@@ -613,6 +613,93 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal [ "teacher@example.com", "student@example.com" ].sort, response.parsed_body.fetch("members").map { |member| member.fetch("email") }.sort
   end
 
+  test "instructors browse source-free project summaries and load one project on demand" do
+    instructor = User.create!(
+      clerk_id: "test_clerk_review_teacher",
+      email: "review-teacher@example.com",
+      first_name: "Review",
+      last_name: "Teacher"
+    )
+    other_student = User.create!(
+      clerk_id: "test_clerk_review_student",
+      email: "review-student@example.com",
+      first_name: "Review",
+      last_name: "Student"
+    )
+    organization = Organization.create!(name: "Review Class", created_by: instructor)
+    organization.organization_memberships.create!(user: instructor, role: :instructor)
+    organization.organization_memberships.create!(user: @user, role: :student)
+    organization.organization_memberships.create!(user: other_student, role: :student)
+    student_project = @user.projects.create!(
+      organization: organization,
+      title: "Private Review Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [
+        ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'sensitive source'"),
+        ProjectFile.new(path: "helper.rb", language: "ruby", content: "MESSAGE = 'hafa'")
+      ]
+    )
+    other_project = other_student.projects.create!(
+      organization: organization,
+      title: "Other Student Ruby",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'other'") ]
+    )
+    ProjectComment.create!(project: student_project, user: instructor, body: "Please explain the loop.")
+    ProjectComment.create!(
+      project: student_project,
+      user: @user,
+      body: "Resolved note",
+      resolved_at: Time.current,
+      resolved_by: instructor
+    )
+    instructor_headers = {
+      "Authorization" => "Bearer test_token_#{instructor.id}",
+      "Content-Type" => "application/json"
+    }
+
+    get "/api/v1/organizations/#{organization.id}/projects", headers: instructor_headers
+
+    assert_response :success
+    summaries = response.parsed_body.fetch("projects")
+    summary = summaries.find { |candidate| candidate.fetch("id") == student_project.id }
+    assert_equal [ other_project.id, student_project.id ].sort, summaries.pluck("id").sort
+    assert_equal 2, summary.fetch("file_count")
+    assert_equal 1, summary.fetch("unresolved_feedback_count")
+    assert_equal @user.full_name, summary.dig("owner", "full_name")
+    assert_not summary.key?("files")
+    assert_not_includes response.body, "sensitive source"
+
+    get "/api/v1/organizations/#{organization.id}/projects",
+      params: { student_id: @user.id },
+      headers: instructor_headers
+
+    assert_response :success
+    assert_equal [ student_project.id ], response.parsed_body.fetch("projects").pluck("id")
+    assert_not response.parsed_body.fetch("projects").first.key?("files")
+
+    get "/api/v1/organizations/#{organization.id}/projects",
+      params: { student_id: instructor.id },
+      headers: instructor_headers
+
+    assert_response :not_found
+
+    get "/api/v1/projects/#{student_project.id}", headers: instructor_headers
+
+    assert_response :success
+    assert_equal "puts 'sensitive source'", response.parsed_body.dig("project", "files", 0, "content")
+
+    get "/api/v1/projects",
+      params: { organization_id: organization.id, owned_only: true },
+      headers: instructor_headers
+
+    assert_response :success
+    assert_empty response.parsed_body.fetch("projects")
+    assert_not_includes response.body, "sensitive source"
+  end
+
   test "platform admins can list and open private organization projects" do
     admin = User.create!(
       clerk_id: "test_clerk_admin",

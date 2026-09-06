@@ -97,9 +97,15 @@ module Api
 
       def projects
         scope = visible_organization_projects(@organization).order(updated_at: :desc, id: :desc)
-        projects, pagination = paginate(scope.includes(:project_files, :user, :organization))
+        if params[:student_id].present?
+          return render_forbidden unless can_view_org_roster?(current_user, @organization)
+
+          student = organization_student!(params[:student_id])
+          scope = scope.where(user: student)
+        end
+        projects, pagination = paginate(scope.includes(:user, :organization))
         render json: {
-          projects: projects.map { |project| project_json(project) },
+          projects: project_summaries_json(projects),
           pagination: pagination
         }
       end
@@ -155,12 +161,12 @@ module Api
       def student_projects
         return render_forbidden unless can_view_org_roster?(current_user, @organization)
 
-        student = @organization.members.find_by!(id: params[:student_id])
+        student = organization_student!(params[:student_id])
         scope = @organization.projects.where(user: student).order(updated_at: :desc, id: :desc)
-        projects, pagination = paginate(scope.includes(:project_files, :user, :organization))
+        projects, pagination = paginate(scope.includes(:user, :organization))
         render json: {
           student: user_json(student),
-          projects: projects.map { |project| project_json(project) },
+          projects: project_summaries_json(projects),
           pagination: pagination
         }
       end
@@ -491,6 +497,10 @@ module Api
           user_id: current_user.id,
           member_visibilities: %w[organization public]
         )
+      end
+
+      def organization_student!(user_id)
+        @organization.organization_memberships.includes(:user).find_by!(user_id: user_id, role: :student).user
       end
 
       def invitation_role_param

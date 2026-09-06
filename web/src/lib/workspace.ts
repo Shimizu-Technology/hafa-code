@@ -21,7 +21,7 @@ export interface FileDialogState {
 
 export type ConfirmAction = 'archive' | 'delete' | 'checkpoint' | null
 export type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
-export type ClassroomTab = 'people' | 'invitations' | 'settings'
+export type ClassroomTab = 'review' | 'people' | 'invitations' | 'settings'
 
 export const PROJECT_FILE_LIMIT = 50
 

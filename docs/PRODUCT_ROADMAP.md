@@ -40,6 +40,7 @@ Hafa Code currently supports:
 - searchable language guides, safe practice-project creation, a dockable learning sidecar, and contextual error coaching;
 - local autosave, workspace backup/restore, project import/export, checkpoints, immutable snapshot links, and optional Rails cloud sync;
 - personal and classroom workspaces, invitations, roster roles, class lifecycle controls, feedback, audit events, and read-only teacher review;
+- a teacher Review Work surface that loads source-free class metadata, filters by student/status/visibility/time/feedback, and fetches one read-only project only when opened;
 - responsive desktop and purpose-built mobile navigation;
 - a lightweight PWA shell, CSP boundaries, worker isolation, quotas, validation, rate limits, and dependency scanning.
 
@@ -47,10 +48,7 @@ Hafa Code currently supports:
 
 Finish these before broad FDMS enrollment:
 
-- require the frontend and backend CI checks on `main`;
 - add repeatable browser coverage for sign-in, invitation acceptance, cloud save/reload, reconnect recovery, role boundaries, class duplication, feedback, archive/removal, and export;
-- complete the class-copy destination chooser so the destination is visible and intentional;
-- load project source on demand and give teachers useful metadata filters before class libraries grow;
 - add storage-usage visibility before a learner reaches a hard quota;
 - verify keyboard operation, 200% zoom, status contrast, screen-reader behavior, school-device performance, and software-keyboard input;
 - publish privacy and acceptable-use information approved by FDMS;
@@ -85,8 +83,8 @@ Add SQL as a focused SQLite learning workspace.
 
 ## P2: classroom usability
 
-- Build a teacher review cockpit with student, status, visibility, language, updated-time, unread-feedback, and unresolved-feedback filters.
-- Load class project metadata first and source only when a project opens.
+- Add saved review filters plus explicit unread-feedback and language controls when classroom volume justifies them.
+- Convert learners' own editable cloud-project lists to metadata-first loading without weakening pending and offline draft recovery.
 - Add student-facing storage usage and recovery guidance.
 - Define graduation and account-deletion behavior.
 - Improve history with meaningful save/run/check milestones and accessible file diffs.

@@ -80,6 +80,22 @@ export interface CloudAuditEvent {
   created_at: string
 }
 
+export interface CloudProjectSummary {
+  id: string
+  title: string
+  kind: ProjectKind
+  entryPath: string | null
+  visibility: ProjectVisibility
+  organizationId: string | null
+  owner: { id: number; fullName: string } | null
+  organization: { id: number; name: string; slug: string } | null
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  fileCount: number
+  unresolvedFeedbackCount: number
+}
+
 interface ApiProjectFile {
   path: string
   language: ProjectFile['language']
@@ -106,6 +122,22 @@ interface ApiProject {
   updated_at: string
   lock_version: number
   files: ApiProjectFile[]
+}
+
+interface ApiProjectSummary {
+  id: number
+  title: string
+  kind: ProjectKind
+  entry_path: string | null
+  visibility: ProjectVisibility
+  organization_id: number | null
+  owner?: { id: number; full_name: string } | null
+  organization?: { id: number; name: string; slug: string } | null
+  archived_at: string | null
+  created_at: string
+  updated_at: string
+  file_count: number
+  unresolved_feedback_count: number
 }
 
 interface ApiResponse<T> {
@@ -141,12 +173,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     ...(options.headers as Record<string, string>),
   }
 
-  if (getAuthToken) {
-    const token = await getAuthToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-
   try {
+    if (getAuthToken) {
+      const token = await getAuthToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}))
@@ -188,6 +220,24 @@ function apiProjectToSavedProject(project: ApiProject): SavedProject {
 
   if (!normalized) throw new Error('Cloud project was not valid.')
   return normalized
+}
+
+function apiProjectToSummary(project: ApiProjectSummary): CloudProjectSummary {
+  return {
+    id: String(project.id),
+    title: project.title,
+    kind: project.kind,
+    entryPath: project.entry_path,
+    visibility: project.visibility,
+    organizationId: project.organization_id ? String(project.organization_id) : null,
+    owner: project.owner ? { id: project.owner.id, fullName: project.owner.full_name } : null,
+    organization: project.organization ?? null,
+    archivedAt: project.archived_at,
+    createdAt: project.created_at,
+    updatedAt: project.updated_at,
+    fileCount: project.file_count,
+    unresolvedFeedbackCount: project.unresolved_feedback_count,
+  }
 }
 
 function savedProjectPayload(project: SavedProject) {
@@ -330,18 +380,47 @@ export const api = {
     const res = await fetchApi<{ organization: CloudOrganization }>(`/api/v1/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST' })
     return res.error ? { data: null, error: res.error } : { data: res.data?.organization ?? null, error: null }
   },
-  getProjects: async (organizationId?: string | null) => {
+  getProjects: async (organizationId?: string | null, options: { ownedOnly?: boolean } = {}) => {
     const projects: SavedProject[] = []
     let page = 1
     while (true) {
       const query = new URLSearchParams({ page: String(page), per_page: '100' })
       if (organizationId) query.set('organization_id', organizationId)
+      if (options.ownedOnly) query.set('owned_only', 'true')
       const res = await fetchApi<{
         projects: ApiProject[]
         pagination: { page: number; total_pages: number }
       }>(`/api/v1/projects?${query}`)
       if (res.error) return { data: null, error: res.error }
       projects.push(...(res.data?.projects.map(apiProjectToSavedProject) ?? []))
+      const totalPages = res.data?.pagination.total_pages ?? 1
+      if (page >= totalPages) break
+      page += 1
+    }
+
+    return { data: projects, error: null }
+  },
+  getProject: async (projectId: string) => {
+    const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${projectId}`)
+    if (res.error) return { data: null, error: res.error }
+    try {
+      return { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Cloud project was not valid.' }
+    }
+  },
+  getOrganizationProjects: async (organizationId: string, options: { studentId?: number } = {}) => {
+    const projects: CloudProjectSummary[] = []
+    let page = 1
+    while (true) {
+      const query = new URLSearchParams({ page: String(page), per_page: '100' })
+      if (options.studentId) query.set('student_id', String(options.studentId))
+      const res = await fetchApi<{
+        projects: ApiProjectSummary[]
+        pagination: { page: number; total_pages: number }
+      }>(`/api/v1/organizations/${organizationId}/projects?${query}`)
+      if (res.error) return { data: null, error: res.error }
+      projects.push(...(res.data?.projects.map(apiProjectToSummary) ?? []))
       const totalPages = res.data?.pagination.total_pages ?? 1
       if (page >= totalPages) break
       page += 1
