@@ -36,6 +36,7 @@ type EditorWorkspaceProps = {
   onDuplicateFile: (file: ProjectFile) => void
   onEditorExpandedChange: (expanded: boolean) => void
   onOpenGuide: () => void
+  onOpenSqlFile?: (path: string) => void
   onOpenPractice: () => void
   onErrorAdviceChange?: (context: ErrorCoachContext) => void
   onRenameFile: (file: ProjectFile) => void
@@ -69,6 +70,7 @@ export function EditorWorkspace({
   onDuplicateFile,
   onEditorExpandedChange,
   onOpenGuide,
+  onOpenSqlFile,
   onOpenPractice,
   onErrorAdviceChange,
   onRenameFile,
@@ -218,7 +220,7 @@ export function EditorWorkspace({
       {project.kind === 'web'
         ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onErrorAdviceChange={onErrorAdviceChange} />
         : project.kind === 'sql'
-          ? <SqlRunnerPanel key={runnerInstanceKey} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />
+          ? <SqlRunnerPanel key={runnerInstanceKey} project={project} entryFile={entryFile} onOpenFile={onOpenSqlFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />
           : <RunnerPanel key={`${runnerInstanceKey}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
     </div>
   )

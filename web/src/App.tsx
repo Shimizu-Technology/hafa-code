@@ -294,6 +294,10 @@ export default function App() {
     setMobileTab(nextTab)
     setCheckpointMenuOpen(nextTab === 'history')
   }
+  const openSqlFile = (path: string) => {
+    setActivePath(path)
+    changeMobileTab('code')
+  }
   const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
     ? {
         id: pendingInvitation.organization.id,
@@ -556,6 +560,17 @@ export default function App() {
       // Preferences can fall back to their defaults without interrupting the workspace.
     }
   }, [themePreference])
+
+  useEffect(() => {
+    const root = document.documentElement
+    const previousTheme = root.getAttribute('data-theme')
+    root.setAttribute('data-theme', resolvedTheme)
+
+    return () => {
+      if (previousTheme === null) root.removeAttribute('data-theme')
+      else root.setAttribute('data-theme', previousTheme)
+    }
+  }, [resolvedTheme])
 
   useEffect(() => {
     if (skipRestorePersistenceRef.current.colorMode) {
@@ -2312,6 +2327,7 @@ export default function App() {
               onDuplicateFile={openDuplicateFileDialog}
               onEditorExpandedChange={setEditorExpanded}
               onOpenGuide={() => openLanguageGuide()}
+              onOpenSqlFile={openSqlFile}
               onOpenPractice={openPracticeLab}
               onErrorAdviceChange={handleErrorAdviceChange}
               onRenameFile={openRenameFileDialog}

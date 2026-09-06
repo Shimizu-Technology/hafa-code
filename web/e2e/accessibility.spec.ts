@@ -230,3 +230,43 @@ test('zoom-equivalent and mobile layouts keep content and primary targets usable
   await expect(mobileHistory).not.toHaveAttribute('open', '')
   await expect(mobileHistorySummary).toBeFocused()
 })
+
+test('light and dark themes keep every mobile workspace destination readable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openPersona(page, 'student')
+
+  const navigation = page.getByRole('navigation', { name: 'Workspace sections' })
+
+  for (const theme of ['Light', 'Dark'] as const) {
+    await navigation.getByRole('button', { name: 'Projects' }).click()
+    await page.getByRole('button', { name: theme, exact: true }).click()
+    await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', theme.toLowerCase())
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme.toLowerCase())
+    await expect(navigation.getByRole('button', { name: 'Home' })).toHaveCSS('color', 'rgb(245, 239, 231)')
+
+    const selectedProjectView = page.locator('.project-view-toggle button.active:visible')
+    await expect(selectedProjectView).toHaveCSS('background-color', theme === 'Dark' ? 'rgb(245, 239, 231)' : 'rgb(20, 17, 15)')
+    await expect(selectedProjectView).toHaveCSS('color', theme === 'Dark' ? 'rgb(20, 17, 15)' : 'rgb(255, 250, 241)')
+
+    for (const destination of ['Home', 'Projects', 'Code', 'Output', 'History'] as const) {
+      await navigation.getByRole('button', { name: destination }).click()
+      await expect(navigation.getByRole('button', { name: destination })).toHaveAttribute('aria-current', 'page')
+      await expectNoWcagViolations(page)
+    }
+
+    await navigation.getByRole('button', { name: 'Home' }).click()
+    await page.getByRole('button', { name: 'Ruby guide' }).click()
+    await expect(page.getByRole('dialog', { name: 'Ruby learning' })).toBeVisible()
+    await expectNoWcagViolations(page)
+    await page.getByRole('tab', { name: 'Practice' }).click()
+    await expectNoWcagViolations(page)
+    await page.getByRole('button', { name: 'Close learning sidecar' }).click()
+
+    await navigation.getByRole('button', { name: 'Projects' }).click()
+    await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+    await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
+    await expectNoWcagViolations(page)
+    await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+    await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
+  }
+})

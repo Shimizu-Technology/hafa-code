@@ -109,7 +109,20 @@ describe('SqlRunnerPanel', () => {
     const queryProject = { ...project, entryPath: 'query.sql', files: [{ ...project.files[0], path: 'query.sql' }, ...project.files.slice(1)] }
     render(<SqlRunnerPanel project={queryProject} entryFile={queryProject.files[0]} />)
 
-    expect(screen.getByText(/Run query\.sql to see a table/)).toBeTruthy()
+    expect(screen.getByText(/Run query\.sql to query the project database/)).toBeTruthy()
+  })
+
+  it('takes learners directly to the schema and starter rows', async () => {
+    const user = userEvent.setup()
+    const onOpenFile = vi.fn()
+    render(<SqlRunnerPanel project={project} entryFile={project.files[0]} onOpenFile={onOpenFile} />)
+
+    expect(screen.getByText('What can I query?')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'View schema' }))
+    await user.click(screen.getByRole('button', { name: 'View starter rows' }))
+
+    expect(onOpenFile).toHaveBeenNthCalledWith(1, 'schema.sql')
+    expect(onOpenFile).toHaveBeenNthCalledWith(2, 'seed.sql')
   })
 
   it('shows a SQL-specific error and sends it to Coach', async () => {
