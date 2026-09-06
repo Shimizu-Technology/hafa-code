@@ -22,12 +22,14 @@ The application already has a credible classroom foundation:
 
 The current `main` branch includes durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
 
-The remaining launch gates are operational rather than missing application code:
+The remaining launch gates include a small amount of application and test work plus external operations:
 
-1. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
-2. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
-3. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
-4. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
+1. Finish the class-copy destination chooser and show the destination before a learner confirms a copy.
+2. Require passing frontend and backend CI on `main`, and add repeatable multi-role browser coverage for the critical classroom flows.
+3. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
+4. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
+5. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
+6. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
 
 The core architecture does not need to be replaced. The next move is to close the remaining code-backed launch gaps, complete the external gates, and run the controlled pilot before full enrollment.
 
@@ -62,7 +64,7 @@ The public checks below were repeated on September 6, 2026. They prove only what
 | --- | --- | --- |
 | Netlify homepage | `200 OK` | The current production frontend is online. |
 | Rails `/health` | `200 OK` with `{"status":"ok"}` | The API process is reachable. |
-| Netlify security headers | Present | CSP, HSTS, no-sniff, referrer, permissions, and frame protections are configured. |
+| Netlify security headers | `frame-ancestors 'none'`; HSTS `max-age=31536000`; `nosniff`; `no-referrer`; restrictive device Permissions Policy | CSP supplies the frame protection. The response does not rely on `X-Frame-Options`. Camera, microphone, geolocation, payment, USB, serial, Bluetooth, accelerometer, gyroscope, and magnetometer access are disabled. |
 | Ruby runner under production CSP | Passed | The default Ruby project runs in its worker under the deployed policy. |
 | Production-origin API preflight | Passed | Render returns `Access-Control-Allow-Origin: https://code.shimizu-technology.com`. |
 | Production page rendering | Successful | The signed-out editor, runner controls, project library, visibility UI, and responsive structure load. |
@@ -258,7 +260,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-005 — Repair CI and clear high-severity dependency advisories
 
-**Why:** The local quality checks are useful, but GitHub does not execute workflows stored under `api/.github/workflows`. Current production dependency audits also report high-severity JavaScript and Ruby advisories.
+**Why:** GitHub previously did not execute the workflow stored under `api/.github/workflows`, and earlier dependency audits reported high-severity JavaScript and Ruby advisories. The workflow now runs from the repository root and the September 6 audits are clean. FDMS-005 remains open only until `main` requires the passing frontend and backend checks.
 
 **Work:**
 
@@ -604,7 +606,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 - **Confirmed in the current repository:** permissions, private feedback, durable save/recovery, stale-write conflict copies, class-preserving duplication, invitation operations, archived-class immutability, export/offboarding, audit logging, class sharing defaults, quotas/cleanup, active CI, dependency advisories, metadata, PWA cache inventory, and modal keyboard behavior.
 - **Confirmed in unauthenticated production checks:** the Netlify app and Render health endpoint are reachable, the production origin passes CORS preflight, Ruby runs under the deployed CSP, and canonical metadata uses the classroom domain.
 - **Requires external configuration verification:** Clerk production settings, Render/Netlify environment variables beyond observable behavior, database plan and backups, restore capability, service billing limits, DNS ownership, email-provider delivery health, school device/network policies, and school approval.
-- **Product decision:** public sharing, exact feedback scope, use of an existing LMS, personal projects, retention duration, support service level, and canonical domain.
+- **Product decision:** public sharing, exact feedback scope, use of an existing LMS, personal projects, retention duration, and support service level. The canonical domain is decided: `code.shimizu-technology.com`.
 
 ## 12. Definition of “Solid Enough to Launch”
 
