@@ -43,7 +43,7 @@ declare global {
   interface Window {
     __HAFA_E2E_EDITOR__?: {
       runAction: (actionId: string) => Promise<boolean>
-      setValue: (value: string) => boolean
+      setValue: (value: string) => Promise<boolean>
       getMarkers: () => Array<{ code: string; message: string; path: string; line: number; column: number }>
     }
     MonacoEnvironment?: {
@@ -92,8 +92,12 @@ if (e2eAuthEnabled) {
     async runAction(actionId) {
       return runE2EEditorAction(monaco.editor.getEditors(), actionId)
     },
-    setValue(value) {
-      return setE2EEditorValue(monaco.editor.getEditors(), value)
+    async setValue(value) {
+      const updated = setE2EEditorValue(monaco.editor.getEditors(), value)
+      if (!updated) return false
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      return true
     },
     getMarkers() {
       return monaco.editor.getModelMarkers({}).map((marker) => ({
