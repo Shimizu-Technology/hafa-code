@@ -173,12 +173,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     ...(options.headers as Record<string, string>),
   }
 
-  if (getAuthToken) {
-    const token = await getAuthToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-
   try {
+    if (getAuthToken) {
+      const token = await getAuthToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}))
