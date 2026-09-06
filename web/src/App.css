@@ -4006,6 +4006,16 @@ button.context-chip.active,
     display: none;
   }
 
+  .mobile-tab-code .project-toolbar {
+    display: block;
+    margin-bottom: 0.55rem;
+  }
+
+  .mobile-tab-code .project-toolbar .title-field,
+  .mobile-tab-code .project-toolbar .toolbar-actions {
+    display: none;
+  }
+
   .mobile-tab-history .toolbar-actions {
     display: flex;
   }
