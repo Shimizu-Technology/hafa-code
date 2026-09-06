@@ -10,10 +10,21 @@ export type ShareDialogState = {
   error?: string | null
 } | null
 
+export type ProjectCopyDestination = {
+  id: string | null
+  label: string
+  description: string
+}
+
 type WorkspaceDialogsProps = {
   activeProjectCount: number
   confirmAction: ConfirmAction
   confirmDialogRef: RefObject<HTMLElement | null>
+  copyDestinationId: string | null
+  copyDestinations: ProjectCopyDestination[]
+  copyDialogOpen: boolean
+  copyDialogRef: RefObject<HTMLElement | null>
+  copySubmitting: boolean
   fileDialog: FileDialogState | null
   fileDialogError: string
   fileDialogRef: RefObject<HTMLElement | null>
@@ -32,11 +43,14 @@ type WorkspaceDialogsProps = {
   onCloseFileDialog: () => void
   onCloseOrganizationDialog: () => void
   onCloseProjectActions: () => void
+  onCloseProjectCopy: () => void
   onCloseShareDialog: () => void
   onConfirmProjectAction: () => void
+  onConfirmProjectCopy: () => void
   onCopyShareLink: () => void
   onCreateOrganization: () => void
   onDuplicateProject: () => void
+  onProjectCopyDestinationChange: (organizationId: string | null) => void
   onFilePathChange: (path: string) => void
   onOrganizationNameChange: (name: string) => void
   onRequestDeleteProject: () => void
@@ -49,6 +63,11 @@ export function WorkspaceDialogs({
   activeProjectCount,
   confirmAction,
   confirmDialogRef,
+  copyDestinationId,
+  copyDestinations,
+  copyDialogOpen,
+  copyDialogRef,
+  copySubmitting,
   fileDialog,
   fileDialogError,
   fileDialogRef,
@@ -67,11 +86,14 @@ export function WorkspaceDialogs({
   onCloseFileDialog,
   onCloseOrganizationDialog,
   onCloseProjectActions,
+  onCloseProjectCopy,
   onCloseShareDialog,
   onConfirmProjectAction,
+  onConfirmProjectCopy,
   onCopyShareLink,
   onCreateOrganization,
   onDuplicateProject,
+  onProjectCopyDestinationChange,
   onFilePathChange,
   onOrganizationNameChange,
   onRequestDeleteProject,
@@ -167,6 +189,37 @@ export function WorkspaceDialogs({
               )}
               <button className="secondary" onClick={onDuplicateProject}><Copy size={16} /> Duplicate</button>
               <button className="danger" onClick={onRequestDeleteProject}><Trash2 size={16} /> Delete</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {copyDialogOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={onCloseProjectCopy}>
+          <section ref={copyDialogRef} tabIndex={-1} className="modal-sheet copy-project-sheet" role="dialog" aria-modal="true" aria-labelledby="copy-project-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div><p className="eyebrow">Duplicate project</p><h2 id="copy-project-title">Where should the copy live?</h2></div>
+              <button className="ghost icon-button" aria-label="Cancel project copy" onClick={onCloseProjectCopy} disabled={copySubmitting}><X size={18} /></button>
+            </div>
+            <p className="helper-text">The new copy stays private. Pick its workspace now so it never lands in the wrong class by accident.</p>
+            <fieldset className="copy-destination-list">
+              <legend>Destination workspace</legend>
+              {copyDestinations.map((destination) => (
+                <label key={destination.id ?? 'personal'} className={copyDestinationId === destination.id ? 'copy-destination active' : 'copy-destination'}>
+                  <input
+                    type="radio"
+                    name="copy-destination"
+                    value={destination.id ?? 'personal'}
+                    checked={copyDestinationId === destination.id}
+                    onChange={() => onProjectCopyDestinationChange(destination.id)}
+                  />
+                  <span><strong>{destination.label}</strong><small>{destination.description}</small></span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="confirm-actions">
+              <button className="secondary" type="button" onClick={onCloseProjectCopy} disabled={copySubmitting}>Cancel</button>
+              <button type="button" onClick={onConfirmProjectCopy} disabled={copySubmitting}><Copy size={16} /> {copySubmitting ? 'Duplicating…' : 'Duplicate here'}</button>
             </div>
           </section>
         </div>

@@ -3068,6 +3068,68 @@ button.context-chip.active,
   width: 100%;
 }
 
+.copy-project-sheet {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+
+.copy-destination-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.copy-destination-list legend {
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.copy-destination {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  min-height: 58px;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+}
+
+.copy-destination.active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+.copy-destination input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.1rem 0 0;
+  accent-color: var(--brand);
+}
+
+.copy-destination span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.copy-destination small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.app-shell[data-theme="dark"] .copy-destination {
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .workspace-transfer-sheet {
   width: min(590px, 100%);
 }

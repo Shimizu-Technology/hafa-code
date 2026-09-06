@@ -65,7 +65,7 @@ import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { ProjectToolbar } from './components/ProjectToolbar'
-import { WorkspaceDialogs, type ShareDialogState } from './components/WorkspaceDialogs'
+import { WorkspaceDialogs, type ProjectCopyDestination, type ShareDialogState } from './components/WorkspaceDialogs'
 import { WorkspaceTransferDialog } from './components/WorkspaceTransferDialog'
 import type { LanguageGuideTopic } from './lib/languageGuides'
 import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
@@ -152,6 +152,9 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
   const [projectActionsOpen, setProjectActionsOpen] = useState(false)
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
+  const [copyDestinationId, setCopyDestinationId] = useState<string | null>(null)
+  const [copySubmitting, setCopySubmitting] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [pendingCheckpoint, setPendingCheckpoint] = useState<ProjectCheckpoint | null>(null)
   const [fileDialog, setFileDialog] = useState<FileDialogState | null>(null)
@@ -254,6 +257,9 @@ export default function App() {
   const workspaceTransferDialogRef = useModalFocus<HTMLElement>(workspaceTransferOpen, () => setWorkspaceTransferOpen(false))
   const orgDialogRef = useModalFocus<HTMLElement>(orgCreateOpen, () => setOrgCreateOpen(false))
   const projectActionsDialogRef = useModalFocus<HTMLElement>(projectActionsOpen, () => setProjectActionsOpen(false))
+  const copyDialogRef = useModalFocus<HTMLElement>(copyDialogOpen, () => {
+    if (!copySubmitting) setCopyDialogOpen(false)
+  })
   const confirmDialogRef = useModalFocus<HTMLElement>(Boolean(confirmAction), () => {
     setConfirmAction(null)
     setPendingCheckpoint(null)
@@ -285,6 +291,18 @@ export default function App() {
       }
     : null
   const activeOrganization = organizations.find((organization) => String(organization.id) === activeOrganizationId) ?? optimisticInvitationOrganization
+  const projectCopyDestinations: ProjectCopyDestination[] = [
+    { id: null, label: 'Personal projects', description: 'Only you can access this copy.' },
+    ...organizations
+      .filter((organization) => !organization.archived_at)
+      .map((organization) => ({
+        id: String(organization.id),
+        label: organization.name,
+        description: organization.role === 'student'
+          ? 'Private to you and this classroom’s instructors.'
+          : 'Private to you inside this classroom workspace.',
+      })),
+  ]
   const workspaceIsSettling = cloudEnabled && authLoading
   const canUseInstructorPanel = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
   const canInviteOrgMembers = activeOrganization?.role === 'instructor' || activeOrganization?.role === 'owner' || user?.role === 'admin'
@@ -1196,19 +1214,65 @@ export default function App() {
     setNotice(`${projectToRestore.title || 'Project'} restored.`)
   }
 
-  const cloneProject = () => {
-    if (workspaceArchived) {
-      setNotice('Restore this classroom before duplicating projects into it.')
-      return
-    }
+  const requestProjectCopy = () => {
     setProjectActionsOpen(false)
-    const copy = duplicateProject(project)
-    clearPendingPracticeCheck()
-    setLibrary((current) => ({ activeProjectId: copy.id, projects: [copy, ...current.projects] }))
-    setActivePath(copy.files[0].path)
-    setShowArchived(false)
-    setMobileTab('code')
-    setNotice('Project duplicated.')
+    const sourceOrganizationId = project.organizationId
+    const sourceOrganizationIsAvailable = sourceOrganizationId
+      ? projectCopyDestinations.some((destination) => destination.id === sourceOrganizationId)
+      : false
+    setCopyDestinationId(sourceOrganizationIsAvailable ? sourceOrganizationId ?? null : null)
+    setCopyDialogOpen(true)
+  }
+
+  const confirmProjectCopy = async () => {
+    if (copySubmitting) return
+
+    setCopySubmitting(true)
+    const destinationOrganization = copyDestinationId
+      ? organizations.find((organization) => String(organization.id) === copyDestinationId) ?? null
+      : null
+    const destinationLabel = destinationOrganization?.name || 'Personal projects'
+
+    try {
+      let sourceProject = project
+      if (canEditProject && isSignedIn && isCloudProjectId(sourceProject.id)) {
+        const flushedProject = await flushCloudProject(sourceProject)
+        if (!flushedProject) return
+        sourceProject = flushedProject
+      }
+
+      let copy: SavedProject
+      if (isSignedIn && isCloudProjectId(sourceProject.id)) {
+        const response = await api.duplicateProject(sourceProject.id, copyDestinationId)
+        if (response.error || !response.data) {
+          setNotice(`Could not duplicate project: ${response.error || 'unknown error'}`)
+          return
+        }
+        copy = response.data
+        syncedProjectVersionsRef.current.set(copy.id, copy.updatedAt)
+      } else {
+        copy = duplicateProject(sourceProject, {
+          organizationId: copyDestinationId,
+          organization: destinationOrganization
+            ? { id: destinationOrganization.id, name: destinationOrganization.name, slug: destinationOrganization.slug }
+            : null,
+        })
+      }
+
+      clearPendingPracticeCheck()
+      setActiveOrganizationId(copyDestinationId)
+      setLibrary((current) => ({
+        activeProjectId: copy.id,
+        projects: [copy, ...current.projects.filter((candidate) => candidate.id !== copy.id)],
+      }))
+      setActivePath(copy.files[0].path)
+      setShowArchived(false)
+      setMobileTab('code')
+      setCopyDialogOpen(false)
+      setNotice(`Project duplicated into ${destinationLabel}.`)
+    } finally {
+      setCopySubmitting(false)
+    }
   }
 
   const confirmProjectAction = () => {
@@ -2020,7 +2084,7 @@ export default function App() {
               onArchive={requestArchiveProject}
               onCheckpointMenuChange={setCheckpointMenuOpen}
               onDelete={requestDeleteProject}
-              onDuplicate={cloneProject}
+              onDuplicate={requestProjectCopy}
               onOpenGuide={() => openLanguageGuide()}
               onOpenPractice={openPracticeLab}
               onOpenProjectActions={() => setProjectActionsOpen(true)}
@@ -2127,6 +2191,11 @@ export default function App() {
         activeProjectCount={activeContextProjects.length}
         confirmAction={confirmAction}
         confirmDialogRef={confirmDialogRef}
+        copyDestinationId={copyDestinationId}
+        copyDestinations={projectCopyDestinations}
+        copyDialogOpen={copyDialogOpen}
+        copyDialogRef={copyDialogRef}
+        copySubmitting={copySubmitting}
         fileDialog={fileDialog}
         fileDialogError={fileDialogError}
         fileDialogRef={fileDialogRef}
@@ -2151,8 +2220,12 @@ export default function App() {
         }}
         onCloseOrganizationDialog={() => setOrgCreateOpen(false)}
         onCloseProjectActions={() => setProjectActionsOpen(false)}
+        onCloseProjectCopy={() => {
+          if (!copySubmitting) setCopyDialogOpen(false)
+        }}
         onCloseShareDialog={() => setShareDialog(null)}
         onConfirmProjectAction={confirmProjectAction}
+        onConfirmProjectCopy={() => { void confirmProjectCopy() }}
         onCopyShareLink={async () => {
           if (!shareDialog) return
           const copied = await writeClipboardText(shareDialog.url)
@@ -2160,7 +2233,8 @@ export default function App() {
           setNotice(copied ? "Share link copied." : "Clipboard blocked. Select the link to copy it.")
         }}
         onCreateOrganization={createOrganization}
-        onDuplicateProject={cloneProject}
+        onDuplicateProject={requestProjectCopy}
+        onProjectCopyDestinationChange={setCopyDestinationId}
         onFilePathChange={(path) => {
           setFileDialog((current) => current ? { ...current, path } : current)
           setFileDialogError("")

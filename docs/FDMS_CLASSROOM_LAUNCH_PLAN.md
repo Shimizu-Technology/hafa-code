@@ -217,15 +217,15 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-003 — Keep class copies inside the class
 
-**Why:** The frontend duplication helper explicitly sets `organizationId`, owner, and organization to `null`. If a teacher publishes a starter project and a student clicks Duplicate, the student's copy becomes a personal project and disappears from the teacher's class view.
+**Why:** A learner must always know where a copy will live. Class starters should default to their source class, while personal or cross-class copies require a deliberate destination choice.
 
 **Work:**
 
 - [x] When duplicating a class project, default the destination to the active class.
-- [ ] Allow a destination chooser only when the user belongs to multiple valid contexts.
+- [x] Allow a destination chooser when the user belongs to multiple valid contexts.
 - [x] Preserve private visibility for the student's new copy.
 - [x] Use the server duplicate endpoint for signed-in cloud projects or make the frontend behavior match it.
-- [ ] Clearly show the destination before confirmation.
+- [x] Clearly show the destination before confirmation.
 
 **Acceptance criteria:**
 

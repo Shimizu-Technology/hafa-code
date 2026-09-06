@@ -99,14 +99,15 @@ module Api
       end
 
       def duplicate
-        return render_archived_organization_error if @project.organization&.archived?
+        destination = duplicate_organization
+        return render_archived_organization_error if destination&.archived?
 
         copy = current_user.projects.new(
-          title: "#{@project.title} Copy",
+          title: "#{@project.title.first(115)} Copy",
           kind: @project.kind,
           entry_path: @project.entry_path,
           visibility: "private",
-          organization: duplicate_organization,
+          organization: destination,
           forked_from: @project
         )
         @project.project_files.each_with_index do |file, index|
@@ -173,6 +174,12 @@ module Api
       end
 
       def duplicate_organization
+        if params.key?(:organization_id)
+          return nil if params[:organization_id].blank?
+
+          return organization_scope.find(params[:organization_id])
+        end
+
         return nil unless @project.organization
 
         current_user.organizations.find_by(id: @project.organization_id)

@@ -209,16 +209,21 @@ export function createProject(kind: ProjectKind, title?: string): SavedProject {
   }
 }
 
-export function duplicateProject(project: SavedProject): SavedProject {
+type DuplicateProjectDestination = Pick<SavedProject, 'organizationId' | 'organization'>
+
+export function duplicateProject(project: SavedProject, destination?: DuplicateProjectDestination): SavedProject {
   const now = new Date().toISOString()
+  const titleSuffix = ' Copy'
+  const organizationId = destination ? destination.organizationId ?? null : project.organizationId ?? null
+  const organization = destination ? destination.organization ?? null : project.organization ?? null
   return {
     ...project,
     id: crypto.randomUUID(),
-    title: `${project.title} Copy`,
+    title: `${project.title.slice(0, 120 - titleSuffix.length)}${titleSuffix}`,
     visibility: 'private',
-    organizationId: project.organizationId ?? null,
+    organizationId,
     owner: null,
-    organization: project.organization ?? null,
+    organization,
     files: project.files.map((file) => ({ ...file })),
     createdAt: now,
     updatedAt: now,

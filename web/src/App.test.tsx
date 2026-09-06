@@ -426,4 +426,22 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/ended before a result arrived/i)
   })
+
+  it('shows and confirms the destination before duplicating a project', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(storedLibrary().projects).toHaveLength(1)
+
+    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+
+    const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
+    expect(within(dialog).getByRole('radio', { name: /Personal projects/ })).toHaveProperty('checked', true)
+    expect(storedLibrary().projects).toHaveLength(1)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
+
+    await waitFor(() => expect(storedLibrary().projects).toHaveLength(2))
+    expect(screen.getByRole('status').textContent).toMatch(/duplicated into Personal projects/i)
+    expect(screen.queryByRole('dialog', { name: 'Where should the copy live?' })).toBeNull()
+  })
 })
