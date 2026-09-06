@@ -44,6 +44,11 @@ async function expectNoWcagViolations(page: Page) {
   expect(usefulViolations(results.violations)).toEqual([])
 }
 
+async function expectColorSafePalette(page: Page) {
+  await expect(page.locator('.desktop-hero-actions').getByRole('button', { name: 'Share' }))
+    .toHaveCSS('background-color', 'rgb(0, 114, 178)')
+}
+
 test('personal and classroom workspaces pass automated WCAG checks', async ({ page }) => {
   await openPersona(page, 'student')
   await expectNoWcagViolations(page)
@@ -52,6 +57,7 @@ test('personal and classroom workspaces pass automated WCAG checks', async ({ pa
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
+  await expectColorSafePalette(page)
   await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveCSS('text-decoration-line', /underline/)
   await expectNoWcagViolations(page)
 
@@ -66,6 +72,7 @@ test('personal and classroom workspaces pass automated WCAG checks', async ({ pa
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
+  await expectColorSafePalette(page)
   await expectNoWcagViolations(page)
 
   await openPersona(page, 'teacher')
