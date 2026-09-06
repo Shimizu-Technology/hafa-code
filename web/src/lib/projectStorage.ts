@@ -25,6 +25,22 @@ function safeParse<T>(value: string | null): T | null {
   }
 }
 
+function safeStorageValue(key: string, storage?: Storage) {
+  try {
+    return (storage ?? localStorage).getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function removeStorageValue(key: string, storage?: Storage) {
+  try {
+    (storage ?? localStorage).removeItem(key)
+  } catch {
+    // A stale legacy copy is harmless when browser storage is unavailable.
+  }
+}
+
 function isFileLanguage(value: unknown): value is FileLanguage {
   return isProjectFileLanguage(value)
 }
@@ -110,15 +126,14 @@ export function normalizeProjectLibrary(candidate: ProjectLibrary | null): Proje
 }
 
 export function loadProjectLibrary(): ProjectLibrary {
-  const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(localStorage.getItem(PROJECT_LIBRARY_STORAGE_KEY)))
+  const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(safeStorageValue(PROJECT_LIBRARY_STORAGE_KEY)))
   if (current) return current
 
-  const legacyProject = safeParse<SavedProject>(localStorage.getItem(LEGACY_STORAGE_KEY))
+  const legacyProject = safeParse<SavedProject>(safeStorageValue(LEGACY_STORAGE_KEY))
   const normalizedLegacyProject = normalizeProject(legacyProject)
   if (normalizedLegacyProject) {
     const migrated = { activeProjectId: normalizedLegacyProject.id, projects: [normalizedLegacyProject] }
-    saveProjectLibrary(migrated)
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
+    if (saveProjectLibrary(migrated)) removeStorageValue(LEGACY_STORAGE_KEY)
     return migrated
   }
 
@@ -128,8 +143,13 @@ export function loadProjectLibrary(): ProjectLibrary {
   return library
 }
 
-export function saveProjectLibrary(library: ProjectLibrary) {
-  localStorage.setItem(PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(library))
+export function saveProjectLibrary(library: ProjectLibrary, storage?: Storage) {
+  try {
+    (storage ?? localStorage).setItem(PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(library))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function normalizeCheckpointLibrary(candidate: unknown): CheckpointLibrary {
@@ -151,11 +171,16 @@ export function normalizeCheckpointLibrary(candidate: unknown): CheckpointLibrar
 }
 
 export function loadCheckpointLibrary(): CheckpointLibrary {
-  return normalizeCheckpointLibrary(safeParse<CheckpointLibrary>(localStorage.getItem(CHECKPOINT_STORAGE_KEY)))
+  return normalizeCheckpointLibrary(safeParse<CheckpointLibrary>(safeStorageValue(CHECKPOINT_STORAGE_KEY)))
 }
 
-export function saveCheckpointLibrary(library: CheckpointLibrary) {
-  localStorage.setItem(CHECKPOINT_STORAGE_KEY, JSON.stringify(library))
+export function saveCheckpointLibrary(library: CheckpointLibrary, storage?: Storage) {
+  try {
+    (storage ?? localStorage).setItem(CHECKPOINT_STORAGE_KEY, JSON.stringify(library))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function projectSnapshot(project: SavedProject): ProjectSnapshot {
@@ -176,7 +201,7 @@ export function loadLocalCheckpoints(projectId: string): ProjectCheckpoint[] {
     .slice(0, 30)
 }
 
-export function createLocalCheckpoint(project: SavedProject, title = 'Checkpoint'): ProjectCheckpoint {
+export function createLocalCheckpoint(project: SavedProject, title = 'Checkpoint'): ProjectCheckpoint | null {
   const checkpoint = {
     id: crypto.randomUUID(),
     title: title.trim() || 'Checkpoint',
@@ -185,8 +210,7 @@ export function createLocalCheckpoint(project: SavedProject, title = 'Checkpoint
   }
   const library = loadCheckpointLibrary()
   library[project.id] = [checkpoint, ...(library[project.id] ?? [])].slice(0, 30)
-  saveCheckpointLibrary(library)
-  return checkpoint
+  return saveCheckpointLibrary(library) ? checkpoint : null
 }
 
 export function snapshotToProject(project: SavedProject, snapshot: ProjectSnapshot): SavedProject {

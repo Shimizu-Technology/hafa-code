@@ -102,6 +102,7 @@ describe('workspace presentation components', () => {
         checkpoints={[]}
         cloudSaveLabel="Autosaved locally"
         currentProjectOwnerLabel=""
+        localBackupAvailable
         mobileHistoryOpen={false}
         project={project}
         projectCount={1}
@@ -122,6 +123,8 @@ describe('workspace presentation components', () => {
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Site' } })
     expect(onRename).toHaveBeenLastCalledWith('Site')
+    expect(screen.getByRole('meter', { name: /project source uses/i }).getAttribute('max')).toBe('2000000')
+    expect(screen.getByText(/of 2.00 MB/)).toBeDefined()
 
     rerender(<MobileWorkspaceNav activeTab="code" projectKind="web" onChange={onMobileChange} />)
     expect(screen.getByRole('button', { name: 'Code' }).getAttribute('aria-current')).toBe('page')

@@ -150,6 +150,7 @@ export default function App() {
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
+  const [localBackupAvailable, setLocalBackupAvailable] = useState(true)
   const [showArchived, setShowArchived] = useState(isArchived(initialProject))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
@@ -339,6 +340,13 @@ export default function App() {
         : currentCloudSaveStatus === 'conflict'
           ? 'Save conflict · local copy safe'
           : 'Saved to cloud + local backup'
+  const workspaceSaveLabel = reviewProject
+    ? 'Cloud project'
+    : localBackupAvailable
+      ? (isSignedIn ? cloudSaveLabel : 'Autosaved locally')
+      : isSignedIn
+        ? `${currentCloudSaveStatus === 'saved' || !currentCloudSaveStatus ? 'Saved to cloud' : cloudSaveLabel.split(' · ')[0]} · local backup unavailable`
+        : 'Local backup unavailable'
   const canAccessProjectFeedback = canViewProjectFeedback(project, isSignedIn, user?.id, canUseInstructorPanel)
   const resolvedTheme = themePreference === 'system'
     ? (systemDark ? 'dark' : 'light')
@@ -516,7 +524,7 @@ export default function App() {
       skipRestorePersistenceRef.current.library = false
       return
     }
-    saveProjectLibrary(library)
+    setLocalBackupAvailable(saveProjectLibrary(library))
   }, [library])
 
   useEffect(() => () => {
@@ -1545,7 +1553,17 @@ export default function App() {
     }
 
     const checkpoint = createLocalCheckpoint(checkpointProject, title)
+    if (!checkpoint) {
+      setLocalBackupAvailable(false)
+      if (isCurrentCheckpointProject()) {
+        setNotice(cloudCheckpointError
+          ? `Cloud checkpoint failed: ${cloudCheckpointError}. The local checkpoint also could not be saved because browser storage is unavailable.`
+          : 'Checkpoint could not be saved because browser storage is unavailable. Free space or download a workspace backup.')
+      }
+      return
+    }
     if (isCurrentCheckpointProject()) {
+      setLocalBackupAvailable(true)
       setCheckpoints((current) => [checkpoint, ...current].slice(0, 30))
       setNotice(cloudCheckpointError
         ? `Cloud checkpoint failed: ${cloudCheckpointError}. Saved locally instead.`
@@ -1869,12 +1887,31 @@ export default function App() {
               Close
             </button>
           </div>
-          <div className="classroom-tabs" role="tablist" aria-label="Classroom tools">
+          <div
+            className="classroom-tabs"
+            role="tablist"
+            aria-label="Classroom tools"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+              const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+              const currentIndex = tabs.indexOf(event.target as HTMLButtonElement)
+              if (currentIndex < 0) return
+              event.preventDefault()
+              const nextIndex = event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? tabs.length - 1
+                  : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+              tabs[nextIndex].focus()
+              tabs[nextIndex].click()
+            }}
+          >
             <button
               className={classroomTab === 'review' ? 'active' : 'secondary'}
               type="button"
               role="tab"
               aria-selected={classroomTab === 'review'}
+              tabIndex={classroomTab === 'review' ? 0 : -1}
               onClick={() => setClassroomTab('review')}
             >
               Review work
@@ -1884,6 +1921,7 @@ export default function App() {
               type="button"
               role="tab"
               aria-selected={classroomTab === 'people'}
+              tabIndex={classroomTab === 'people' ? 0 : -1}
               onClick={() => setClassroomTab('people')}
             >
               People
@@ -1893,6 +1931,7 @@ export default function App() {
               type="button"
               role="tab"
               aria-selected={classroomTab === 'invitations'}
+              tabIndex={classroomTab === 'invitations' ? 0 : -1}
               onClick={() => setClassroomTab('invitations')}
             >
               Invitations
@@ -1903,6 +1942,7 @@ export default function App() {
                 type="button"
                 role="tab"
                 aria-selected={classroomTab === 'settings'}
+                tabIndex={classroomTab === 'settings' ? 0 : -1}
                 onClick={() => {
                   setSchoolYearDraft(activeOrganization.school_year || '')
                   setClassroomTab('settings')
@@ -2160,8 +2200,9 @@ export default function App() {
               checkpointMenuIsOpen={checkpointMenuIsOpen}
               checkpointMenuRef={checkpointMenuRef}
               checkpoints={checkpoints}
-              cloudSaveLabel={reviewProject ? 'Cloud project' : isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
+              cloudSaveLabel={workspaceSaveLabel}
               currentProjectOwnerLabel={currentProjectOwnerLabel}
+              localBackupAvailable={localBackupAvailable}
               mobileHistoryOpen={mobileTab === 'history'}
               project={project}
               projectCount={activeContextProjects.length}

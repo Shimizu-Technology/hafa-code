@@ -392,12 +392,12 @@ This plan is a product and engineering checklist, not legal advice.
 
 ### FDMS-103 — Define quotas and cleanup
 
-- [ ] Set total bytes per project, student, and organization.
-- [x] Review the current theoretical project maximum of 50 files × 500,000 characters and enforce a 2 MiB combined-source cap.
+- [x] Enforce and display a 2,000,000-byte combined-source limit per project, measured as UTF-8 bytes.
+- [ ] Set aggregate stored bytes per student and organization after FDMS and the service owner approve capacity and retention policy.
 - [x] Account for up to 30 full project checkpoints and enforce source-size validation.
 - [x] Add scheduled deletion of expired anonymous shares.
 - [x] Use a durable database-backed rate-limit store.
-- [ ] Add storage-usage visibility and warnings before rejecting work.
+- [x] Add source-usage visibility, an 80% warning, honest local-storage failure states, and workspace-backup recovery guidance before rejecting or losing work.
 
 ### FDMS-104 — Complete class lifecycle and offboarding
 
@@ -426,11 +426,11 @@ The log should capture actor, action, target, organization, timestamp, and relev
 ### FDMS-106 — Complete accessibility and device QA
 
 - [x] Add Escape-to-close, focus trap, initial focus, and focus return for every modal.
-- [ ] Test full keyboard operation of project, file, history, sharing, and classroom controls.
+- [x] Gate keyboard operation of project, file, history, sharing, and classroom controls in Chromium, including arrow/Home/End navigation for classroom tabs.
 - [ ] Test with VoiceOver and at least one other screen reader/browser combination.
-- [ ] Verify 200% zoom and narrow Chromebook/mobile widths.
-- [ ] Recheck color-safe mode and all status states without relying on color alone.
-- [ ] Confirm touch targets are at least 44 px where practical.
+- [x] Gate a 640 CSS-pixel viewport as the layout equivalent of 1280 px at 200% browser zoom, plus narrow mobile widths and horizontal overflow.
+- [x] Run automated WCAG checks in default and dark color-safe modes; selected and status states retain text, underline, border, or icon cues instead of color alone.
+- [x] Gate primary mobile navigation, Run/Practice, and project-action targets at 44 px or larger.
 - [ ] Test the exact school devices, browser versions, content filters, and network.
 
 ### FDMS-107 — Reduce first-load and PWA cache cost
@@ -598,7 +598,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
-| Local multi-role browser workflow | Pass: 11 Chromium scenarios covering session resolution, provisioning, invites, save/reload, review, feedback, role isolation, class duplication, export, dual-class switching, mobile actions, checkpoints, archive/restore/delete, and offboarding |
+| Local multi-role browser workflow | Pass: 14 Chromium scenarios covering session resolution, provisioning, invites, save/reload, review, feedback, role isolation, class duplication, export, dual-class switching, mobile actions, checkpoints, archive/restore/delete, offboarding, automated WCAG checks, keyboard paths, contrast, zoom-equivalent layout, overflow, and primary target sizes |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
 | GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend`, `backend`, and `classroom-e2e` checks are required |
 | Netlify production page and headers | Reachable; security headers present |

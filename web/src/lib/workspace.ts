@@ -24,6 +24,8 @@ export type MobileTab = 'home' | 'projects' | 'code' | 'output' | 'history'
 export type ClassroomTab = 'review' | 'people' | 'invitations' | 'settings'
 
 export const PROJECT_FILE_LIMIT = 50
+export const PROJECT_SOURCE_LIMIT_BYTES = 2_000_000
+export const PROJECT_SOURCE_WARNING_RATIO = 0.8
 
 export const kindLabels = Object.fromEntries(
   PROJECT_KINDS.map((kind) => [kind, projectKindDefinition(kind).label]),
@@ -134,6 +136,27 @@ export function formatCheckpointTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'just now'
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
+}
+
+export function projectSourceBytes(project: Pick<SavedProject, 'files'>) {
+  const encoder = new TextEncoder()
+  return project.files.reduce((total, file) => total + encoder.encode(file.content).byteLength, 0)
+}
+
+export function formatSourceBytes(bytes: number) {
+  if (bytes < 1_000) return `${bytes} B`
+  if (bytes < 1_000_000) return `${Math.ceil(bytes / 1_000)} KB`
+  return `${(bytes / 1_000_000).toFixed(2)} MB`
+}
+
+export function projectSourceUsage(project: Pick<SavedProject, 'files'>) {
+  const bytes = projectSourceBytes(project)
+  const ratio = bytes / PROJECT_SOURCE_LIMIT_BYTES
+  return {
+    bytes,
+    ratio,
+    state: ratio >= 1 ? 'full' : ratio >= PROJECT_SOURCE_WARNING_RATIO ? 'warning' : 'comfortable',
+  } as const
 }
 
 export function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notice: string } {

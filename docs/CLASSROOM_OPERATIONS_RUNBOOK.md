@@ -12,7 +12,7 @@ Hafa Code is the coding workspace. The school LMS remains the system for grades,
 
 | Environment | Purpose | Student data | Required evidence |
 | --- | --- | --- | --- |
-| Local E2E | Deterministic React, Rails, PostgreSQL, and browser checks | Synthetic `.example.test` records only | `npm --prefix web run test:e2e` passes against an `_e2e` database |
+| Local E2E | Deterministic React, Rails, PostgreSQL, browser, accessibility, keyboard, contrast, and responsive checks | Synthetic `.example.test` records only | `npm --prefix web run test:e2e` passes against an `_e2e` database |
 | Staging or isolated test tenant | Real Clerk and deployed-service verification | Synthetic school-approved accounts only | URL, owner, expiration date, release SHA, and smoke result recorded below |
 | Production | Controlled pilot and classroom use | School-approved accounts and work | School approval, restore evidence, monitoring alert evidence, support owners, and pilot sign-off |
 
