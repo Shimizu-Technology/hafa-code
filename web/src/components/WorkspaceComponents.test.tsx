@@ -65,6 +65,7 @@ describe('workspace presentation components', () => {
         editorFontSize={15}
         entryFile={project.files[0]}
         project={project}
+        runnerInstanceKey={project.id}
         onCreateFile={vi.fn()}
         onDeleteFile={vi.fn()}
         onDuplicateFile={vi.fn()}

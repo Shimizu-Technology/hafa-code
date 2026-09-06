@@ -83,6 +83,7 @@ import {
   type PendingPracticeCheck,
 } from './lib/practiceProgress'
 import type { RunnerOutcome } from './lib/runnerOutcome'
+import { remapRunnerInstanceKey } from './lib/runnerIdentity'
 import type { ErrorCoachContext } from './lib/errorCoach'
 import {
   clearProjectPendingCloudSync,
@@ -202,6 +203,7 @@ export default function App() {
   const [hasImportedServerShare, setHasImportedServerShare] = useState(() => !new URLSearchParams(window.location.hash.replace(/^#/, '')).has('share'))
   const [hasLoadedCloudProjects, setHasLoadedCloudProjects] = useState(false)
   const [cloudSaveStatuses, setCloudSaveStatuses] = useState<Record<string, CloudSaveStatus>>({})
+  const [runnerInstanceKeys, setRunnerInstanceKeys] = useState<ReadonlyMap<string, string>>(() => new Map())
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const workspaceRestoreInputRef = useRef<HTMLInputElement | null>(null)
   const skipRestorePersistenceRef = useRef({ library: false, theme: false, colorMode: false })
@@ -453,6 +455,9 @@ export default function App() {
 
     syncRetryCountsRef.current.delete(projectId)
     const savedProject = res.data
+    if (savedProject.id !== projectId) {
+      setRunnerInstanceKeys((current) => remapRunnerInstanceKey(current, projectId, savedProject.id))
+    }
     const latestProject = libraryRef.current.projects.find((candidate) => candidate.id === projectId)
     const changedWhileSaving = Boolean(latestProject && latestProject.updatedAt !== projectToSave.updatedAt)
     const projectNeedingAnotherSave: SavedProject | null = latestProject && changedWhileSaving
@@ -1727,7 +1732,7 @@ export default function App() {
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
           <h1>Hafa Code</h1>
-          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, Python, Java, and HTML/CSS/JS in the browser.</p>
+          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JS in the browser.</p>
           <div className="trust-row" aria-label="Platform guardrails">
             <span><ShieldCheck size={15} /> Browser-sandboxed</span>
             <span><Rocket size={15} /> No setup</span>
@@ -2301,6 +2306,7 @@ export default function App() {
               editorFontSize={editorFontSize}
               entryFile={entryFile}
               project={project}
+              runnerInstanceKey={runnerInstanceKeys.get(project.id) ?? project.id}
               onCreateFile={openCreateFileDialog}
               onDeleteFile={deleteFile}
               onDuplicateFile={openDuplicateFileDialog}

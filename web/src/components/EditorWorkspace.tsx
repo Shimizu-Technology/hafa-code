@@ -1,4 +1,5 @@
-import MonacoEditor from '@monaco-editor/react'
+import MonacoEditor, { type OnMount } from '@monaco-editor/react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   BookOpen,
   Check,
@@ -28,6 +29,7 @@ type EditorWorkspaceProps = {
   editorFontSize: number
   entryFile: ProjectFile
   project: SavedProject
+  runnerInstanceKey: string
   onCreateFile: () => void
   onDeleteFile: (file: ProjectFile) => void
   onDuplicateFile: (file: ProjectFile) => void
@@ -44,6 +46,14 @@ type EditorWorkspaceProps = {
   onRunnerComplete?: (outcome: RunnerOutcome) => void
 }
 
+type Monaco = Parameters<OnMount>[1]
+
+function modelUri(projectId: string, path: string) {
+  const encodedProjectId = encodeURIComponent(projectId)
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+  return `file:///project/${encodedProjectId}/${encodedPath}`
+}
+
 /** Renders file navigation, Monaco, and the matching output pane without owning project state. */
 export function EditorWorkspace({
   activeFile,
@@ -52,6 +62,7 @@ export function EditorWorkspace({
   editorFontSize,
   entryFile,
   project,
+  runnerInstanceKey,
   onCreateFile,
   onDeleteFile,
   onDuplicateFile,
@@ -67,6 +78,45 @@ export function EditorWorkspace({
   onRunnerCancel,
   onRunnerComplete,
 }: EditorWorkspaceProps) {
+  const monacoRef = useRef<Monaco | null>(null)
+  const managedTypeScriptModelsRef = useRef(new Set<string>())
+
+  const syncTypeScriptModels = useCallback((monaco: Monaco) => {
+    const nextUris = new Set<string>()
+    if (project.kind === 'typescript') {
+      project.files.filter((file) => file.language === 'typescript').forEach((file) => {
+        const uri = monaco.Uri.parse(modelUri(project.id, file.path))
+        const uriText = uri.toString()
+        nextUris.add(uriText)
+        const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(file.content, 'typescript', uri)
+        if (model.getValue() !== file.content) model.setValue(file.content)
+      })
+    }
+
+    managedTypeScriptModelsRef.current.forEach((uriText) => {
+      if (!nextUris.has(uriText)) monaco.editor.getModel(monaco.Uri.parse(uriText))?.dispose()
+    })
+    managedTypeScriptModelsRef.current = nextUris
+  }, [project.files, project.id, project.kind])
+
+  const handleEditorMount: OnMount = (_editor, monaco) => {
+    monacoRef.current = monaco
+    syncTypeScriptModels(monaco)
+  }
+
+  useEffect(() => {
+    if (monacoRef.current) syncTypeScriptModels(monacoRef.current)
+  }, [syncTypeScriptModels])
+
+  useEffect(() => () => {
+    const monaco = monacoRef.current
+    if (!monaco) return
+    managedTypeScriptModelsRef.current.forEach((uriText) => {
+      monaco.editor.getModel(monaco.Uri.parse(uriText))?.dispose()
+    })
+    managedTypeScriptModelsRef.current.clear()
+  }, [])
+
   return (
     <div className="workspace">
       <section className="panel editor-panel">
@@ -144,10 +194,12 @@ export function EditorWorkspace({
         <MonacoEditor
           height="var(--workspace-pane-height)"
           language={languageForFile(activeFile)}
+          path={modelUri(project.id, activeFile.path)}
           theme="vs-dark"
           value={activeFile.content}
           loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
           onChange={(value) => onUpdateActiveFile(value ?? '')}
+          onMount={handleEditorMount}
           options={{
             readOnly: !canEditProject,
             minimap: { enabled: false },
@@ -164,7 +216,7 @@ export function EditorWorkspace({
 
       {project.kind === 'web'
         ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onErrorAdviceChange={onErrorAdviceChange} />
-        : <RunnerPanel key={`${project.id}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
+        : <RunnerPanel key={`${runnerInstanceKey}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
     </div>
   )
 }

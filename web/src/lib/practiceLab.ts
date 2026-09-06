@@ -4,6 +4,7 @@ import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
 import { eventHandlerBody } from './practiceChallenges/javascript'
+import { TYPESCRIPT_CHALLENGES } from './practiceChallenges/typescript'
 
 export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 
@@ -251,6 +252,7 @@ const webChallenges: PracticeChallenge[] = [
 export const PRACTICE_CHALLENGES = Object.freeze([
   ...runtimeChallenges,
   ...webChallenges,
+  ...TYPESCRIPT_CHALLENGES,
   ...ADDITIONAL_STARTER_CHALLENGES,
   ...ADDITIONAL_BUILDER_CHALLENGES,
   ...ADDITIONAL_STRETCH_CHALLENGES,
@@ -291,8 +293,8 @@ function sourceWithoutComments(file: ProjectFile) {
     ? file.content.replace(/^=begin\b[\s\S]*?(?:^=end\b[^\n]*|$(?![\s\S]))/gm, (comment) => comment.replace(/[^\n]/g, ' '))
     : file.content
   const lineComment = file.language === 'ruby' || file.language === 'python' ? '#' : '//'
-  const hasLineComments = ['ruby', 'python', 'javascript', 'java'].includes(file.language)
-  const hasBlockComments = ['javascript', 'java', 'css'].includes(file.language)
+  const hasLineComments = ['ruby', 'python', 'javascript', 'typescript', 'java'].includes(file.language)
+  const hasBlockComments = ['javascript', 'typescript', 'java', 'css'].includes(file.language)
   let result = ''
   let quote: string | null = null
   let escaped = false
@@ -309,7 +311,7 @@ function sourceWithoutComments(file: ProjectFile) {
       continue
     }
 
-    if (char === '"' || char === "'" || (file.language === 'javascript' && char === '`')) {
+    if (char === '"' || char === "'" || ((file.language === 'javascript' || file.language === 'typescript') && char === '`')) {
       quote = char
       result += char
       continue

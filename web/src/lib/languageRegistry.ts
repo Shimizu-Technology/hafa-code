@@ -67,6 +67,12 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     extensions: ['js', 'mjs', 'cjs'],
     starterContent: '// Write JavaScript here\n',
   },
+  typescript: {
+    label: 'TS',
+    monacoLanguage: 'typescript',
+    extensions: ['ts'],
+    starterContent: '// Write TypeScript here\n',
+  },
   python: {
     label: 'Python',
     monacoLanguage: 'python',
@@ -146,6 +152,28 @@ export const PROJECT_KIND_DEFINITIONS = {
       runLabel: 'JS',
       terminalCommand: (entryPath) => `node ${entryPath}`,
       createWorker: () => new Worker(new URL('../workers/javascriptRunner.worker.ts', import.meta.url), { type: 'module' }),
+    },
+  },
+  typescript: {
+    kind: 'typescript',
+    label: 'TypeScript',
+    shortLabel: 'TS',
+    starterTitle: 'TypeScript Playground',
+    entryPath: 'main.ts',
+    starterFiles: [
+      { path: 'main.ts', language: 'typescript', content: 'import { greeting } from "./greeting"\n\nconst learner: string = "Lina"\nconst lessons: number = 3\nconsole.log(greeting(learner, lessons))\n' },
+      { path: 'greeting.ts', language: 'typescript', content: 'export function greeting(name: string, lessons: number): string {\n  return `Hafa adai, ${name}! Lessons: ${lessons}`\n}\n' },
+    ],
+    preferredEntryPaths: ['main.ts', 'index.ts'],
+    defaultFileLanguage: 'typescript',
+    fallbackFileLanguage: 'typescript',
+    newFileCandidates: ['helper.ts', 'types.ts', 'practice.ts'],
+    defaultExtension: 'ts',
+    runner: {
+      language: 'typescript',
+      runLabel: 'TypeScript',
+      terminalCommand: (entryPath) => `tsc ${shellArgument(entryPath)} && node ${shellArgument(entryPath.replace(/\.ts$/i, '.js'))}`,
+      createWorker: () => new Worker(new URL('../workers/typescriptRunner.worker.ts', import.meta.url), { type: 'module' }),
     },
   },
   python: {

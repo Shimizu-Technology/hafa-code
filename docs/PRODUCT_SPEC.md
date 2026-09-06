@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a small, open-source coding workspace where students and alumni can write, run, understand, save, and review Ruby, JavaScript, Python, Java, and HTML/CSS/JavaScript projects without installing a local development environment.
+Create a small, open-source coding workspace where students and alumni can write, run, understand, save, and review Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JavaScript projects without installing a local development environment.
 
 ## Primary Users
 
@@ -16,7 +16,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Student
 
-- I can open a browser and immediately write Ruby, JavaScript, Python, or Java.
+- I can open a browser and immediately write Ruby, JavaScript, TypeScript, Python, or Java.
 - I can press Run and see output/errors.
 - I can understand common errors in plain language and jump to the relevant guide topic.
 - I can create an HTML/CSS/JS page and see it update live.
@@ -53,7 +53,13 @@ Create a small, open-source coding workspace where students and alumni can write
    - console.log/warn/error capture
    - 3s timeout
 
-3. Python project
+3. TypeScript project
+   - Multi-file `.ts` editor with semantic diagnostics
+   - Relative project imports compiled to JavaScript in a dedicated worker
+   - QuickJS execution with stdout/stderr, stop, memory, output, and time limits
+   - no npm packages, DOM APIs, Node APIs, or application server
+
+4. Python project
    - Multi-file Python editor
    - Standard-library-only Pyodide runtime
    - stdout/stderr panel with interactive `input()` on JSPI-capable browsers
@@ -61,14 +67,14 @@ Create a small, open-source coding workspace where students and alumni can write
    - warm repeat runs with fresh project files and module imports
    - 3s execution timeout after runtime startup
 
-4. Java project
+5. Java project
    - `Main.java` plus default-package helper classes
    - Java 8 compiler diagnostics, stdout/stderr, and line-oriented standard input
    - explicit startup and execution states with a Stop control
    - warm repeat runs after the first runtime download
    - no packages, build tools, external dependencies, or desktop GUI support
 
-5. Web page
+6. Web page
    - HTML editor
    - CSS editor
    - JS editor
@@ -76,7 +82,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Language Guides
 
-- One searchable quick reference for each supported project kind: Ruby, JavaScript, Python, Java, and HTML/CSS/JS
+- One searchable quick reference for each supported project kind: Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JS
 - Plain-language explanations, runnable syntax, expected results, and common mistakes
 - A safe **Try example** action that creates a complete practice project and leaves the current project untouched
 - Responsive presentation: a topic index beside the reference on desktop and a full-screen, touch-friendly guide on mobile
@@ -84,7 +90,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Practice Lab
 
-- Fifteen challenges for every supported project kind: five Starter, five Builder, and five Stretch challenges for Ruby, JavaScript, Python, Java, and HTML/CSS/JS
+- Fifteen challenges for every supported project kind: five Starter, five Builder, and five Stretch challenges for Ruby, JavaScript, TypeScript, Python, Java, and HTML/CSS/JS
 - Separate private practice projects so a learner's current work is never overwritten
 - Plain-language steps, concept labels, and progressive hints that stay available while coding
 - Deterministic checks for required syntax and runtime output, or HTML/CSS/JS file requirements for Web projects
@@ -93,7 +99,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Contextual Error Coach
 
-- Deterministic, private explanations for common Ruby, JavaScript, Python, Java, and Web preview errors
+- Deterministic, private explanations for common Ruby, JavaScript, TypeScript, Python, Java, and Web preview errors
 - File and line context when the runtime provides it, followed by three focused next steps
 - Direct links into the relevant topic in the project’s language guide
 - No generated fixes or hidden code changes; the original terminal/console error remains visible
@@ -135,12 +141,11 @@ Phase 2:
 
 These can come later, but only after the simple learning loop is excellent.
 
-## Next Supported Modes
+## Next Supported Mode
 
-The next language additions are intentionally narrow:
+TypeScript is now a supported mode. The next addition remains intentionally narrow:
 
-1. TypeScript as a first-class browser project with diagnostics and JavaScript output, without packages or a Node server.
-2. SQL as a focused SQLite learning workspace with a resettable browser database, schema/data tables, and query results.
+1. SQL as a focused SQLite learning workspace with a resettable browser database, schema/data tables, and query results.
 
 Go, C/C++, Perl, unrestricted package installation, and remote terminals are deferred. Each future language must justify its learner need, runtime cost, security boundary, guide content, practice progression, and school-device behavior before implementation.
 
@@ -152,6 +157,7 @@ Go, C/C++, Perl, unrestricted package installation, and remote terminals are def
 - Monaco editor
 - Ruby WASM for Ruby
 - QuickJS WASM for JavaScript
+- TypeScript compiler API followed by QuickJS WASM for TypeScript
 - Pyodide WASM for Python
 - CheerpJ for Java 8
 - Sandboxed iframe for HTML/CSS/JS

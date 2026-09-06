@@ -25,6 +25,8 @@ const runnerHarness = vi.hoisted(() => ({
   onErrorAdviceChange: undefined as undefined | ((context: ErrorCoachContext) => void),
   onRunCancel: undefined as undefined | (() => void),
   onRunComplete: undefined as undefined | ((outcome: RunnerOutcome) => void),
+  mountCount: 0,
+  unmountCount: 0,
 }))
 
 type AppAuthContext = ReturnType<typeof useAuthContext>
@@ -37,18 +39,29 @@ vi.mock('./contexts/AuthContext', () => ({
   useAuthContext: () => authHarness.value,
 }))
 
-vi.mock('./components/RunnerPanel', () => ({
-  RunnerPanel: ({ onErrorAdviceChange, onRunCancel, onRunComplete }: {
+vi.mock('./components/RunnerPanel', async () => {
+  const { useEffect, useState } = await import('react')
+
+  return { RunnerPanel: ({ onErrorAdviceChange, onRunCancel, onRunComplete }: {
     onErrorAdviceChange?: typeof runnerHarness.onErrorAdviceChange
     onRunCancel?: typeof runnerHarness.onRunCancel
     onRunComplete?: typeof runnerHarness.onRunComplete
   }) => {
+    const [active, setActive] = useState(false)
     runnerHarness.onErrorAdviceChange = onErrorAdviceChange
     runnerHarness.onRunCancel = onRunCancel
     runnerHarness.onRunComplete = onRunComplete
-    return <section aria-label="Test runner" />
-  },
-}))
+    useEffect(() => {
+      runnerHarness.mountCount += 1
+      return () => { runnerHarness.unmountCount += 1 }
+    }, [])
+    return (
+      <section aria-label="Test runner">
+        <button type="button" onClick={() => setActive(true)}>{active ? 'Test run active' : 'Start test run'}</button>
+      </section>
+    )
+  } }
+})
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 
@@ -69,6 +82,8 @@ describe('App language guide practice projects', () => {
     runnerHarness.onErrorAdviceChange = undefined
     runnerHarness.onRunCancel = undefined
     runnerHarness.onRunComplete = undefined
+    runnerHarness.mountCount = 0
+    runnerHarness.unmountCount = 0
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
       configurable: true,
       value: vi.fn(),
@@ -179,6 +194,52 @@ describe('App language guide practice projects', () => {
       [...document.querySelectorAll('.title-field small')]
         .some((element) => element.textContent?.includes('Checking cloud save · local backup unavailable')),
     ).toBe(true))
+  })
+
+  it('keeps the active runner mounted when a local project receives its cloud id', async () => {
+    const user = userEvent.setup()
+    authHarness.value = {
+      isSignedIn: true,
+      isLoading: false,
+      user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
+      organizations: [],
+      syncSession: vi.fn(),
+    }
+    vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
+    vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    let resolveCreate!: (result: Awaited<ReturnType<typeof api.createProject>>) => void
+    const createResult = new Promise<Awaited<ReturnType<typeof api.createProject>>>((resolve) => {
+      resolveCreate = resolve
+    })
+    const createCloudProject = vi.spyOn(api, 'createProject').mockReturnValue(createResult)
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Start test run' }))
+    expect(screen.getByRole('button', { name: 'Test run active' })).toBeTruthy()
+    expect(runnerHarness.mountCount).toBe(1)
+
+    await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+    const localProject = createCloudProject.mock.calls[0][0]
+    await act(async () => {
+      resolveCreate({
+        data: {
+          ...localProject,
+          id: '42',
+          owner: { id: 7, fullName: 'Student One' },
+          lockVersion: 0,
+        },
+        error: null,
+        status: 201,
+        code: null,
+        conflictProject: null,
+      })
+      await createResult
+    })
+
+    await waitFor(() => expect(storedLibrary().activeProjectId).toBe('42'))
+    expect(screen.getByRole('button', { name: 'Test run active' })).toBeTruthy()
+    expect(runnerHarness.mountCount).toBe(1)
+    expect(runnerHarness.unmountCount).toBe(0)
   })
 
   it('opens desktop error advice directly in the docked Coach', () => {

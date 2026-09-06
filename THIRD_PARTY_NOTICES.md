@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## TypeScript
+
+Hafa Code includes the TypeScript compiler and a focused set of its standard declaration libraries in the on-demand TypeScript worker.
+
+- Project: <https://www.typescriptlang.org/>
+- Source: <https://github.com/microsoft/TypeScript>
+- License: Apache License 2.0
+
+The compiler is used in the browser to type-check and emit learner projects. Hafa Code does not provide Microsoft support, npm package access, Node APIs, or DOM APIs through this runtime.
+
 ## CheerpJ Core
 
 Hafa Code's Java runner uses CheerpJ Core 4.3 by Leaning Technologies Limited.

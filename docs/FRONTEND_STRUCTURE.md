@@ -19,7 +19,7 @@ web/src/
     PracticeSessionPanel.tsx  Active challenge instructions, hints, and check results
     ProjectSidebar.tsx        Desktop and mobile project navigation
     ProjectToolbar.tsx        Project metadata, visibility, history, and primary actions
-    RunnerPanel.tsx           Ruby/JavaScript/Python/Java terminal runner UI
+    RunnerPanel.tsx           Ruby/JavaScript/TypeScript/Python/Java terminal runner UI
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
     WorkspaceDialogs.tsx      Controlled file, share, organization, action, and confirmation dialogs
   contexts/
@@ -34,15 +34,21 @@ web/src/
     languageGuides.ts         Guide topics and complete practice projects for every project kind
     languageRegistry.ts       Supported languages, starters, editor and runner metadata
     practiceLab.ts            Challenge catalog and deterministic source/output checks
+    practiceChallenges/       Per-language challenge catalogs
     practiceProgress.ts       Local challenge completion and project-to-challenge links
     projectTypes.ts           Shared project, file, and language types
     projectStorage.ts         localStorage, import/export, checkpoints
     runnerOutcome.ts          Shared runner completion contract for learning tools
+    runnerIdentity.ts         Stable runner identity across local-to-cloud project ID changes
+    typescriptEnvironment.ts  Deliberately narrow learner-facing TypeScript declarations
     workspace.ts              Workspace labels, guards, formatting, path helpers
   workers/
     runnerProtocol.ts         Typed worker request/response contract
     rubyRunner.worker.ts      Browser-side ruby.wasm execution
     javascriptRunner.worker.ts Browser-side QuickJS execution
+    typescriptCompiler.ts     In-memory multi-file TypeScript compiler host
+    commonJsBundle.ts         Trusted relative-module loader emitted for QuickJS
+    typescriptRunner.worker.ts TypeScript compilation and QuickJS execution
     pythonRunner.worker.ts    Browser-side Pyodide execution
     javaRunner.worker.ts      Browser-side CheerpJ compiler and runtime bridge
 ```

@@ -10,8 +10,8 @@ import {
 
 describe('language registry', () => {
   it('describes every supported project kind in display order', () => {
-    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'python', 'java', 'web'])
-    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'Python', 'Java', 'Web'])
+    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'web'])
+    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'TS', 'Python', 'Java', 'Web'])
   })
 
   it('keeps runnable and preview-only project capabilities explicit', () => {
@@ -19,6 +19,8 @@ describe('language registry', () => {
     expect(projectKindDefinition('ruby').runner?.terminalCommand('main.rb')).toBe('ruby main.rb')
     expect(projectKindDefinition('javascript').runner?.language).toBe('javascript')
     expect(projectKindDefinition('javascript').runner?.terminalCommand('src/main.js')).toBe('node src/main.js')
+    expect(projectKindDefinition('typescript').runner?.language).toBe('typescript')
+    expect(projectKindDefinition('typescript').runner?.terminalCommand('src/main.ts')).toBe('tsc src/main.ts && node src/main.js')
     expect(projectKindDefinition('python').runner?.language).toBe('python')
     expect(projectKindDefinition('python').runner?.terminalCommand('src/main.py')).toBe('python src/main.py')
     expect(projectKindDefinition('java').runner?.language).toBe('java')
@@ -51,9 +53,10 @@ describe('language registry', () => {
   })
 
   it('centralizes file extensions while preserving unknown-file fallbacks', () => {
-    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'python', 'java', 'html', 'css', 'json', 'plain'])
+    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'html', 'css', 'json', 'plain'])
     expect(inferFileLanguage('lib/hello.rb', 'javascript')).toBe('ruby')
     expect(inferFileLanguage('src/index.mjs', 'ruby')).toBe('javascript')
+    expect(inferFileLanguage('src/main.ts', 'ruby')).toBe('typescript')
     expect(inferFileLanguage('src/main.py', 'ruby')).toBe('python')
     expect(inferFileLanguage('src/Main.java', 'ruby')).toBe('java')
     expect(inferFileLanguage('README', 'ruby')).toBe('ruby')

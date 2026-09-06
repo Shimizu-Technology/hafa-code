@@ -188,6 +188,8 @@ test('the selective Monaco build keeps core editing commands', async ({ page }) 
   await page.keyboard.press('Escape')
 
   await editorSurface.click()
+  await page.keyboard.press('ControlOrMeta+End')
+  await page.keyboard.insertText('\nconsole.')
   expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.triggerSuggest'))).toBe(true)
   await expect(page.locator('.suggest-widget.visible')).toBeVisible()
   await page.keyboard.press('Escape')

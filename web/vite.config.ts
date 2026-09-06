@@ -45,6 +45,35 @@ function copyPyodideRuntime() {
   })
 }
 
+const VIRTUAL_TYPESCRIPT_LIBRARIES = 'virtual:hafa-typescript-libraries'
+const RESOLVED_VIRTUAL_TYPESCRIPT_LIBRARIES = `\0${VIRTUAL_TYPESCRIPT_LIBRARIES}`
+
+function bundleTypeScriptLibraries(): Plugin {
+  return {
+    name: 'hafa-code-typescript-libraries',
+    resolveId(id) {
+      return id === VIRTUAL_TYPESCRIPT_LIBRARIES ? RESOLVED_VIRTUAL_TYPESCRIPT_LIBRARIES : null
+    },
+    load(id) {
+      if (id !== RESOLVED_VIRTUAL_TYPESCRIPT_LIBRARIES) return null
+
+      const libraryDirectory = dirname(createRequire(import.meta.url).resolve('typescript'))
+      const libraries: Record<string, string> = {}
+      const visit = (fileName: string) => {
+        if (libraries[fileName]) return
+        const source = readFileSync(join(libraryDirectory, fileName), 'utf8')
+        libraries[fileName] = source
+        for (const match of source.matchAll(/<reference\s+lib=["']([^"']+)["']/g)) {
+          visit(`lib.${match[1].toLowerCase()}.d.ts`)
+        }
+      }
+
+      visit('lib.es2020.d.ts')
+      return `export default ${JSON.stringify(libraries)}`
+    },
+  }
+}
+
 function buildServiceWorker(): Plugin {
   return {
     name: 'hafa-code-service-worker',
@@ -82,13 +111,17 @@ function buildServiceWorker(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), copyPyodideRuntime(), buildServiceWorker()],
+  plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker()],
+  worker: {
+    plugins: () => [bundleTypeScriptLibraries()],
+  },
   test: {
     environment: 'jsdom',
     exclude: [...configDefaults.exclude, 'e2e/**'],
     setupFiles: ['./src/test/setup.ts'],
   },
   optimizeDeps: {
+    include: ['typescript'],
     exclude: [
       '@jitl/quickjs-wasmfile-release-sync',
       '@ruby/3.3-wasm-wasi',
