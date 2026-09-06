@@ -1,10 +1,10 @@
 # Hafa Code
 
-A simple open-source coding playground for Code School of Guam, Father Dueñas students, alumni, and anyone learning to code.
+A beginner-first, open-source coding workspace for Code School of Guam, Father Dueñas students, alumni, and anyone learning to code.
 
 ## Vision
 
-A lightweight alternative to Replit focused on the languages CSG actually teaches first:
+A focused alternative to Replit that removes installation and account friction from the first coding session:
 
 - Ruby snippets powered by `ruby.wasm`
 - JavaScript snippets powered by QuickJS in a Web Worker
@@ -15,7 +15,9 @@ A lightweight alternative to Replit focused on the languages CSG actually teache
 - Save, fork, share, and remix beginner-friendly projects
 - Optional Clerk sign-in with Rails-backed cloud projects
 
-This project intentionally starts smaller than Replit. The first version should be fast, safe, cheap to host, and approachable for students to contribute to.
+Hafa Code intentionally stays smaller than a general cloud IDE. It keeps the first learning loop—open, write, run, understand, revise—fast and approachable, while classroom organizations add teacher visibility and feedback without giving teachers edit access to student source.
+
+Untrusted programs run in isolated browser workers or a sandboxed preview. Rails stores projects and classroom records; it does not execute student code. This keeps the hosted service comparatively inexpensive and avoids placing a general code-execution service beside student data.
 
 ## Monorepo
 
@@ -28,6 +30,7 @@ hafa-code/
 ## Planning Docs
 
 - [Product spec](docs/PRODUCT_SPEC.md)
+- [Product roadmap](docs/PRODUCT_ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Frontend structure](docs/FRONTEND_STRUCTURE.md)
 - [Security model](docs/SECURITY.md)
@@ -49,6 +52,8 @@ Run untrusted code in the browser, not on Rails.
 Java is intentionally a focused practice environment rather than a full desktop JDK. It supports `Main.java`, helper classes in the default package, compiler diagnostics, standard input, stdout/stderr, and stop/time limits. Maven, Gradle, third-party dependencies, packages, GUI apps, and arbitrary network access are not part of the first release. See [Java runtime](docs/JAVA_RUNTIME.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Development
+
+The repository contract, ports, architecture boundaries, and complete validation gate are documented in [AGENTS.md](AGENTS.md).
 
 ```bash
 # frontend

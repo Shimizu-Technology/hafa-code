@@ -228,15 +228,32 @@ button.icon-button {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px auto;
+  grid-template-columns: minmax(20rem, 1fr) 170px clamp(22rem, 34vw, 32rem);
   align-items: center;
-  gap: 1.2rem;
+  gap: clamp(0.8rem, 1.4vw, 1.2rem);
   margin-bottom: 1rem;
 }
 
 .hero-panel { padding: 1.2rem; }
 .hero-copy { min-width: 0; }
-.hero-actions,
+.hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.hero-actions > .auth-actions,
+.hero-actions > .cloud-pill {
+  grid-column: 1 / -1;
+}
+
+.hero-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3132,7 +3149,7 @@ button.context-chip.active,
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1250px) {
-  .hero { grid-template-columns: 1fr auto; }
+  .hero { grid-template-columns: minmax(0, 1fr) clamp(22rem, 44vw, 30rem); }
   .hero-card { display: none; }
   .layout-grid,
   .sidebar-collapsed .layout-grid { grid-template-columns: 1fr; }
@@ -3183,8 +3200,27 @@ button.context-chip.active,
   .project-toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .hero-actions,
   .toolbar-actions { justify-content: stretch; }
-  .hero-actions button,
   .toolbar-actions button { flex: 1; }
+
+  .context-bar {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .context-actions {
+    justify-content: stretch;
+    min-width: 0;
+  }
+
+  .workspace-toolbar {
+    grid-template-columns: minmax(14rem, 1fr) 5.2rem 8.8rem;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .preference-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

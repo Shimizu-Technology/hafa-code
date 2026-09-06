@@ -1,15 +1,15 @@
 # FDMS Classroom Launch Readiness and Action Plan
 
-**Version:** 1.1
-**Audit date:** July 25, 2026
+**Version:** 1.2
+**Audit date:** September 6, 2026
 **Target:** Father Dueñas Memorial School classroom use during the 2026–2027 school year
 **Production frontend:** <https://code.shimizu-technology.com/>
 **Production API:** <https://hafa-code.onrender.com/>
-**Current recommendation:** **Repository-ready after this hardening PR; production launch remains conditional on the deployment, school, backup, monitoring, and pilot gates below**
+**Current recommendation:** **Continue toward a controlled pilot. The repository foundation and public production boundary are credible; authenticated multi-role production testing, school approval, backup/restore, monitoring, support ownership, and an FDMS-device pilot remain launch gates.**
 
 ## 1. Executive Summary
 
-Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
+Hafa Code is a Guam-built, open-source browser coding workspace for beginner Ruby, JavaScript, Python, Java, and HTML/CSS/JavaScript projects. It was intentionally built smaller than Replit: students can start coding without installing a development environment, their code runs in browser sandboxes instead of on the Rails server, and signed-in users can save projects to the cloud.
 
 The application already has a credible classroom foundation:
 
@@ -20,16 +20,16 @@ The application already has a credible classroom foundation:
 - Invitations, role management, project history, multi-file projects, sharing, archiving, and mobile layouts already exist.
 - The current lint, TypeScript build, Rails tests, RuboCop, and Brakeman checks pass.
 
-The classroom-hardening branch resolves the verified repository blockers: durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
+The current `main` branch includes durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
 
 The remaining launch gates are operational rather than missing application code:
 
-1. Deploy the branch and verify the real Netlify, Render, and Clerk production configuration.
+1. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
 2. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
 3. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
 4. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
 
-The core architecture does not need to be replaced. The next move is to merge and deploy the hardening work, close the external gates, then run the controlled pilot before full enrollment.
+The core architecture does not need to be replaced. The next move is to close the remaining code-backed launch gaps, complete the external gates, and run the controlled pilot before full enrollment.
 
 ## 2. What Hafa Code Is — and Why It Exists
 
@@ -38,7 +38,7 @@ Hafa Code is best understood as a **classroom coding workspace**, not a complete
 It solves several specific problems:
 
 - Students can write and run beginner code on school devices without installing Ruby, Node, compilers, or an IDE.
-- Ruby and JavaScript run in browser workers with time guardrails.
+- Ruby, JavaScript, Python, and Java run in browser workers with time guardrails.
 - Web projects render inside nested sandboxed frames.
 - Rails stores users, memberships, project metadata, source files, checkpoints, and share snapshots; it does not execute student code.
 - The product is small enough to remain understandable and approachable for Code School of Guam and FDMS students who may eventually contribute to it.
@@ -56,19 +56,19 @@ Assignments, grades, due dates, rubrics, and official course records should rema
 
 ## 3. Verified Production Baseline
 
-These checks were performed against the production URLs on July 25, 2026, before the hardening branch was deployed. They are baseline evidence, not a claim about the post-merge deployment.
+The public checks below were repeated on September 6, 2026. They prove only what an unauthenticated browser and direct HTTP checks can observe; they do not replace the multi-role production flow.
 
 | Check | Result | Meaning |
 | --- | --- | --- |
 | Netlify homepage | `200 OK` | The current production frontend is online. |
 | Rails `/health` | `200 OK` with `{"status":"ok"}` | The API process is reachable. |
 | Netlify security headers | Present | CSP, HSTS, no-sniff, referrer, permissions, and frame protections are configured. |
-| Ruby runner under Netlify CSP | Failed in the August 7 follow-up | The baseline policy permitted WASM compilation but blocked ruby.wasm's JavaScript bridge. The branch now isolates `'unsafe-eval'` to the code-runner worker; the deploy preview must prove the default Ruby program succeeds before merge. |
-| Netlify-origin API preflight | Missing `Access-Control-Allow-Origin` | Baseline production cannot use the API from the current origin. The branch fixes the application default; redeployment and a production preflight remain required. |
-| Localhost API preflight | Allowed | Current Render CORS configuration appears to allow localhost instead of production. |
+| Ruby runner under production CSP | Passed | The default Ruby project runs in its worker under the deployed policy. |
+| Production-origin API preflight | Passed | Render returns `Access-Control-Allow-Origin: https://code.shimizu-technology.com`. |
 | Production page rendering | Successful | The signed-out editor, runner controls, project library, visibility UI, and responsive structure load. |
-| Canonical and social metadata | Points to `https://hafacode.com/` | Baseline metadata is stale. The branch aligns canonical, social, robots, and sitemap URLs to `code.shimizu-technology.com`. |
-| API authentication/class workflows | Not production-verifiable while CORS is blocked | Must be tested after the origin configuration is corrected. |
+| Canonical and social metadata | Uses `code.shimizu-technology.com` | The deployed application and discovery metadata agree on the classroom URL. |
+| Java first and warm runs | Passed | The first browser run completed in about 20.4 seconds and a warm rerun in about 1.3 seconds on the audited machine. This is not a school-device benchmark. |
+| API authentication/class workflows | Not yet production-verified in this audit | Complete with dedicated role accounts before the pilot. |
 
 ### Correction to the earlier domain finding
 
@@ -77,9 +77,9 @@ The earlier concern should be stated precisely:
 - The application is available at `https://code.shimizu-technology.com/`.
 - The Netlify frontend is not down.
 - The production Rails API is healthy.
-- The baseline break was that the API did not authorize the production frontend as a CORS origin.
-- `hafacode.com` is a stale or future canonical domain in the baseline metadata, not the URL students should use today.
-- The hardening branch declares `https://code.shimizu-technology.com` as the production application origin. The original Netlify host remains an explicit recovery origin for browser-local workspace transfer.
+- The earlier CORS break has been corrected for the production frontend origin.
+- `https://code.shimizu-technology.com` is the canonical classroom URL.
+- The original Netlify host remains an explicit recovery origin for browser-local workspace transfer and must not silently replace the canonical URL.
 
 That makes the finding more actionable: align Render, Netlify, Clerk, invitation links, and metadata around one declared production origin.
 
@@ -167,17 +167,18 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-001 — Align production origins and prove authenticated production access
 
-**Why:** The production UI loads, but the Rails API does not currently return CORS permission for the Netlify origin. A healthy API is not useful if browsers cannot call it.
+**Why:** Every deployed service and invitation must agree on the same classroom origin. Public CORS behavior is now correct, but authenticated role flows still need production evidence.
 
 **Work:**
 
-- [ ] Set Render `ALLOWED_ORIGINS` to include `https://code.shimizu-technology.com` and the `https://hafa-code.netlify.app` recovery origin.
+- [x] Confirm Render allows `https://code.shimizu-technology.com` through an observed production preflight.
+- [ ] Confirm the recovery origin is intentionally present in Render `ALLOWED_ORIGINS`.
 - [ ] Set Render `FRONTEND_URL` or `APP_URL` to `https://code.shimizu-technology.com` so invitation links use the canonical site.
-- [ ] Verify Netlify `VITE_API_URL` points to `https://hafa-code.onrender.com`.
+- [x] Verify the deployed frontend calls `https://hafa-code.onrender.com`.
 - [ ] Verify Clerk production allowed origins and redirect URLs include `https://code.shimizu-technology.com`; retain the Netlify host only where the recovery flow requires it.
 - [x] Use `code.shimizu-technology.com` as the canonical host; do not depend on `hafacode.com` for this launch.
 - [x] Change canonical, Open Graph, Twitter, JSON-LD, robots, sitemap, and share image URLs to the declared production domain.
-- [ ] Keep the Netlify recovery host available without redirecting it so users can export origin-bound browser data; allow both frontend origins deliberately in Render CORS.
+- [x] Keep the Netlify recovery host available without redirecting it so users can export origin-bound browser data.
 
 **Acceptance criteria:**
 
@@ -550,7 +551,7 @@ This is an order of operations, not a guaranteed calendar estimate. Each phase m
 | Is there a co-teacher or substitute? | Prevents a single-owner support problem. | Keep two organization owners where possible. |
 | What is the retention period? | Drives archive, export, deletion, and backup policy. | School year plus an agreed grace period. |
 | Who handles support during class? | Reduces downtime and teacher uncertainty. | Name a primary and backup Shimizu contact. |
-| Which domain is canonical? | Aligns CORS, Clerk, links, SEO, and documentation. | Use the Netlify domain now; move once to a custom domain later. |
+| Which domain is canonical? | Aligns CORS, Clerk, links, SEO, and documentation. | Decided: use `code.shimizu-technology.com`; retain the Netlify host only for recovery. |
 
 ## 10. Explicitly Out of Scope for the Initial FDMS Launch
 
@@ -579,29 +580,29 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 - Rails routes, models, authorization concerns, controllers, services, migrations, environment configuration, and integration tests
 - React application state, storage merge, API client, authentication context, runner, preview sandbox, service worker, headers, manifest, and build configuration
 
-### Checks run on July 25 and re-run on August 7, 2026
+### Checks re-run on September 6, 2026
 
 | Check | Result |
 | --- | --- |
 | `npm --prefix web run lint` | Pass |
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
-| `npm --prefix web test` | Pass: 4 files, 10 tests |
-| `bundle exec rails test` | Pass: 50 runs, 402 assertions |
+| `npm --prefix web test` | Pass: 22 files, 203 tests |
+| `bundle exec rails test` | Pass: 52 runs, 410 assertions |
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
-| Baseline Netlify production page and headers | Reachable; security headers present |
-| Baseline Render health endpoint | Healthy |
-| Baseline Netlify-origin Render CORS preflight | Fail before deployment; hardening branch adds the production origin by default |
-| Hardening-build service worker inventory | 13 application-shell entries; language runtimes and workers load on demand |
+| Netlify production page and headers | Reachable; security headers present |
+| Render health endpoint | Healthy |
+| Production-origin Render CORS preflight | Pass for `https://code.shimizu-technology.com` |
+| Production service worker inventory | Language runtimes and workers load on demand rather than entering the application shell |
 
 ### Confidence labels
 
-- **Confirmed fixed and tested in the hardening branch:** permissions, private feedback, durable save/recovery, stale-write conflict copies, class-preserving duplication, invitation operations, archived-class immutability, export/offboarding, audit logging, class sharing defaults, quotas/cleanup, active CI placement, dependency advisories, metadata, PWA cache inventory, and modal keyboard behavior.
-- **Confirmed only in the pre-deployment production baseline:** the Netlify app and Render health endpoint are reachable, while the old deployment's CORS and metadata are stale.
+- **Confirmed in the current repository:** permissions, private feedback, durable save/recovery, stale-write conflict copies, class-preserving duplication, invitation operations, archived-class immutability, export/offboarding, audit logging, class sharing defaults, quotas/cleanup, active CI, dependency advisories, metadata, PWA cache inventory, and modal keyboard behavior.
+- **Confirmed in unauthenticated production checks:** the Netlify app and Render health endpoint are reachable, the production origin passes CORS preflight, Ruby runs under the deployed CSP, and canonical metadata uses the classroom domain.
 - **Requires external configuration verification:** Clerk production settings, Render/Netlify environment variables beyond observable behavior, database plan and backups, restore capability, service billing limits, DNS ownership, email-provider delivery health, school device/network policies, and school approval.
 - **Product decision:** public sharing, exact feedback scope, use of an existing LMS, personal projects, retention duration, support service level, and canonical domain.
 
