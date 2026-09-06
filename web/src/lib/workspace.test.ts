@@ -185,6 +185,9 @@ describe('project source usage', () => {
 
   test('warns before the server source limit and marks the limit as full', () => {
     const candidate = project('42', '2026-07-25T01:00:00.000Z')
+    candidate.files[0].content = 'a'.repeat((PROJECT_SOURCE_LIMIT_BYTES * 0.8) - 1)
+    expect(projectSourceUsage(candidate).state).toBe('comfortable')
+
     candidate.files[0].content = 'a'.repeat(PROJECT_SOURCE_LIMIT_BYTES * 0.8)
     expect(projectSourceUsage(candidate).state).toBe('warning')
 
@@ -194,7 +197,9 @@ describe('project source usage', () => {
 
   test('formats source sizes for quick scanning', () => {
     expect(formatSourceBytes(999)).toBe('999 B')
+    expect(formatSourceBytes(1_000)).toBe('1 KB')
     expect(formatSourceBytes(1_001)).toBe('2 KB')
+    expect(formatSourceBytes(1_000_000)).toBe('1.00 MB')
     expect(formatSourceBytes(PROJECT_SOURCE_LIMIT_BYTES)).toBe('2.00 MB')
   })
 })

@@ -48,6 +48,17 @@ describe('project storage failures', () => {
     expect(loadCheckpointLibrary()).toEqual({})
   })
 
+  test('does not overwrite fallback state after a browser storage read fails', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+
+    expect(loadProjectLibrary().projects).toHaveLength(1)
+    expect(createLocalCheckpoint(createProject('javascript'))).toBeNull()
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
   test('preserves a legacy project when the migrated library cannot be saved', () => {
     const legacyProject = createProject('ruby')
     localStorage.setItem('hafa-code-project-v1', JSON.stringify(legacyProject))
