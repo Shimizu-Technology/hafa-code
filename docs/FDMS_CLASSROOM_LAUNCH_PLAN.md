@@ -22,15 +22,15 @@ The application already has a credible classroom foundation:
 
 The current `main` branch includes durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
 
-The remaining launch gates are primarily repeatable browser automation and external operations:
+The remaining launch gates are deployed-provider, school, and operating evidence rather than unimplemented classroom fundamentals:
 
-1. Run the new repeatable multi-role browser coverage in required CI and add a production-safe Clerk smoke suite on an isolated deployed tenant.
+1. Keep the repeatable multi-role browser coverage required in CI and add a production-safe Clerk smoke suite on an isolated deployed tenant.
 2. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
 3. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
 4. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
 5. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
 
-The core architecture does not need to be replaced. The next move is to close the remaining code-backed launch gaps, complete the external gates, and run the controlled pilot before full enrollment.
+The core architecture does not need to be replaced. The next move is to maintain the code-backed release gates, complete the external evidence, and run the controlled pilot before full enrollment.
 
 ## 2. What Hafa Code Is — and Why It Exists
 
