@@ -10,8 +10,9 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker.js?worker
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker.js?worker'
 import './index.css'
 import App from './App.tsx'
-import { AuthProvider } from './contexts/AuthContext.tsx'
+import { AuthProvider, configureE2EAuthToken, E2EAuthProvider } from './contexts/AuthContext.tsx'
 import { hasClerkPublishableKey } from './lib/clerk.ts'
+import { e2eAuthEnabled } from './lib/e2eAuth.ts'
 import { registerServiceWorker } from './pwa.ts'
 
 declare global {
@@ -37,7 +38,13 @@ window.MonacoEnvironment = {
 
 loader.config({ monaco })
 
-const app = cloudEnabled ? (
+if (e2eAuthEnabled) configureE2EAuthToken()
+
+const app = e2eAuthEnabled ? (
+  <E2EAuthProvider>
+    <App />
+  </E2EAuthProvider>
+) : cloudEnabled ? (
   <ClerkProvider publishableKey={clerkPublishableKey}>
     <AuthProvider>
       <App />

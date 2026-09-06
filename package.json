@@ -7,6 +7,7 @@
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "web:lint": "npm --prefix web run lint",
+    "web:e2e": "npm --prefix web run test:e2e",
     "api:test": "cd api && bundle exec rails test",
     "gate": "./scripts/gate.sh"
   }

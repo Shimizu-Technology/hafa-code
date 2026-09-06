@@ -129,6 +129,7 @@ import {
   type MobileTab,
 } from './lib/workspace'
 import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
+import { e2eAuthEnabled } from './lib/e2eAuth'
 import {
   createWorkspaceBackup,
   downloadWorkspaceBackup,
@@ -217,7 +218,7 @@ export default function App() {
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const practiceCheckWatchdogRef = useRef<number | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
-  const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
+  const cloudEnabled = e2eAuthEnabled || hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
   const project = reviewProject ?? library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
@@ -549,7 +550,7 @@ export default function App() {
       if (isCurrentRequest()) setCheckpoints(loadLocalCheckpoints(project.id))
     })
 
-    if (isSignedIn && isCloudProjectId(project.id)) {
+    if (isSignedIn && isCloudProjectId(project.id) && !reviewProject?.id) {
       api.getCheckpoints(project.id).then((res) => {
         if (isCurrentRequest() && res.data) setCheckpoints(res.data)
       })

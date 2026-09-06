@@ -20,6 +20,7 @@ Add project kinds and file-language behavior through `web/src/lib/languageRegist
 - Rails API: `(cd api && bin/rails server -b 127.0.0.1 -p 3000)`
 - Full gate: `./scripts/gate.sh`
 - Frontend-only gate: `npm --prefix web run lint && npm --prefix web test && npm --prefix web run build && npm --prefix web audit --audit-level=high`
+- Classroom browser gate: `npm --prefix web run test:e2e` (uses ports 3014 and 5190 plus a guarded `_e2e` PostgreSQL database)
 
 Ports are configurable. Use distinct strict ports when another session already owns the defaults. Record and clean only resources started by the current session; never stop a borrowed listener, simulator, browser tab, database, or container.
 

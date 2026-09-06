@@ -37,6 +37,7 @@ hafa-code/
 - [Multi-file workspace plan](docs/MULTI_FILE_WORKSPACE.md)
 - [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)
 - [FDMS classroom launch readiness and action plan](docs/FDMS_CLASSROOM_LAUNCH_PLAN.md)
+- [Classroom operations and incident runbook](docs/CLASSROOM_OPERATIONS_RUNBOOK.md)
 
 ## Security Model
 
@@ -69,6 +70,8 @@ bin/rails server -p 3000
 # full gate
 ./scripts/gate.sh
 ```
+
+The full gate includes an isolated Playwright classroom suite. It creates and resets only a PostgreSQL database whose name ends in `_e2e`; it refuses to run against any other database. Install Chromium once with `cd web && npx playwright install chromium` if Playwright has not already downloaded it.
 
 ## Clerk Setup
 

@@ -107,6 +107,12 @@ locked to the 8.1.3.1 security patch, which fixes CVE-2026-66066 in Active
 Storage variant processing. `npm audit --audit-level=high` and
 `bundle exec bundler-audit check` must both pass before deployment.
 
+## Automated classroom auth
+
+Browser tests use deterministic local personas instead of Clerk. The frontend adapter is enabled only when Vite is in development mode, the mode is exactly `e2e`, and `VITE_E2E_AUTH=true`. Its tokens are accepted only by Rails in the test environment. The fixture reset task also verifies that the active database name ends in `_e2e` before deleting data.
+
+This is a test seam, not an alternate production login. Production and preview builds must continue to use Clerk, and deployment smoke tests must prove real Clerk login and deployed environment configuration separately.
+
 ## Known Limitations
 
 - Browser-side execution is appropriate for learning snippets and simple web pages, not production backend apps.

@@ -48,7 +48,8 @@ Hafa Code currently supports:
 
 Finish these before broad FDMS enrollment:
 
-- add repeatable browser coverage for sign-in, invitation acceptance, cloud save/reload, reconnect recovery, role boundaries, class duplication, feedback, archive/removal, and export;
+- [x] Add repeatable local browser coverage for session resolution, invitations, cloud save/reload, role boundaries, class duplication, feedback, archive/removal, export, dual-class switching, and mobile actions.
+- [ ] Run a smaller post-deploy suite with real Clerk accounts against staging or a production-safe test tenant, including reconnect recovery.
 - add storage-usage visibility before a learner reaches a hard quota;
 - verify keyboard operation, 200% zoom, status contrast, screen-reader behavior, school-device performance, and software-keyboard input;
 - publish privacy and acceptable-use information approved by FDMS;

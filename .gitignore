@@ -6,6 +6,8 @@ vendor/bundle/
 # Build output
 dist/
 web/dist/
+web/playwright-report/
+web/test-results/
 
 # Env / secrets
 .env
