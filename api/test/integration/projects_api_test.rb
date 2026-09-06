@@ -1455,6 +1455,77 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal source_project, copy.forked_from
   end
 
+  test "duplicates into an explicitly selected valid workspace" do
+    source_organization = Organization.create!(name: "Source Class", created_by: @user)
+    destination_organization = Organization.create!(name: "Destination Class", created_by: @user)
+    source_organization.organization_memberships.create!(user: @user, role: :student)
+    destination_organization.organization_memberships.create!(user: @user, role: :student)
+    source_project = @user.projects.create!(
+      organization: source_organization,
+      title: "A" * 120,
+      kind: "ruby",
+      visibility: "organization",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
+    )
+
+    post "/api/v1/projects/#{source_project.id}/duplicate", headers: @headers
+
+    assert_response :created
+    default_copy = Project.find(response.parsed_body.dig("project", "id"))
+    assert_equal source_organization, default_copy.organization
+
+    post "/api/v1/projects/#{source_project.id}/duplicate",
+      params: { organization_id: destination_organization.id }.to_json,
+      headers: @headers
+
+    assert_response :created
+    class_copy = Project.find(response.parsed_body.dig("project", "id"))
+    assert_equal destination_organization, class_copy.organization
+    assert_equal "private", class_copy.visibility
+    assert_equal source_project, class_copy.forked_from
+    assert_equal 120, class_copy.title.length
+    assert class_copy.title.end_with?(" Copy")
+
+    post "/api/v1/projects/#{source_project.id}/duplicate",
+      params: { organization_id: nil }.to_json,
+      headers: @headers
+
+    assert_response :created
+    personal_copy = Project.find(response.parsed_body.dig("project", "id"))
+    assert_nil personal_copy.organization
+    assert_equal "private", personal_copy.visibility
+  end
+
+  test "rejects unavailable or archived copy destinations" do
+    source_organization = Organization.create!(name: "Source Class", created_by: @user)
+    source_organization.organization_memberships.create!(user: @user, role: :student)
+    source_project = @user.projects.create!(
+      organization: source_organization,
+      title: "Class Starter",
+      kind: "ruby",
+      visibility: "private",
+      project_files: [ ProjectFile.new(path: "main.rb", language: "ruby", content: "puts 'copy me'") ]
+    )
+    unavailable = Organization.create!(name: "Other Class", created_by: @user)
+
+    post "/api/v1/projects/#{source_project.id}/duplicate",
+      params: { organization_id: unavailable.id }.to_json,
+      headers: @headers
+    assert_response :not_found
+
+    source_organization.update!(archived_at: Time.current)
+    post "/api/v1/projects/#{source_project.id}/duplicate",
+      params: { organization_id: source_organization.id }.to_json,
+      headers: @headers
+    assert_response :unprocessable_entity
+
+    post "/api/v1/projects/#{source_project.id}/duplicate",
+      params: { organization_id: nil }.to_json,
+      headers: @headers
+    assert_response :created
+    assert_nil Project.find(response.parsed_body.dig("project", "id")).organization
+  end
+
   test "destroying an organization keeps formerly organization-visible projects valid" do
     organization = Organization.create!(name: "Closing School", created_by: @user)
     organization.organization_memberships.create!(user: @user, role: :owner)

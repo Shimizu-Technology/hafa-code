@@ -217,15 +217,15 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-003 — Keep class copies inside the class
 
-**Why:** The frontend duplication helper explicitly sets `organizationId`, owner, and organization to `null`. If a teacher publishes a starter project and a student clicks Duplicate, the student's copy becomes a personal project and disappears from the teacher's class view.
+**Why:** A learner must always know where a copy will live. Class starters should default to their source class, while personal or cross-class copies require a deliberate destination choice.
 
 **Work:**
 
 - [x] When duplicating a class project, default the destination to the active class.
-- [ ] Allow a destination chooser only when the user belongs to multiple valid contexts.
+- [x] Allow a destination chooser when the user belongs to multiple valid contexts.
 - [x] Preserve private visibility for the student's new copy.
 - [x] Use the server duplicate endpoint for signed-in cloud projects or make the frontend behavior match it.
-- [ ] Clearly show the destination before confirmation.
+- [x] Clearly show the destination before confirmation.
 
 **Acceptance criteria:**
 
@@ -272,7 +272,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 - [x] Update affected frontend dependencies, including the DOMPurify and `js-cookie` dependency chains.
 - [x] Update affected Ruby dependencies, prioritizing `jwt`, `puma`, and `websocket-driver`, then the remaining advisories.
 - [x] Rebuild and rerun all tests after lockfile updates.
-- [ ] Make passing CI required before merging to `main`.
+- [x] Make passing CI required before merging to `main`.
 
 **Acceptance criteria:**
 
@@ -510,11 +510,11 @@ This is an order of operations, not a guaranteed calendar estimate. Each phase m
 ### Before the pilot
 
 - [ ] Production origin and invitation URLs are correct.
-- [ ] High-severity dependency audits are clear.
-- [ ] CI runs on every pull request.
-- [ ] Save failure and recovery scenarios pass.
-- [ ] Class-preserving duplication passes.
-- [ ] Teacher feedback workflow is implemented or FDMS accepts the documented LMS fallback.
+- [x] High-severity dependency audits are clear.
+- [x] CI runs on every pull request.
+- [x] Save failure and recovery scenarios pass.
+- [x] Class-preserving duplication passes.
+- [x] Teacher feedback workflow is implemented or FDMS accepts the documented LMS fallback.
 - [ ] Public sharing is disabled or governed by an approved policy.
 - [ ] Test accounts for every role exist.
 - [ ] Backup restore and monitoring checks pass.
@@ -588,14 +588,15 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | --- | --- |
 | `npm --prefix web run lint` | Pass |
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
-| `npm --prefix web test` | Pass: 22 files, 203 tests |
-| `bundle exec rails test` | Pass: 52 runs, 410 assertions |
+| `npm --prefix web test` | Pass: 22 files, 209 tests |
+| `bundle exec rails test` | Pass: 54 runs, 425 assertions |
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
+| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend` and `backend` checks are required |
 | Netlify production page and headers | Reachable; security headers present |
 | Render health endpoint | Healthy |
 | Production-origin Render CORS preflight | Pass for `https://code.shimizu-technology.com` |

@@ -8,9 +8,11 @@ import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
 import { practiceChallengeById, practiceChallengesFor } from './lib/practiceLab'
 import { completePracticeChallenge, completedPracticeChallengeIds, practiceChallengeIdForProject, preservePracticeConflictLinks } from './lib/practiceProgress'
-import { createConflictCopy } from './lib/projectStorage'
+import { createConflictCopy, createProject } from './lib/projectStorage'
 import type { ProjectLibrary } from './lib/projectStorage'
 import type { RunnerOutcome } from './lib/runnerOutcome'
+import { api } from './lib/api'
+import type { useAuthContext } from './contexts/AuthContext'
 
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
@@ -22,6 +24,16 @@ const runnerHarness = vi.hoisted(() => ({
   onErrorAdviceChange: undefined as undefined | ((context: ErrorCoachContext) => void),
   onRunCancel: undefined as undefined | (() => void),
   onRunComplete: undefined as undefined | ((outcome: RunnerOutcome) => void),
+}))
+
+type AppAuthContext = ReturnType<typeof useAuthContext>
+
+const authHarness = vi.hoisted(() => ({
+  value: null as unknown as AppAuthContext,
+}))
+
+vi.mock('./contexts/AuthContext', () => ({
+  useAuthContext: () => authHarness.value,
 }))
 
 vi.mock('./components/RunnerPanel', () => ({
@@ -46,6 +58,13 @@ function storedLibrary() {
 describe('App language guide practice projects', () => {
   beforeEach(() => {
     localStorage.clear()
+    authHarness.value = {
+      isSignedIn: false,
+      isLoading: true,
+      user: null,
+      organizations: [],
+      syncSession: async () => {},
+    }
     runnerHarness.onErrorAdviceChange = undefined
     runnerHarness.onRunCancel = undefined
     runnerHarness.onRunComplete = undefined
@@ -71,6 +90,7 @@ describe('App language guide practice projects', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('opens a complete example in a new private project without changing the original', async () => {
@@ -425,5 +445,81 @@ describe('App language guide practice projects', () => {
 
     expect(screen.getByRole('button', { name: 'Check my work' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/ended before a result arrived/i)
+  })
+
+  it('shows and confirms the destination before duplicating a project', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(storedLibrary().projects).toHaveLength(1)
+
+    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+
+    const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
+    expect(within(dialog).getByRole('radio', { name: /Personal projects/ })).toHaveProperty('checked', true)
+    expect(storedLibrary().projects).toHaveLength(1)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
+
+    await waitFor(() => expect(storedLibrary().projects).toHaveLength(2))
+    expect(screen.getByRole('status').textContent).toMatch(/duplicated into Personal projects/i)
+    expect(screen.queryByRole('dialog', { name: 'Where should the copy live?' })).toBeNull()
+  })
+
+  it('keeps a failed cloud copy retryable and sends the selected classroom', async () => {
+    const user = userEvent.setup()
+    const cloudProject = {
+      ...createConflictCopy(createProject('ruby')),
+      id: '42',
+      title: 'Cloud starter',
+      owner: { id: 7, fullName: 'Student One' },
+      organizationId: null,
+      organization: null,
+      lockVersion: 3,
+    }
+    const cloudCopy = {
+      ...cloudProject,
+      id: '43',
+      title: 'Cloud starter Copy',
+      organizationId: '20',
+      organization: { id: 20, name: 'Robotics', slug: 'robotics' },
+      lockVersion: 0,
+    }
+    authHarness.value = {
+      isSignedIn: true,
+      isLoading: false,
+      user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
+      organizations: [{ id: 20, name: 'Robotics', slug: 'robotics', role: 'student' }],
+      syncSession: vi.fn(),
+    }
+    vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [cloudProject], error: null })
+    vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    const updateProject = vi.spyOn(api, 'updateProject').mockResolvedValue({
+      data: cloudProject,
+      error: null,
+      status: 200,
+      code: null,
+      conflictProject: null,
+    })
+    const duplicateCloudProject = vi.spyOn(api, 'duplicateProject')
+      .mockResolvedValueOnce({ data: null, error: 'Classroom service unavailable' })
+      .mockResolvedValueOnce({ data: cloudCopy, error: null })
+
+    render(<App />)
+    await user.click((await screen.findAllByRole('button', { name: 'Cloud starter Ruby' }))[0])
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Cloud starter')
+    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
+    await user.click(within(dialog).getByRole('radio', { name: /Robotics/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Classroom service unavailable/i))
+    expect(duplicateCloudProject).toHaveBeenLastCalledWith('42', '20')
+    expect(within(dialog).getByRole('button', { name: 'Duplicate here' })).toHaveProperty('disabled', false)
+    expect(updateProject).toHaveBeenCalledWith(expect.objectContaining({ id: '42' }))
+
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Where should the copy live?' })).toBeNull())
+    expect(duplicateCloudProject).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('status').textContent).toMatch(/duplicated into Robotics/i)
   })
 })

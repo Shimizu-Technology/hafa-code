@@ -66,7 +66,11 @@ describe('classroom project reconciliation', () => {
 describe('class starter duplication', () => {
   test('keeps the copy in its class and makes it teacher-only', () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000001')
-    const source = { ...project('42', '2026-07-25T01:00:00.000Z'), visibility: 'organization' as const }
+    const source = {
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: 'A'.repeat(120),
+      visibility: 'organization' as const,
+    }
 
     const copy = duplicateProject(source)
 
@@ -77,6 +81,42 @@ describe('class starter duplication', () => {
     expect(copy.owner).toBeNull()
     expect(copy.lockVersion).toBeUndefined()
     expect(copy.files).not.toBe(source.files)
+  })
+
+  test('uses the learner-selected destination without carrying stale class metadata', () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000003')
+    const source = {
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: 'A'.repeat(120),
+      visibility: 'organization' as const,
+    }
+
+    const personalCopy = duplicateProject(source, { organizationId: null, organization: null })
+    expect(personalCopy.organizationId).toBeNull()
+    expect(personalCopy.organization).toBeNull()
+
+    const otherClassCopy = duplicateProject(source, {
+      organizationId: '20',
+      organization: { id: 20, name: 'Robotics', slug: 'robotics' },
+    })
+    expect(otherClassCopy.organizationId).toBe('20')
+    expect(otherClassCopy.organization).toEqual({ id: 20, name: 'Robotics', slug: 'robotics' })
+    expect(otherClassCopy.visibility).toBe('private')
+    expect(otherClassCopy.title).toHaveLength(120)
+    expect(otherClassCopy.title).toMatch(/ Copy$/)
+  })
+
+  test('keeps astral Unicode titles on valid code-point boundaries', () => {
+    const source = {
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: '😀'.repeat(120),
+    }
+
+    const copy = duplicateProject(source)
+
+    expect(Array.from(copy.title)).toHaveLength(120)
+    expect(copy.title).toMatch(/ Copy$/)
+    expect(copy.title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
   })
 })
 
@@ -98,6 +138,17 @@ describe('save conflict recovery', () => {
     expect(copy.organizationId).toBe(source.organizationId)
     expect(copy.lockVersion).toBeUndefined()
     expect(copy.files[0].content).toBe(source.files[0].content)
+  })
+
+  test('keeps astral Unicode conflict titles on valid code-point boundaries', () => {
+    const copy = createConflictCopy({
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: '🚀'.repeat(120),
+    })
+
+    expect(Array.from(copy.title)).toHaveLength(120)
+    expect(copy.title).toMatch(/ Conflict Copy$/)
+    expect(copy.title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
   })
 })
 

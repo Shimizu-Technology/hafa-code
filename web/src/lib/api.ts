@@ -370,6 +370,15 @@ export const api = {
       ? { data: null, error: res.error, status: res.status, code: res.code, conflictProject }
       : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null, status: res.status, code: null, conflictProject: null }
   },
+  duplicateProject: async (projectId: string, organizationId: string | null) => {
+    const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${projectId}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({ organization_id: organizationId }),
+    })
+    return res.error
+      ? { data: null, error: res.error }
+      : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+  },
   getProjectComments: async (projectId: string) => {
     const res = await fetchApi<{ comments: CloudProjectComment[]; unread_count: number }>(`/api/v1/projects/${projectId}/comments`)
     return res.error
