@@ -159,4 +159,23 @@ describe('SqlRunnerPanel', () => {
     expect(onRunComplete).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', stderr: 'Worker creation blocked' }))
     expect(screen.getByRole('button', { name: 'Run SQL' })).toBeTruthy()
   })
+
+  it('recovers when the browser rejects the first worker message', async () => {
+    const user = userEvent.setup()
+    const onRunComplete = vi.fn()
+    class RejectingSqlWorker extends FakeSqlWorker {
+      postMessage() {
+        throw new Error('Worker messaging blocked')
+      }
+    }
+    vi.stubGlobal('Worker', RejectingSqlWorker)
+    render(<SqlRunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
+
+    await user.click(screen.getByRole('button', { name: 'Run SQL' }))
+
+    expect(screen.getByRole('alert').textContent).toContain('Worker messaging blocked')
+    expect(onRunComplete).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', stderr: 'Worker messaging blocked' }))
+    expect(FakeSqlWorker.instances[0].terminated).toBe(true)
+    expect(screen.getByRole('button', { name: 'Run SQL' })).toBeTruthy()
+  })
 })

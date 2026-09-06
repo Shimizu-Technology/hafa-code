@@ -56,7 +56,13 @@ export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete,
     clearTimer()
     const worker = workerRef.current
     const requestId = requestIdRef.current
-    if (worker && requestId) worker.postMessage({ id: requestId, type: 'abort' } satisfies SqlRunnerRequest)
+    if (worker && requestId) {
+      try {
+        worker.postMessage({ id: requestId, type: 'abort' } satisfies SqlRunnerRequest)
+      } catch {
+        // A worker that already failed cannot receive cleanup messages; termination below is sufficient.
+      }
+    }
     detachWorkerListenersRef.current()
     detachWorkerListenersRef.current = () => {}
     worker?.terminate()
