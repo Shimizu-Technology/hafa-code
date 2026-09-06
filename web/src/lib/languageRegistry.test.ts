@@ -10,8 +10,8 @@ import {
 
 describe('language registry', () => {
   it('describes every supported project kind in display order', () => {
-    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'web'])
-    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'TS', 'Python', 'Java', 'Web'])
+    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'sql', 'web'])
+    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'TS', 'Python', 'Java', 'SQL', 'Web'])
   })
 
   it('keeps runnable and preview-only project capabilities explicit', () => {
@@ -31,6 +31,8 @@ describe('language registry', () => {
     expect(projectKindDefinition('java').runner?.startupTimeoutMs).toBe(120_000)
     expect(projectKindDefinition('java').runner?.executionTimeoutMs).toBe(30_000)
     expect(projectKindDefinition('java').runner?.startupNote).toBe('The first Java run downloads the browser compiler and may take longer on a mobile connection.')
+    expect(projectKindDefinition('sql').runner?.language).toBe('sql')
+    expect(projectKindDefinition('sql').runner?.terminalCommand('main.sql')).toBe('sqlite3 :memory: < main.sql')
     expect(projectKindDefinition('web').runner).toBeUndefined()
   })
 
@@ -53,12 +55,13 @@ describe('language registry', () => {
   })
 
   it('centralizes file extensions while preserving unknown-file fallbacks', () => {
-    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'html', 'css', 'json', 'plain'])
+    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'sql', 'html', 'css', 'json', 'plain'])
     expect(inferFileLanguage('lib/hello.rb', 'javascript')).toBe('ruby')
     expect(inferFileLanguage('src/index.mjs', 'ruby')).toBe('javascript')
     expect(inferFileLanguage('src/main.ts', 'ruby')).toBe('typescript')
     expect(inferFileLanguage('src/main.py', 'ruby')).toBe('python')
     expect(inferFileLanguage('src/Main.java', 'ruby')).toBe('java')
+    expect(inferFileLanguage('queries/report.sql', 'ruby')).toBe('sql')
     expect(inferFileLanguage('README', 'ruby')).toBe('ruby')
     expect(inferFileLanguage('README', 'javascript')).toBe('plain')
     expect(inferFileLanguage('README', 'python')).toBe('python')

@@ -105,6 +105,24 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal %w[greeting.ts main.ts], response.parsed_body.dig("project", "files").pluck("path")
   end
 
+  test "creates SQL projects and chooses main.sql as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "SQL Data Playground",
+        kind: "sql",
+        files: [
+          { path: "schema.sql", language: "sql", content: "CREATE TABLE learners (name TEXT);" },
+          { path: "main.sql", language: "sql", content: "SELECT name FROM learners;" }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "sql", response.parsed_body.dig("project", "kind")
+    assert_equal "main.sql", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[schema.sql main.sql], response.parsed_body.dig("project", "files").pluck("path")
+  end
+
   test "creates Java projects and chooses Main.java as the default entry" do
     post "/api/v1/projects",
       params: {

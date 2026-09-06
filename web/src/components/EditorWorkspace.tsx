@@ -20,6 +20,7 @@ import type { RunnerOutcome } from '../lib/runnerOutcome'
 import type { ErrorCoachContext } from '../lib/errorCoach'
 import { formatFileLanguage, languageForFile } from '../lib/workspace'
 import { RunnerPanel } from './RunnerPanel'
+import { SqlRunnerPanel } from './SqlRunnerPanel'
 import { WebPreview } from './WebPreview'
 
 type EditorWorkspaceProps = {
@@ -216,7 +217,9 @@ export function EditorWorkspace({
 
       {project.kind === 'web'
         ? <WebPreview key={project.id} files={project.files} entryPath={project.entryPath} onErrorAdviceChange={onErrorAdviceChange} />
-        : <RunnerPanel key={`${runnerInstanceKey}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
+        : project.kind === 'sql'
+          ? <SqlRunnerPanel key={runnerInstanceKey} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />
+          : <RunnerPanel key={`${runnerInstanceKey}:${project.entryPath}`} project={project} entryFile={entryFile} onRunCancel={onRunnerCancel} onRunComplete={onRunnerComplete} onErrorAdviceChange={onErrorAdviceChange} />}
     </div>
   )
 }

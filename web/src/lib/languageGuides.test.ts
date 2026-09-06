@@ -32,6 +32,8 @@ describe('language guides', () => {
         expect(topic.practiceProject.files.map((file) => file.language)).toEqual(
           expect.arrayContaining(['html', 'css', 'javascript']),
         )
+      } else if (kind === 'sql') {
+        expect(topic.practiceProject.files.some((file) => file.content === topic.code)).toBe(true)
       } else {
         expect(topic.practiceProject.files[0].content).toBe(topic.code)
       }

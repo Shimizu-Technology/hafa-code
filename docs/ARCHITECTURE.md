@@ -17,7 +17,8 @@ Rails API + React SPA
       │   ├─ QuickJS WASM for JavaScript
       │   ├─ TypeScript compiler + QuickJS WASM
       │   ├─ Pyodide Python WASM
-      │   └─ CheerpJ Java runtime
+      │   ├─ CheerpJ Java runtime
+      │   └─ SQLite WASM in-memory database
       ├─ HTML preview iframe
       └─ Project storage adapter
           ├─ localStorage anonymous fallback
@@ -103,6 +104,19 @@ The first release targets Java 8 language and library behavior. It does not
 provide packages, Maven/Gradle, external JARs, desktop GUI support, or a general
 network client. See [Java runtime](JAVA_RUNTIME.md) for the exact boundary.
 
+### SQL
+
+Use the official `@sqlite.org/sqlite-wasm` distribution and its object-oriented API inside a dedicated Web Worker.
+
+- create only a transient `:memory:` database; do not initialize OPFS or expose database filenames
+- execute `schema.sql` and `seed.sql` in that order when the project worker starts, after an explicit Reset database, or when either file changes
+- keep query changes in the project worker between Runs so learners can observe `INSERT`, `UPDATE`, and `DELETE`
+- render the first result-producing statement as a semantic HTML table, capped at 500 visible rows and 50 columns; report changes and statement counts when no table is returned
+- terminate the worker for Stop or the three-second query deadline
+- keep SQLite JavaScript and WebAssembly out of the service-worker application shell so other languages do not pay its startup cost
+
+Rails stores SQL source exactly like other project files and never receives or executes the in-memory database. See [SQL runtime](SQL_RUNTIME.md) for the learner-facing lifecycle and limits.
+
 ### HTML/CSS/JS
 
 Use a sandboxed iframe with `srcDoc`.
@@ -118,7 +132,7 @@ Do not allow same-origin unless there is a specific reason.
 ## Data Model Draft
 
 ```ts
-type ProjectKind = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'web'
+type ProjectKind = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql' | 'web'
 
 type Project = {
   id: string
@@ -135,7 +149,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  language: 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'html' | 'css'
+  language: 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql' | 'html' | 'css'
   content: string
 }
 ```

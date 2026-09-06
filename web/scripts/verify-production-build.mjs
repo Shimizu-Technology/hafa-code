@@ -11,6 +11,7 @@ const RUNNER_HEADERS = {
   ruby: '/assets/rubyRunner.worker-*.js',
   javascript: '/assets/javascriptRunner.worker-*.js',
   typescript: '/assets/typescriptRunner.worker-*.js',
+  sql: '/assets/sqlRunner.worker-*.js',
   python: '/assets/pythonRunner.worker-*.js',
   java: '/assets/javaRunner.worker-*.js',
 }
@@ -64,6 +65,7 @@ const applicationPolicy = headers.get('/*')?.get('content-security-policy')
 const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security-policy')
 const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
 const typescriptRunnerPolicy = headers.get(RUNNER_HEADERS.typescript)?.get('content-security-policy')
+const sqlRunnerPolicy = headers.get(RUNNER_HEADERS.sql)?.get('content-security-policy')
 const pythonRunnerPolicy = headers.get(RUNNER_HEADERS.python)?.get('content-security-policy')
 const javaRunnerPolicy = headers.get(RUNNER_HEADERS.java)?.get('content-security-policy')
 const javaBootstrapPolicy = headers.get(JAVA_BOOTSTRAP_HEADER)?.get('content-security-policy')
@@ -72,6 +74,7 @@ assert(applicationPolicy, 'Missing application Content-Security-Policy')
 assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
 assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Security-Policy')
 assert(typescriptRunnerPolicy, 'Missing TypeScript runner worker Content-Security-Policy')
+assert(sqlRunnerPolicy, 'Missing SQL runner worker Content-Security-Policy')
 assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
 assert(javaBootstrapPolicy, 'Missing Java bootstrap worker Content-Security-Policy')
@@ -107,6 +110,12 @@ assert(typescriptRunnerScripts.includes("'wasm-unsafe-eval'"), 'TypeScript runne
 assert(!typescriptRunnerScripts.includes("'unsafe-eval'"), 'TypeScript runner CSP must not permit browser JavaScript string evaluation')
 assert.deepEqual(directiveSources(typescriptRunnerPolicy, 'connect-src'), ["'self'"])
 assert(!typescriptRunnerPolicy.includes('clerk'), 'TypeScript runner CSP must not inherit application third-party script origins')
+
+const sqlRunnerScripts = directiveSources(sqlRunnerPolicy, 'script-src')
+assert(sqlRunnerScripts.includes("'wasm-unsafe-eval'"), 'SQL runner CSP must permit WebAssembly compilation')
+assert(!sqlRunnerScripts.includes("'unsafe-eval'"), 'SQL runner CSP must not permit JavaScript string evaluation')
+assert.deepEqual(directiveSources(sqlRunnerPolicy, 'connect-src'), ["'self'"])
+assert(!sqlRunnerPolicy.includes('clerk'), 'SQL runner CSP must not inherit application third-party script origins')
 
 const pythonRunnerScripts = directiveSources(pythonRunnerPolicy, 'script-src')
 assert(pythonRunnerScripts.includes("'wasm-unsafe-eval'"), 'Python runner CSP must permit WebAssembly compilation')
@@ -151,6 +160,13 @@ for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
   assert(!serviceWorker.includes(runnerAssetPath), `${runnerAssetPath} must remain lazy and outside the service-worker app shell`)
   console.log(`Verified production CSP coverage for ${runnerAssetPath}`)
 }
+
+const sqliteRuntimeAssets = assetNames.filter((name) => /^(?:sqlite3|sqlRunner\.)/.test(name))
+assert(sqliteRuntimeAssets.some((name) => name.endsWith('.wasm')), 'Expected the SQLite WebAssembly asset')
+for (const assetName of sqliteRuntimeAssets) {
+  assert(!serviceWorker.includes(`/assets/${assetName}`), `SQLite runtime asset ${assetName} must remain lazy and outside the service-worker app shell`)
+}
+console.log(`Verified lazy SQLite runtime assets: ${sqliteRuntimeAssets.sort().join(', ')}`)
 
 const pyodideAssets = (await readdir(new URL('pyodide/', ASSETS_DIRECTORY))).sort()
 assert.deepEqual(pyodideAssets, PYODIDE_RUNTIME_FILES, 'Expected only the pinned core Pyodide runtime assets')

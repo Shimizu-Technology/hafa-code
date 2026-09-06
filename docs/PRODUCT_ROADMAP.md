@@ -35,6 +35,7 @@ Hafa Code currently supports:
 - multi-file TypeScript through the browser compiler API and QuickJS;
 - multi-file Python through self-hosted Pyodide;
 - Java 8 compilation and execution through CheerpJ;
+- SQL through a project-scoped, in-memory official SQLite WebAssembly worker;
 - HTML/CSS/JavaScript through a sandboxed preview;
 - Monaco editing, multiple files, entry-file selection, standard input where supported, stop controls, and bounded execution;
 - fifteen practice challenges per project kind across Starter, Builder, and Stretch tiers;
@@ -73,16 +74,17 @@ Add TypeScript as a first-class, beginner-focused project rather than disguising
 - [x] A complete guide, fifteen challenges, error coaching, starter projects, import/export support, and mobile coverage.
 - [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
 
-## P1: SQL
+## Shipped: SQL
 
-Add SQL as a focused SQLite learning workspace.
+SQL now ships as a focused SQLite learning workspace.
 
-- a dedicated worker using the official SQLite WebAssembly distribution;
-- a resettable, project-scoped database seeded from explicit schema/data files;
-- query results rendered as an accessible table with row counts and clear empty/error states;
-- a deliberate Run/Reset model so repeated practice stays predictable;
-- no remote database credentials, network access, extensions, or arbitrary filesystem access;
-- a complete guide, fifteen challenges, error coaching, starter data, import/export support, and school-device measurements.
+- [x] A dedicated worker using the official SQLite WebAssembly distribution.
+- [x] A resettable, project-scoped database seeded from explicit `schema.sql` and `seed.sql` files.
+- [x] Query results rendered as an accessible table with row/change counts and clear loading, empty, stopped, success, and error states.
+- [x] A deliberate Run/Reset model; changes persist in the project worker, while schema/seed edits rebuild automatically.
+- [x] No remote database credentials, network access, extensions, OPFS persistence, or host filesystem access.
+- [x] A complete eight-topic guide, fifteen challenges, error coaching, starter data, import/export support, automated browser coverage, and mobile coverage.
+- [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
 
 ## P2: classroom usability
 

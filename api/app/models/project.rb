@@ -1,5 +1,5 @@
 class Project < ApplicationRecord
-  KINDS = %w[ruby javascript typescript python java web].freeze
+  KINDS = %w[ruby javascript typescript python java sql web].freeze
   VISIBILITIES = %w[private organization unlisted public].freeze
   MAX_FILES = 50
   MAX_TOTAL_CONTENT_BYTES = 2_000_000
@@ -44,6 +44,7 @@ class Project < ApplicationRecord
       when "typescript" then %w[main.ts index.ts]
       when "python" then %w[main.py app.py]
       when "java" then %w[Main.java]
+      when "sql" then %w[main.sql query.sql]
       else %w[main.js index.js]
       end
 
