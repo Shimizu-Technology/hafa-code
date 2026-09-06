@@ -120,7 +120,7 @@ export function ProjectToolbar({
               {checkpoints.length === 0 ? (
                 <p className="empty-project-list">No checkpoints yet.</p>
               ) : checkpoints.slice(0, 5).map((checkpoint) => (
-                <button key={checkpoint.id} className="checkpoint-card secondary" type="button" onClick={() => onRestoreCheckpoint(checkpoint)} title={`Restore ${checkpoint.title}`}>
+                <button key={checkpoint.id} className="checkpoint-card secondary" type="button" onClick={() => onRestoreCheckpoint(checkpoint)} title={`Restore ${checkpoint.title}`} disabled={!canEditProject}>
                   <span>{checkpoint.title}</span>
                   <small>{formatCheckpointTime(checkpoint.createdAt)}</small>
                 </button>

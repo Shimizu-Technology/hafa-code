@@ -137,6 +137,7 @@ describe('workspace presentation components', () => {
     render(
       <WorkspaceDialogs
         activeProjectCount={1}
+        canEditProject
         confirmAction={null}
         confirmDialogRef={createRef<HTMLElement>()}
         copyDestinationId={null}
@@ -192,6 +193,7 @@ describe('workspace presentation components', () => {
     render(
       <WorkspaceDialogs
         activeProjectCount={1}
+        canEditProject
         confirmAction={null}
         confirmDialogRef={createRef<HTMLElement>()}
         copyDestinationId="10"

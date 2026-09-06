@@ -46,7 +46,7 @@ describe('ClassroomReviewPanel', () => {
     ]
     const getProjects = vi.spyOn(api, 'getOrganizationProjects').mockResolvedValue({ data: summaries, error: null })
 
-    render(<ClassroomReviewPanel organizationId="10" members={members} onOpenProject={vi.fn()} />)
+    render(<ClassroomReviewPanel organizationId="10" members={members} membersError="" membersLoading={false} onOpenProject={vi.fn()} onRefreshMembers={vi.fn()} />)
 
     expect(await screen.findByText('Loop practice')).toBeTruthy()
     expect(screen.getByText('Class website')).toBeTruthy()
@@ -76,12 +76,79 @@ describe('ClassroomReviewPanel', () => {
     const getProject = vi.spyOn(api, 'getProject').mockResolvedValue({ data: fullProject, error: null })
     const onOpenProject = vi.fn()
 
-    render(<ClassroomReviewPanel organizationId="10" members={members} onOpenProject={onOpenProject} />)
+    render(<ClassroomReviewPanel organizationId="10" members={members} membersError="" membersLoading={false} onOpenProject={onOpenProject} onRefreshMembers={vi.fn()} />)
     await screen.findByText('Loop practice')
     const list = screen.getByLabelText('Student projects')
     await user.click(within(list).getByRole('button', { name: 'Open review' }))
 
     await waitFor(() => expect(getProject).toHaveBeenCalledWith('42'))
     expect(onOpenProject).toHaveBeenCalledWith(fullProject)
+  })
+
+  it('shows roster and project loading failures without exposing unverified owners', async () => {
+    vi.spyOn(api, 'getOrganizationProjects').mockResolvedValue({
+      data: [summary({ id: '45', title: 'Teacher notes', owner: { id: 1, fullName: 'Tess Teacher' } })],
+      error: null,
+    })
+
+    const { rerender } = render(
+      <ClassroomReviewPanel
+        organizationId="10"
+        members={[]}
+        membersError=""
+        membersLoading
+        onOpenProject={vi.fn()}
+        onRefreshMembers={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText('Loading class roster…')).toBeTruthy()
+    expect(screen.queryByText('Teacher notes')).toBeNull()
+
+    rerender(
+      <ClassroomReviewPanel
+        organizationId="10"
+        members={[]}
+        membersError="Could not load organization roster: unavailable"
+        membersLoading={false}
+        onOpenProject={vi.fn()}
+        onRefreshMembers={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('alert').textContent).toMatch(/organization roster: unavailable/i)
+    expect(screen.queryByText('Teacher notes')).toBeNull()
+  })
+
+  it('renders class-work errors and a filter-empty state', async () => {
+    const user = userEvent.setup()
+    const getProjects = vi.spyOn(api, 'getOrganizationProjects')
+      .mockResolvedValueOnce({ data: null, error: 'service unavailable' })
+      .mockResolvedValueOnce({ data: [summary({})], error: null })
+
+    const onRefreshMembers = vi.fn()
+    render(<ClassroomReviewPanel organizationId="10" members={members} membersError="" membersLoading={false} onOpenProject={vi.fn()} onRefreshMembers={onRefreshMembers} />)
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not load class work: service unavailable/i)
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(await screen.findByText('Loop practice')).toBeTruthy()
+    await user.type(screen.getByPlaceholderText('Project or student'), 'does not exist')
+    expect(screen.getByText('No projects match these filters.')).toBeTruthy()
+    expect(getProjects).toHaveBeenCalledTimes(2)
+    expect(onRefreshMembers).toHaveBeenCalledOnce()
+  })
+
+  it('re-enables review actions after a project fails to open', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'getOrganizationProjects').mockResolvedValue({ data: [summary({})], error: null })
+    vi.spyOn(api, 'getProject').mockResolvedValue({ data: null, error: 'invalid project payload' })
+
+    render(<ClassroomReviewPanel organizationId="10" members={members} membersError="" membersLoading={false} onOpenProject={vi.fn()} onRefreshMembers={vi.fn()} />)
+    await screen.findByText('Loop practice')
+    const openButton = screen.getByRole('button', { name: 'Open review' })
+    await user.click(openButton)
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not open loop practice: invalid project payload/i)
+    expect(openButton).toHaveProperty('disabled', false)
   })
 })

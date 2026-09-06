@@ -18,6 +18,7 @@ export type ProjectCopyDestination = {
 
 type WorkspaceDialogsProps = {
   activeProjectCount: number
+  canEditProject: boolean
   confirmAction: ConfirmAction
   confirmDialogRef: RefObject<HTMLElement | null>
   copyDestinationId: string | null
@@ -61,6 +62,7 @@ type WorkspaceDialogsProps = {
 /** Collects workspace dialogs so App remains focused on state and orchestration. */
 export function WorkspaceDialogs({
   activeProjectCount,
+  canEditProject,
   confirmAction,
   confirmDialogRef,
   copyDestinationId,
@@ -183,12 +185,12 @@ export function WorkspaceDialogs({
             </div>
             <div className="modal-action-grid">
               {isArchived(project) ? (
-                <button className="secondary" onClick={onRestoreProject}><RotateCcw size={16} /> Restore</button>
+                <button className="secondary" onClick={onRestoreProject} disabled={!canEditProject}><RotateCcw size={16} /> Restore</button>
               ) : (
-                <button className="secondary" onClick={onArchiveProject} disabled={activeProjectCount <= 1}><Archive size={16} /> Archive</button>
+                <button className="secondary" onClick={onArchiveProject} disabled={!canEditProject || activeProjectCount <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={onDuplicateProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={onRequestDeleteProject}><Trash2 size={16} /> Delete</button>
+              <button className="danger" onClick={onRequestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
             </div>
           </section>
         </div>

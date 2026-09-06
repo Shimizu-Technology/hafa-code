@@ -164,6 +164,9 @@ export default function App() {
   const [workspaceTransferOpen, setWorkspaceTransferOpen] = useState(false)
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null)
   const [orgMembers, setOrgMembers] = useState<CloudOrgMember[]>([])
+  const [orgMembersLoading, setOrgMembersLoading] = useState(false)
+  const [orgMembersError, setOrgMembersError] = useState('')
+  const [orgMembersReloadRevision, setOrgMembersReloadRevision] = useState(0)
   const [orgInvitations, setOrgInvitations] = useState<CloudOrgInvitation[]>([])
   const [auditEvents, setAuditEvents] = useState<CloudAuditEvent[]>([])
   const [inviteEmailDraft, setInviteEmailDraft] = useState('')
@@ -630,6 +633,8 @@ export default function App() {
       setReviewProject(null)
       setClassroomTab('review')
       setOrgMembers([])
+      setOrgMembersLoading(false)
+      setOrgMembersError('')
       setOrgInvitations([])
       setLastInviteUrl('')
     })
@@ -658,11 +663,23 @@ export default function App() {
   useEffect(() => {
     if (!isSignedIn || !activeOrganizationId || !canUseInstructorPanel) return
 
-    api.getOrgMembers(activeOrganizationId).then((res) => {
-      if (res.data) setOrgMembers(res.data)
-      if (res.error) setNotice(`Could not load organization roster: ${res.error}`)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setOrgMembersLoading(true)
+      setOrgMembersError('')
     })
-  }, [activeOrganizationId, canUseInstructorPanel, isSignedIn])
+    api.getOrgMembers(activeOrganizationId).then((res) => {
+      if (cancelled) return
+      if (res.data) setOrgMembers(res.data)
+      if (res.error) setOrgMembersError(`Could not load organization roster: ${res.error}`)
+      setOrgMembersLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrganizationId, canUseInstructorPanel, isSignedIn, orgMembersReloadRevision])
 
   useEffect(() => {
     if (!isSignedIn || !activeOrganizationId || !canInviteOrgMembers) return
@@ -1109,6 +1126,10 @@ export default function App() {
   }
 
   const requestArchiveProject = () => {
+    if (!canEditProject) {
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
@@ -1118,6 +1139,10 @@ export default function App() {
   }
 
   const requestDeleteProject = () => {
+    if (!canEditProject) {
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     if (library.projects.length <= 1) {
       setNotice('Keep at least one project in the library.')
       return
@@ -1127,6 +1152,10 @@ export default function App() {
   }
 
   const removeProject = (projectId: string) => {
+    if (!canEditProject) {
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     if (library.projects.length === 1) {
       setNotice('Keep at least one project in the library.')
       return
@@ -1175,6 +1204,10 @@ export default function App() {
   }
 
   const archiveProject = async () => {
+    if (!canEditProject) {
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     if (activeContextProjects.length <= 1) {
       setNotice('Keep at least one active project in the library.')
       return
@@ -1207,6 +1240,10 @@ export default function App() {
   }
 
   const restoreProject = async () => {
+    if (!canEditProject) {
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     const projectToRestore = project
 
     if (isSignedIn && isCloudProjectId(projectToRestore.id)) {
@@ -1302,6 +1339,12 @@ export default function App() {
   }
 
   const confirmProjectAction = () => {
+    if (!canEditProject) {
+      setConfirmAction(null)
+      setPendingCheckpoint(null)
+      setNotice('This project is open for read-only review. Duplicate it to make changes.')
+      return
+    }
     if (confirmAction === 'archive') archiveProject()
     if (confirmAction === 'delete') removeProject(project.id)
     if (confirmAction === 'checkpoint' && pendingCheckpoint) restoreCheckpoint(pendingCheckpoint)
@@ -1465,11 +1508,13 @@ export default function App() {
   }
 
   const requestRestoreCheckpoint = (checkpoint: ProjectCheckpoint) => {
+    if (!canEditProject) return
     setPendingCheckpoint(checkpoint)
     setConfirmAction('checkpoint')
   }
 
   const saveCheckpoint = async () => {
+    if (!canEditProject) return
     const projectToCheckpoint = libraryRef.current.projects.find((candidate) => candidate.id === libraryRef.current.activeProjectId) ?? project
     const checkpointProjectId = projectToCheckpoint.id
     const isCurrentCheckpointProject = () => libraryRef.current.activeProjectId === checkpointProjectId
@@ -1508,6 +1553,7 @@ export default function App() {
   }
 
   const restoreCheckpoint = async (checkpoint: ProjectCheckpoint) => {
+    if (!canEditProject) return
     if (isSignedIn && isCloudProjectId(project.id) && isCloudProjectId(checkpoint.id)) {
       const res = await api.restoreCheckpoint(project.id, checkpoint.id)
       if (res.data) {
@@ -1879,7 +1925,10 @@ export default function App() {
               key={activeOrganization.id}
               organizationId={String(activeOrganization.id)}
               members={orgMembers}
+              membersError={orgMembersError}
+              membersLoading={orgMembersLoading}
               onOpenProject={openClassroomReviewProject}
+              onRefreshMembers={() => setOrgMembersReloadRevision((current) => current + 1)}
             />
           )}
           {classroomTab === 'settings' && canManageOrgMembers && (
@@ -2223,6 +2272,7 @@ export default function App() {
 
       <WorkspaceDialogs
         activeProjectCount={activeContextProjects.length}
+        canEditProject={canEditProject}
         confirmAction={confirmAction}
         confirmDialogRef={confirmDialogRef}
         copyDestinationId={copyDestinationId}

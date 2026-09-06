@@ -588,7 +588,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | --- | --- |
 | `npm --prefix web run lint` | Pass |
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
-| `npm --prefix web test` | Pass: 23 files, 212 tests |
+| `npm --prefix web test` | Pass: 23 files, 215 tests |
 | `bundle exec rails test` | Pass: 55 runs, 444 assertions |
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |

@@ -11,7 +11,10 @@ type FeedbackFilter = 'all' | 'unresolved'
 interface ClassroomReviewPanelProps {
   organizationId: string
   members: CloudOrgMember[]
+  membersError: string
+  membersLoading: boolean
   onOpenProject: (project: SavedProject) => void
+  onRefreshMembers: () => void
 }
 
 function matchesUpdatedFilter(project: CloudProjectSummary, filter: UpdatedFilter) {
@@ -20,7 +23,7 @@ function matchesUpdatedFilter(project: CloudProjectSummary, filter: UpdatedFilte
   return new Date(project.updatedAt).getTime() >= cutoff
 }
 
-export function ClassroomReviewPanel({ organizationId, members, onOpenProject }: ClassroomReviewPanelProps) {
+export function ClassroomReviewPanel({ organizationId, members, membersError, membersLoading, onOpenProject, onRefreshMembers }: ClassroomReviewPanelProps) {
   const [projects, setProjects] = useState<CloudProjectSummary[]>([])
   const [studentId, setStudentId] = useState('all')
   const [status, setStatus] = useState<ProjectStatusFilter>('active')
@@ -54,9 +57,10 @@ export function ClassroomReviewPanel({ organizationId, members, onOpenProject }:
   }, [organizationId, reloadRevision, studentId])
 
   const studentProjects = useMemo(() => {
+    if (membersLoading || membersError) return []
     const studentMemberIds = new Set(members.filter((member) => member.organization_role === 'student').map((member) => member.id))
     return projects.filter((project) => project.owner && studentMemberIds.has(project.owner.id))
-  }, [members, projects])
+  }, [members, membersError, membersLoading, projects])
 
   const visibleProjects = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -98,6 +102,7 @@ export function ClassroomReviewPanel({ organizationId, members, onOpenProject }:
   const reloadProjects = () => {
     setLoading(true)
     setError('')
+    onRefreshMembers()
     setReloadRevision((current) => current + 1)
   }
 
@@ -116,7 +121,7 @@ export function ClassroomReviewPanel({ organizationId, members, onOpenProject }:
       <div className="classroom-review-filters" aria-label="Filter student work">
         <label>
           <span>Student</span>
-          <select value={studentId} onChange={(event) => changeStudent(event.target.value)}>
+          <select value={studentId} onChange={(event) => changeStudent(event.target.value)} disabled={membersLoading || Boolean(membersError)}>
             <option value="all">All students</option>
             {studentMembers.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}
           </select>
@@ -161,10 +166,11 @@ export function ClassroomReviewPanel({ organizationId, members, onOpenProject }:
       </div>
 
       <div className="classroom-review-summary" role="status" aria-live="polite">
-        {loading ? 'Loading class work…' : `${visibleProjects.length} of ${studentProjects.length} project${studentProjects.length === 1 ? '' : 's'} shown`}
+        {membersLoading ? 'Loading class roster…' : loading ? 'Loading class work…' : `${visibleProjects.length} of ${studentProjects.length} project${studentProjects.length === 1 ? '' : 's'} shown`}
       </div>
-      {error && <p className="classroom-review-error" role="alert">{error}</p>}
-      {!loading && !error && visibleProjects.length === 0 && (
+      {membersError && <p className="classroom-review-error" role="alert">{membersError}</p>}
+      {!membersError && error && <p className="classroom-review-error" role="alert">{error}</p>}
+      {!membersLoading && !membersError && !loading && !error && visibleProjects.length === 0 && (
         <p className="empty-project-list">No projects match these filters.</p>
       )}
       <div className="classroom-review-list" aria-label="Student projects">

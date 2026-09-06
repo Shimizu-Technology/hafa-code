@@ -402,9 +402,12 @@ export const api = {
   },
   getProject: async (projectId: string) => {
     const res = await fetchApi<{ project: ApiProject }>(`/api/v1/projects/${projectId}`)
-    return res.error
-      ? { data: null, error: res.error }
-      : { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+    if (res.error) return { data: null, error: res.error }
+    try {
+      return { data: res.data ? apiProjectToSavedProject(res.data.project) : null, error: null }
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : 'Cloud project was not valid.' }
+    }
   },
   getOrganizationProjects: async (organizationId: string, options: { studentId?: number } = {}) => {
     const projects: CloudProjectSummary[] = []
