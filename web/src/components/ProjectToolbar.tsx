@@ -21,8 +21,7 @@ type ProjectToolbarProps = {
   checkpoints: ProjectCheckpoint[]
   cloudSaveLabel: string
   currentProjectOwnerLabel: string
-  localBackupAvailable: boolean
-  mobileHistoryOpen: boolean
+  localBackupAvailable: boolean | null
   project: SavedProject
   projectCount: number
   onArchive: () => void
@@ -49,7 +48,6 @@ export function ProjectToolbar({
   cloudSaveLabel,
   currentProjectOwnerLabel,
   localBackupAvailable,
-  mobileHistoryOpen,
   project,
   projectCount,
   onArchive,
@@ -100,7 +98,7 @@ export function ProjectToolbar({
                 : 'This project is getting full. Remove unused code or download a backup before making a large change.'}
             </p>
           )}
-          {!localBackupAvailable && (
+          {localBackupAvailable === false && (
             <p role="alert">Local backup is unavailable. Free browser storage or download a workspace backup before closing this tab.</p>
           )}
         </div>
@@ -145,7 +143,7 @@ export function ProjectToolbar({
             event.currentTarget.querySelector('summary')?.focus()
           }}
           onToggle={(event) => {
-            if (!mobileHistoryOpen) onCheckpointMenuChange(event.currentTarget.open)
+            onCheckpointMenuChange(event.currentTarget.open)
           }}
         >
           <summary>

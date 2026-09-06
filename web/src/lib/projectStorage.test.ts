@@ -48,6 +48,18 @@ describe('project storage failures', () => {
     expect(loadCheckpointLibrary()).toEqual({})
   })
 
+  test('preserves a legacy project when the migrated library cannot be saved', () => {
+    const legacyProject = createProject('ruby')
+    localStorage.setItem('hafa-code-project-v1', JSON.stringify(legacyProject))
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem')
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+
+    expect(loadProjectLibrary().projects[0].id).toBe(legacyProject.id)
+    expect(removeItem).not.toHaveBeenCalled()
+  })
+
   test('does not claim that a local checkpoint exists when persistence fails', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('Storage quota exceeded', 'QuotaExceededError')

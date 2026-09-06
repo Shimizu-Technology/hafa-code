@@ -125,6 +125,19 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('status').textContent).toMatch(/previous project is unchanged/i)
   })
 
+  it('shows recovery guidance when project autosave cannot use browser storage', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+
+    render(<App />)
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/local backup is unavailable/i)
+  })
+
   it('opens desktop error advice directly in the docked Coach', () => {
     render(<App />)
 

@@ -89,6 +89,7 @@ test('project, file, history, sharing, and classroom controls work from the keyb
   await expect(history.locator('.checkpoint-popover')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(history).not.toHaveAttribute('open', '')
+  await expect(history.locator('summary')).toBeFocused()
 
   await openPersona(page, 'teacher')
   await switchToClassroom(page)
@@ -122,6 +123,16 @@ test('zoom-equivalent and mobile layouts keep content and primary targets usable
   for (let index = 0; index < targetCount; index += 1) {
     const box = await primaryTargets.nth(index).boundingBox()
     expect(box, `target ${index + 1} should have a box`).not.toBeNull()
+    expect(box!.width, `target ${index + 1} should be at least 44 px wide`).toBeGreaterThanOrEqual(44)
     expect(box!.height, `target ${index + 1} should be at least 44 px high`).toBeGreaterThanOrEqual(44)
   }
+
+  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'History' }).click()
+  const mobileHistory = page.locator('.checkpoint-menu')
+  const mobileHistorySummary = mobileHistory.locator('summary')
+  await expect(mobileHistory).toHaveAttribute('open', '')
+  await mobileHistorySummary.focus()
+  await page.keyboard.press('Escape')
+  await expect(mobileHistory).not.toHaveAttribute('open', '')
+  await expect(mobileHistorySummary).toBeFocused()
 })

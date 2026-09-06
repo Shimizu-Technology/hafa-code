@@ -150,7 +150,7 @@ export default function App() {
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
-  const [localBackupAvailable, setLocalBackupAvailable] = useState(true)
+  const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null)
   const [showArchived, setShowArchived] = useState(isArchived(initialProject))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [editorExpanded, setEditorExpanded] = useState(false)
@@ -287,7 +287,11 @@ export default function App() {
   const activeContextProjects = activeProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
   const archivedContextProjects = archivedProjects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
   const visibleProjects = showArchived ? archivedContextProjects : activeContextProjects
-  const checkpointMenuIsOpen = mobileTab === 'history' || checkpointMenuOpen
+  const checkpointMenuIsOpen = checkpointMenuOpen
+  const changeMobileTab = (nextTab: MobileTab) => {
+    setMobileTab(nextTab)
+    setCheckpointMenuOpen(nextTab === 'history')
+  }
   const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
     ? {
         id: pendingInvitation.organization.id,
@@ -342,7 +346,9 @@ export default function App() {
           : 'Saved to cloud + local backup'
   const workspaceSaveLabel = reviewProject
     ? 'Cloud project'
-    : localBackupAvailable
+    : localBackupAvailable === null
+      ? 'Checking local backup…'
+      : localBackupAvailable
       ? (isSignedIn ? cloudSaveLabel : 'Autosaved locally')
       : isSignedIn
         ? `${currentCloudSaveStatus === 'saved' || !currentCloudSaveStatus ? 'Saved to cloud' : cloudSaveLabel.split(' · ')[0]} · local backup unavailable`
@@ -537,7 +543,11 @@ export default function App() {
       skipRestorePersistenceRef.current.theme = false
       return
     }
-    localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+    } catch {
+      // Preferences can fall back to their defaults without interrupting the workspace.
+    }
   }, [themePreference])
 
   useEffect(() => {
@@ -545,7 +555,11 @@ export default function App() {
       skipRestorePersistenceRef.current.colorMode = false
       return
     }
-    localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+    try {
+      localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorModePreference)
+    } catch {
+      // Preferences can fall back to their defaults without interrupting the workspace.
+    }
   }, [colorModePreference])
 
   useEffect(() => {
@@ -2203,7 +2217,6 @@ export default function App() {
               cloudSaveLabel={workspaceSaveLabel}
               currentProjectOwnerLabel={currentProjectOwnerLabel}
               localBackupAvailable={localBackupAvailable}
-              mobileHistoryOpen={mobileTab === 'history'}
               project={project}
               projectCount={activeContextProjects.length}
               onArchive={requestArchiveProject}
@@ -2286,7 +2299,7 @@ export default function App() {
         />
       </div>
 
-      <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={setMobileTab} />
+      <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={changeMobileTab} />
 
       {learningCoachContext && !learningSidecarOpen && (
         <button
