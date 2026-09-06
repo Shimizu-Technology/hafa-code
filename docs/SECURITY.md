@@ -71,6 +71,7 @@ attribution and does not self-host CheerpJ Core.
 SQL runs through the official SQLite WebAssembly distribution in a dedicated Web Worker. Rails stores the source files but never receives or executes the database.
 
 - The worker creates only a transient `:memory:` database and does not initialize OPFS or another persistent VFS
+- Every new database connection enables SQLite defensive mode before schema or seed SQL runs, preventing learner SQL from writing directly to internal shadow tables while preserving normal virtual-table operations
 - `schema.sql` and `seed.sql` are explicit project inputs; no host files, uploaded databases, remote URLs, or credentials are accepted
 - SQLite extensions and a remote database protocol are not exposed
 - Project validation retains the shared 50-file and 2,000,000-byte source limits

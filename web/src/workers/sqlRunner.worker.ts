@@ -1,6 +1,6 @@
 import sqlite3InitModule, { type Database, type Sqlite3Static } from '@sqlite.org/sqlite-wasm'
 import sqliteWasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url'
-import { executeSql, initializeSqlDatabase, sqlBootstrapSignature, validateSqlProject } from './sqlRunnerCore'
+import { enableSqlDefensiveMode, executeSql, initializeSqlDatabase, sqlBootstrapSignature, validateSqlProject } from './sqlRunnerCore'
 import type { SqlRunnerRequest, SqlRunnerResponse } from './sqlRunnerProtocol'
 
 ;(globalThis as typeof globalThis & { sqlite3ApiConfig?: unknown }).sqlite3ApiConfig = {
@@ -34,8 +34,9 @@ function closeDatabase() {
 async function resetDatabase(files: Extract<SqlRunnerRequest, { type: 'reset' | 'run' }>['files']) {
   sqlite ??= await sqlitePromise
   closeDatabase()
-  const nextDatabase = new sqlite.oo1.DB(':memory:', 'ct')
+  const nextDatabase = new sqlite.oo1.DB(':memory:', 'c')
   try {
+    enableSqlDefensiveMode(sqlite, nextDatabase)
     initializeSqlDatabase(nextDatabase, files)
   } catch (error) {
     nextDatabase.close()

@@ -1,4 +1,4 @@
-import type { Database, SqlValue } from '@sqlite.org/sqlite-wasm'
+import type { Database, Sqlite3Static, SqlValue } from '@sqlite.org/sqlite-wasm'
 import type { ProjectFile } from '../lib/projectTypes'
 import type { SqlCellValue, SqlQueryResult } from './sqlRunnerProtocol'
 
@@ -40,6 +40,19 @@ export function initializeSqlDatabase(db: Database, files: ProjectFile[]) {
   db.exec('PRAGMA foreign_keys = ON;')
   if (schema.trim()) db.exec(schema)
   if (seed.trim()) db.exec(seed)
+}
+
+export function enableSqlDefensiveMode(sqlite: Sqlite3Static, db: Database) {
+  if (db.pointer === undefined) throw new Error('SQLite defensive mode requires an open database.')
+  const result = sqlite.capi.sqlite3_db_config(
+    db.pointer,
+    sqlite.capi.SQLITE_DBCONFIG_DEFENSIVE,
+    1,
+    0,
+  )
+  if (result !== sqlite.capi.SQLITE_OK) {
+    throw new Error(`SQLite defensive mode could not be enabled (result ${result}).`)
+  }
 }
 
 function transferableValue(value: SqlValue): SqlCellValue {

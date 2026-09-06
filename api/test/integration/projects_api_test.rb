@@ -123,6 +123,24 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal %w[schema.sql main.sql], response.parsed_body.dig("project", "files").pluck("path")
   end
 
+  test "creates SQL projects and falls back to query.sql as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "SQL Query Playground",
+        kind: "sql",
+        files: [
+          { path: "schema.sql", language: "sql", content: "CREATE TABLE learners (name TEXT);" },
+          { path: "query.sql", language: "sql", content: "SELECT name FROM learners;" }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "sql", response.parsed_body.dig("project", "kind")
+    assert_equal "query.sql", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[schema.sql query.sql], response.parsed_body.dig("project", "files").pluck("path")
+  end
+
   test "creates Java projects and chooses Main.java as the default entry" do
     post "/api/v1/projects",
       params: {

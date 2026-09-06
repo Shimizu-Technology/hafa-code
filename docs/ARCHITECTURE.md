@@ -110,7 +110,7 @@ Use the official `@sqlite.org/sqlite-wasm` distribution and its object-oriented 
 
 - create only a transient `:memory:` database; do not initialize OPFS or expose database filenames
 - execute `schema.sql` and `seed.sql` in that order when the project worker starts, after an explicit Reset database, or when either file changes
-- keep query changes in the project worker between Runs so learners can observe `INSERT`, `UPDATE`, and `DELETE`
+- keep query changes in the living project worker between Runs so learners can observe `INSERT`, `UPDATE`, and `DELETE`; Stop, timeout, worker termination, or a `schema.sql`/`seed.sql` edit causes the next Run to rebuild from those files and discard unexported database changes
 - render the first result-producing statement as a semantic HTML table, capped at 500 visible rows and 50 columns; report changes and statement counts when no table is returned
 - terminate the worker for Stop or the three-second query deadline
 - keep SQLite JavaScript and WebAssembly out of the service-worker application shell so other languages do not pay its startup cost

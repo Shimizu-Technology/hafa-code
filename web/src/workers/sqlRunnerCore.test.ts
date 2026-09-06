@@ -2,6 +2,7 @@ import type { Database, SqlValue } from '@sqlite.org/sqlite-wasm'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProjectFile } from '../lib/projectTypes'
 import {
+  enableSqlDefensiveMode,
   executeSql,
   initializeSqlDatabase,
   SQL_MAX_RESULT_ROWS,
@@ -38,6 +39,24 @@ describe('SQL runner core', () => {
       files[1].content,
       files[2].content,
     ])
+  })
+
+  it('requires SQLite defensive mode to initialize successfully', () => {
+    const sqlite3DbConfig = vi.fn().mockReturnValue(0)
+    const sqlite = {
+      capi: {
+        sqlite3_db_config: sqlite3DbConfig,
+        SQLITE_DBCONFIG_DEFENSIVE: 1010,
+        SQLITE_OK: 0,
+      },
+    }
+    const database = { pointer: 42 } as unknown as Database
+
+    enableSqlDefensiveMode(sqlite as never, database)
+    expect(sqlite3DbConfig).toHaveBeenCalledWith(42, 1010, 1, 0)
+
+    sqlite3DbConfig.mockReturnValueOnce(1)
+    expect(() => enableSqlDefensiveMode(sqlite as never, database)).toThrow('SQLite defensive mode could not be enabled')
   })
 
   it('returns accessible tabular values, change counts, and a bounded row preview', () => {

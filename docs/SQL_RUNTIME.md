@@ -32,6 +32,7 @@ A page reload, Stop, timeout, project switch that unmounts the runner, or worker
 
 - Official `@sqlite.org/sqlite-wasm` object-oriented API in a dedicated worker
 - in-memory database only; no OPFS persistence, imported database files, remote connection strings, or credentials
+- SQLite defensive mode enabled before bootstrap, so normal FTS5 operations work but direct writes to internal shadow tables are rejected
 - no exposed extension-loading or network database mechanism
 - shared maximum of 50 project files and 2,000,000 UTF-8 source bytes
 - 500 displayed rows, 50 columns, 256 KiB of transferred result values, and the shared three-second execution deadline after runtime startup

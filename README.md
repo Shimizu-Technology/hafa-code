@@ -60,7 +60,7 @@ Java is intentionally a focused practice environment rather than a full desktop 
 
 TypeScript is similarly focused: it supports typed multi-file projects and relative imports, but not npm packages, browser DOM APIs, Node APIs, or an application server. See [TypeScript runtime](docs/TYPESCRIPT_RUNTIME.md).
 
-SQL is a focused data-learning workspace rather than a remote database console. `schema.sql` and `seed.sql` create a project-scoped in-memory database; queries and changes persist during that project session until Reset database restores those files. There are no credentials, extensions, OPFS persistence, or host filesystem/network connections. See [SQL runtime](docs/SQL_RUNTIME.md).
+SQL is a focused data-learning workspace rather than a remote database console. `schema.sql` and `seed.sql` create a project-scoped in-memory database; queries and changes persist only while that project's worker stays alive. Reset database, Stop, a timeout, worker termination, or edits to `schema.sql` or `seed.sql` rebuild the database from those files, so unexported database changes are lost. There are no credentials, extensions, OPFS persistence, or host filesystem/network connections. See [SQL runtime](docs/SQL_RUNTIME.md).
 
 ## Development
 
