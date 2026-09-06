@@ -139,6 +139,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Verify fixture reset after workflow mutations
+        if: ${{ !cancelled() }}
         working-directory: api
         env:
           RAILS_ENV: test
