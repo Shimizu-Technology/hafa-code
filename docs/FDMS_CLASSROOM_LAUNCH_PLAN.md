@@ -272,7 +272,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 - [x] Update affected frontend dependencies, including the DOMPurify and `js-cookie` dependency chains.
 - [x] Update affected Ruby dependencies, prioritizing `jwt`, `puma`, and `websocket-driver`, then the remaining advisories.
 - [x] Rebuild and rerun all tests after lockfile updates.
-- [ ] Make passing CI required before merging to `main`.
+- [x] Make passing CI required before merging to `main`.
 
 **Acceptance criteria:**
 
@@ -596,6 +596,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
+| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend` and `backend` checks are required |
 | Netlify production page and headers | Reachable; security headers present |
 | Render health endpoint | Healthy |
 | Production-origin Render CORS preflight | Pass for `https://code.shimizu-technology.com` |
