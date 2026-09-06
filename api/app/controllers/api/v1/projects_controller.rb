@@ -7,6 +7,7 @@ module Api
 
       def index
         scope = scoped_projects.order(updated_at: :desc, id: :desc)
+        scope = scope.where(user: current_user) if ActiveModel::Type::Boolean.new.cast(params[:owned_only])
         page = positive_integer_param(:page, 1)
         per_page = [ positive_integer_param(:per_page, 50), 100 ].min
         total_count = scope.count

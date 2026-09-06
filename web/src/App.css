@@ -140,6 +140,7 @@ button.icon-button {
 .app-shell[data-theme="dark"] .project-card,
 .app-shell[data-theme="dark"] .student-card,
 .app-shell[data-theme="dark"] .member-row,
+.app-shell[data-theme="dark"] .classroom-review-card,
 .app-shell[data-theme="dark"] .invite-row,
 .app-shell[data-theme="dark"] .title-field input,
 .app-shell[data-theme="dark"] .file-path-field input,
@@ -148,6 +149,8 @@ button.icon-button {
 .app-shell[data-theme="dark"] .member-role-select,
 .app-shell[data-theme="dark"] .workspace-select,
 .app-shell[data-theme="dark"] .classroom-search input,
+.app-shell[data-theme="dark"] .classroom-review-filters select,
+.app-shell[data-theme="dark"] .classroom-review-search-field,
 .app-shell[data-theme="dark"] .mobile-actions-menu summary,
 .app-shell[data-theme="dark"] .mobile-project-menu summary {
   background: rgba(255, 255, 255, 0.08);
@@ -594,6 +597,173 @@ button.context-chip.active,
   display: grid;
   gap: 0.85rem;
   padding: 1rem;
+}
+
+.classroom-review-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.classroom-review-intro {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.classroom-review-intro p {
+  margin: 0.3rem 0 0;
+}
+
+.classroom-review-filters {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(180px, 1.35fr);
+}
+
+.classroom-review-filters label {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.classroom-review-filters label > span:first-child {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.classroom-review-filters select,
+.classroom-review-search-field {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 0.78rem;
+  color: var(--ink);
+  min-height: 44px;
+}
+
+.classroom-review-filters select {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.55rem 0.65rem;
+  width: 100%;
+}
+
+.classroom-review-search-field {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  padding: 0 0.65rem;
+}
+
+.classroom-review-search-field svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.classroom-review-search-field input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.classroom-review-summary,
+.classroom-review-error {
+  font-size: 0.78rem;
+  font-weight: 850;
+  margin: 0;
+}
+
+.classroom-review-summary {
+  color: var(--muted);
+}
+
+.classroom-review-error {
+  background: rgba(199, 68, 64, 0.1);
+  border: 1px solid rgba(199, 68, 64, 0.28);
+  border-radius: 0.8rem;
+  color: var(--danger);
+  padding: 0.7rem 0.8rem;
+}
+
+.classroom-review-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: min(58vh, 620px);
+  overflow: auto;
+  padding-right: 0.1rem;
+}
+
+.classroom-review-card {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  padding: 0.72rem;
+}
+
+.classroom-review-card-main {
+  min-width: 0;
+}
+
+.classroom-review-card-main > strong,
+.classroom-review-card-main > small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom-review-card-main > small,
+.classroom-review-updated {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.classroom-review-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.classroom-review-badges span {
+  align-items: center;
+  background: rgba(84, 196, 178, 0.14);
+  border: 1px solid rgba(84, 196, 178, 0.24);
+  border-radius: 999px;
+  color: var(--lagoon);
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 900;
+  gap: 0.22rem;
+  padding: 0.28rem 0.45rem;
+}
+
+.classroom-review-badges .feedback-badge {
+  background: rgba(235, 139, 62, 0.14);
+  border-color: rgba(235, 139, 62, 0.3);
+  color: var(--sunset-deep);
+}
+
+.classroom-review-open {
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .classroom-settings-actions {
@@ -3283,6 +3453,10 @@ button.context-chip.active,
   .preference-actions {
     justify-content: flex-start;
   }
+
+  .classroom-review-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3413,6 +3587,34 @@ button.context-chip.active,
 
   .people-panel {
     padding: 0.72rem;
+  }
+
+  .classroom-review-panel {
+    padding: 0.72rem;
+  }
+
+  .classroom-review-intro,
+  .classroom-review-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .classroom-review-intro {
+    display: grid;
+  }
+
+  .classroom-review-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .classroom-review-updated {
+    white-space: normal;
+  }
+
+  .classroom-review-open,
+  .classroom-review-intro button {
+    justify-content: center;
+    width: 100%;
   }
 
   .member-row {

@@ -54,6 +54,7 @@ import { useAuthContext } from './contexts/AuthContext'
 import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
 import { AuthControls } from './components/AuthControls'
+import { ClassroomReviewPanel } from './components/ClassroomReviewPanel'
 import { ProjectFeedback } from './components/ProjectFeedback'
 import {
   LEARNING_SIDECAR_OVERLAY_QUERY,
@@ -169,12 +170,13 @@ export default function App() {
   const [inviteRoleDraft, setInviteRoleDraft] = useState<CloudOrgInvitation['role']>('student')
   const [schoolYearDraft, setSchoolYearDraft] = useState('')
   const [lastInviteUrl, setLastInviteUrl] = useState('')
-  const [classroomTab, setClassroomTab] = useState<ClassroomTab>('people')
+  const [classroomTab, setClassroomTab] = useState<ClassroomTab>('review')
   const [memberSearchDraft, setMemberSearchDraft] = useState('')
   const [pendingInvitationToken, setPendingInvitationToken] = useState(() => readHashParam('invite'))
   const [pendingInvitation, setPendingInvitation] = useState<CloudOrgInvitation | null>(null)
   const [invitationAccepting, setInvitationAccepting] = useState(false)
   const [instructorPanelOpen, setInstructorPanelOpen] = useState(false)
+  const [reviewProject, setReviewProject] = useState<SavedProject | null>(null)
   const [orgCreateOpen, setOrgCreateOpen] = useState(false)
   const [orgNameDraft, setOrgNameDraft] = useState('')
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadThemePreference())
@@ -205,6 +207,7 @@ export default function App() {
   const syncedProjectVersionsRef = useRef<Map<string, string>>(new Map())
   const syncCloudProjectRef = useRef<(projectId: string) => Promise<void>>(async () => {})
   const replacingCloudIdRef = useRef(false)
+  const suppressNextCloudLoadNoticeRef = useRef(false)
   const acceptingInvitationTokenRef = useRef<string | null>(null)
   const libraryRef = useRef(library)
   const checkpointRequestIdRef = useRef(0)
@@ -214,7 +217,7 @@ export default function App() {
   const cloudEnabled = hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
-  const project = library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
+  const project = reviewProject ?? library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
   const clearPracticeCheckWatchdog = useCallback(() => {
     if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
     practiceCheckWatchdogRef.current = null
@@ -482,6 +485,7 @@ export default function App() {
 
   const activateProject = (nextProject: SavedProject) => {
     clearPendingPracticeCheck()
+    setReviewProject(null)
     setLibrary((current) => ({ ...current, activeProjectId: nextProject.id }))
     setActivePath(nextProject.files[0].path)
     setCheckpointMenuOpen(false)
@@ -489,6 +493,7 @@ export default function App() {
 
   const activateFallbackProject = (projects: SavedProject[], archivedView = showArchived) => {
     clearPendingPracticeCheck()
+    setReviewProject(null)
     const preferred = projects.find((candidate) => (archivedView ? isArchived(candidate) : !isArchived(candidate))) ?? projects[0]
     if (preferred) {
       setLibrary({ activeProjectId: preferred.id, projects })
@@ -535,7 +540,7 @@ export default function App() {
     const requestId = checkpointRequestIdRef.current + 1
     checkpointRequestIdRef.current = requestId
     let cancelled = false
-    const isCurrentRequest = () => !cancelled && checkpointRequestIdRef.current === requestId && libraryRef.current.activeProjectId === project.id
+    const isCurrentRequest = () => !cancelled && checkpointRequestIdRef.current === requestId && (reviewProject?.id ?? libraryRef.current.activeProjectId) === project.id
 
     Promise.resolve().then(() => {
       if (isCurrentRequest()) setCheckpoints(loadLocalCheckpoints(project.id))
@@ -550,7 +555,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [isSignedIn, project.id])
+  }, [isSignedIn, project.id, reviewProject?.id])
 
   useEffect(() => {
     if (hasImportedServerShare) return
@@ -622,6 +627,8 @@ export default function App() {
     queueMicrotask(() => {
       setHasLoadedCloudProjects(false)
       setInstructorPanelOpen(false)
+      setReviewProject(null)
+      setClassroomTab('review')
       setOrgMembers([])
       setOrgInvitations([])
       setLastInviteUrl('')
@@ -668,8 +675,10 @@ export default function App() {
 
   useEffect(() => {
     if (!isSignedIn || hasLoadedCloudProjects) return
+    const suppressLoadedNotice = suppressNextCloudLoadNoticeRef.current
+    suppressNextCloudLoadNoticeRef.current = false
 
-    api.getProjects(activeOrganizationId).then((res) => {
+    api.getProjects(activeOrganizationId, { ownedOnly: canUseInstructorPanel }).then((res) => {
       if (res.error) {
         setNotice(`Cloud sync unavailable: ${res.error}`)
         setHasLoadedCloudProjects(true)
@@ -688,7 +697,9 @@ export default function App() {
         setLibrary(merged)
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
-        setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
+        if (!suppressLoadedNotice) {
+          setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
+        }
       } else {
         if (activeOrganizationId) {
           const contextProjects = libraryRef.current.projects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))
@@ -710,7 +721,7 @@ export default function App() {
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [activeOrganization, activeOrganizationId, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, canUseInstructorPanel, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
@@ -756,6 +767,16 @@ export default function App() {
     setMobileTab('code')
   }
 
+  const openClassroomReviewProject = (nextProject: SavedProject) => {
+    clearPendingPracticeCheck()
+    setReviewProject(nextProject)
+    setActivePath(nextProject.files[0].path)
+    setShowArchived(isArchived(nextProject))
+    setMobileTab('code')
+    setInstructorPanelOpen(false)
+    setNotice(`Opened ${nextProject.title} in read-only review mode.`)
+  }
+
   const addProject = (kind: ProjectKind) => {
     if (workspaceArchived) {
       setNotice('This classroom is archived and read-only.')
@@ -769,6 +790,7 @@ export default function App() {
       visibility: 'private' as ProjectVisibility,
     }
     clearPendingPracticeCheck()
+    setReviewProject(null)
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
@@ -792,6 +814,7 @@ export default function App() {
       files: topic.practiceProject.files.map((file) => ({ ...file })),
     }
     clearPendingPracticeCheck()
+    setReviewProject(null)
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
@@ -817,6 +840,7 @@ export default function App() {
     }
     const progressSaved = linkPracticeProject(practiceProject.id, challenge.id)
     clearPendingPracticeCheck()
+    setReviewProject(null)
     setLibrary((current) => ({ activeProjectId: practiceProject.id, projects: [practiceProject, ...current.projects] }))
     setActivePath(practiceProject.entryPath)
     setShowArchived(false)
@@ -1260,11 +1284,13 @@ export default function App() {
       }
 
       clearPendingPracticeCheck()
+      if (copyDestinationId !== activeOrganizationId) suppressNextCloudLoadNoticeRef.current = true
       setActiveOrganizationId(copyDestinationId)
       setLibrary((current) => ({
         activeProjectId: copy.id,
         projects: [copy, ...current.projects.filter((candidate) => candidate.id !== copy.id)],
       }))
+      setReviewProject(null)
       setActivePath(copy.files[0].path)
       setShowArchived(false)
       setMobileTab('code')
@@ -1798,6 +1824,15 @@ export default function App() {
           </div>
           <div className="classroom-tabs" role="tablist" aria-label="Classroom tools">
             <button
+              className={classroomTab === 'review' ? 'active' : 'secondary'}
+              type="button"
+              role="tab"
+              aria-selected={classroomTab === 'review'}
+              onClick={() => setClassroomTab('review')}
+            >
+              Review work
+            </button>
+            <button
               className={classroomTab === 'people' ? 'active' : 'secondary'}
               type="button"
               role="tab"
@@ -1838,6 +1873,14 @@ export default function App() {
             <p className="helper-text" role="status">
               This classroom is archived. Projects, roster changes, invitations, and settings are read-only until an owner restores it.
             </p>
+          )}
+          {classroomTab === 'review' && (
+            <ClassroomReviewPanel
+              key={activeOrganization.id}
+              organizationId={String(activeOrganization.id)}
+              members={orgMembers}
+              onOpenProject={openClassroomReviewProject}
+            />
           )}
           {classroomTab === 'settings' && canManageOrgMembers && (
             <div className="classroom-settings">
@@ -1963,7 +2006,6 @@ export default function App() {
               <p className="empty-project-list">{orgMembers.length === 0 ? 'No members in this organization yet.' : 'No people match that search.'}</p>
             )}
             {filteredOrgMembers.map((member) => {
-              const memberProjects = library.projects.filter((candidate) => candidate.organizationId === activeOrganizationId && candidate.owner?.id === member.id)
               const isCurrentMember = member.id === user?.id
               return (
                 <article key={member.id} className="member-row">
@@ -1975,7 +2017,6 @@ export default function App() {
                       {isCurrentMember && <span>You</span>}
                     </div>
                   </div>
-                  <span className="member-count">{memberProjects.length} project{memberProjects.length === 1 ? '' : 's'}</span>
                   {canManageOrgMembers && !isCurrentMember ? (
                     <div className="member-actions">
                       <select
@@ -1998,13 +2039,6 @@ export default function App() {
                       <span>{isCurrentMember ? 'Signed in as you' : 'Managed by owner'}</span>
                     </div>
                   )}
-                  <div className="member-project-list">
-                    {memberProjects.slice(0, 4).map((memberProject) => (
-                      <button key={memberProject.id} className="secondary compact" type="button" onClick={() => setActiveProject(memberProject.id)}>
-                        {memberProject.title}
-                      </button>
-                    ))}
-                  </div>
                 </article>
               )
             })}
@@ -2076,7 +2110,7 @@ export default function App() {
               checkpointMenuIsOpen={checkpointMenuIsOpen}
               checkpointMenuRef={checkpointMenuRef}
               checkpoints={checkpoints}
-              cloudSaveLabel={isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
+              cloudSaveLabel={reviewProject ? 'Cloud project' : isSignedIn ? cloudSaveLabel : 'Autosaved locally'}
               currentProjectOwnerLabel={currentProjectOwnerLabel}
               mobileHistoryOpen={mobileTab === 'history'}
               project={project}

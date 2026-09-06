@@ -22,14 +22,13 @@ The application already has a credible classroom foundation:
 
 The current `main` branch includes durable per-project cloud sync, optimistic conflict protection, private feedback threads, class-preserving copies, bulk invitations, durable email jobs, classroom lifecycle/export/audit behavior, quotas and cleanup, accessibility fixes, safer sharing defaults, leaner PWA caching, active root-level CI, and clear dependency audits. Multi-role Rails integration tests and focused React tests cover the most important authorization, saving, feedback, invitation, lifecycle, and accessibility paths.
 
-The remaining launch gates include a small amount of application and test work plus external operations:
+The remaining launch gates are primarily repeatable browser automation and external operations:
 
-1. Finish the class-copy destination chooser and show the destination before a learner confirms a copy.
-2. Require passing frontend and backend CI on `main`, and add repeatable multi-role browser coverage for the critical classroom flows.
-3. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
-4. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
-5. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
-6. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
+1. Add repeatable multi-role browser coverage for the critical classroom flows.
+2. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
+3. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
+4. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
+5. Run a production-safe multi-role smoke test and a 2–4 student pilot on the actual FDMS devices and network.
 
 The core architecture does not need to be replaced. The next move is to close the remaining code-backed launch gaps, complete the external gates, and run the controlled pilot before full enrollment.
 
@@ -260,7 +259,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-005 — Repair CI and clear high-severity dependency advisories
 
-**Why:** GitHub previously did not execute the workflow stored under `api/.github/workflows`, and earlier dependency audits reported high-severity JavaScript and Ruby advisories. The workflow now runs from the repository root and the September 6 audits are clean. FDMS-005 remains open only until `main` requires the passing frontend and backend checks.
+**Status:** Complete. GitHub previously did not execute the workflow stored under `api/.github/workflows`, and earlier dependency audits reported high-severity JavaScript and Ruby advisories. The workflow now runs from the repository root, the September 6 audits are clean, and the active `main` ruleset requires strict current-head frontend and backend checks plus resolved review threads.
 
 **Work:**
 
@@ -283,7 +282,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-006 — Add multi-role end-to-end classroom tests
 
-**Why:** Thirty-two Rails integration tests and clean static scans are a good base, but they do not prove that Clerk, React, Render, Netlify, invitations, and role-specific UI work together.
+**Why:** The Rails integration suite and focused React tests are a good base, but they do not prove that Clerk, React, Render, Netlify, invitations, and role-specific UI work together in a browser.
 
 **Test accounts:**
 
@@ -378,15 +377,16 @@ This plan is a product and engineering checklist, not legal advice.
 - [x] Stop returning the invitee email from the public invitation-token lookup unless the UI genuinely needs it.
 - [x] Verify the invite-only signup policy: a pending organization invitation must be able to create/link the local user even when open signup is disabled.
 
-### FDMS-102 — Paginate project libraries and load source lazily
+### FDMS-102 — Paginate project libraries and load classroom source lazily
 
-**Why:** The project and organization list endpoints include every file and its full contents. This is fine for a new 20-person class but will become slow as each student accumulates projects.
+**Why:** A teacher should not download and persist every student's source merely to find recent work. The review workflow now uses source-free metadata and opens one project on demand. A learner's own editable project list still carries complete files and can move to the same lazy model later, once pending/offline drafts have an explicit placeholder design.
 
-- [ ] Return project metadata from list endpoints.
+- [x] Return project metadata from classroom review list endpoints.
 - [x] Add pagination and stable ordering.
-- [ ] Fetch full files only when a project is opened.
-- [ ] Give the teacher dashboard student, status, visibility, and updated-time filters.
-- [ ] Load one student's projects on demand instead of materializing the whole class library in the editor.
+- [x] Fetch full student files only when a teacher opens a project.
+- [x] Give the teacher review surface student, status, visibility, updated-time, feedback, and search filters.
+- [x] Load one student's project summaries on demand instead of materializing the whole class library in the editor.
+- [ ] Convert the learner's own editable cloud-project list to metadata-first loading without weakening offline-draft recovery.
 
 ### FDMS-103 — Define quotas and cleanup
 
@@ -588,8 +588,8 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | --- | --- |
 | `npm --prefix web run lint` | Pass |
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
-| `npm --prefix web test` | Pass: 22 files, 209 tests |
-| `bundle exec rails test` | Pass: 54 runs, 425 assertions |
+| `npm --prefix web test` | Pass: 23 files, 212 tests |
+| `bundle exec rails test` | Pass: 55 runs, 444 assertions |
 | `bundle exec rubocop` | Pass: 73 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |

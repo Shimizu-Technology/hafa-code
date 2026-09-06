@@ -151,6 +151,10 @@ GET    /api/v1/projects/:id
 PATCH  /api/v1/projects/:id
 DELETE /api/v1/projects/:id
 POST   /api/v1/projects/:id/duplicate
+GET    /api/v1/organizations/:id/projects
+GET    /api/v1/organizations/:id/students/:student_id/projects
 ```
+
+The organization project endpoints return paginated metadata summaries, including file and unresolved-feedback counts, but never file contents. The teacher Review Work surface filters those summaries and requests `GET /api/v1/projects/:id` only when an instructor opens one project. Instructor workspace sync also sends `owned_only=true`, so ordinary editor loading does not materialize every student's private source. Reviewed source stays in transient React state rather than the teacher's local workspace backup.
 
 Auth follows the CSG LMS Clerk pattern: frontend gets a Clerk JWT, API verifies it against Clerk JWKS, and Rails finds or creates the local `User`.
