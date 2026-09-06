@@ -21,6 +21,9 @@ npm --prefix web run build
 echo "-- classroom browser tests"
 npm --prefix web run test:e2e
 
+echo "-- repeatable classroom fixture reset"
+(cd api && RAILS_ENV=test DATABASE_URL="${E2E_DATABASE_URL:-postgresql:///hafa_code_e2e}" bundle exec rails e2e:reset)
+
 if [ -d api ]; then
   echo "-- api tests"
   (cd api && bundle exec rails test)

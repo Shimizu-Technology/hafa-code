@@ -1,4 +1,5 @@
 # Deterministic records for Playwright. This file is loaded only by the guarded e2e:reset task.
+Project.update_all(forked_from_id: nil)
 Project.destroy_all
 OrganizationInvitation.delete_all
 OrganizationMembership.delete_all

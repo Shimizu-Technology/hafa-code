@@ -49,8 +49,10 @@ test('teacher reviews private source, gives feedback, and duplicates into the cl
     if (message.type() === 'error') browserErrors.push(message.text())
   })
   const privateSourceRequests: string[] = []
+  const checkpointRequests: string[] = []
   page.on('request', (request) => {
     if (request.url().endsWith(`/api/v1/projects/${PRIVATE_PROJECT_ID}`)) privateSourceRequests.push(request.url())
+    if (request.url().endsWith(`/api/v1/projects/${PRIVATE_PROJECT_ID}/checkpoints`)) checkpointRequests.push(request.url())
   })
 
   await openPersona(page, 'teacher')
@@ -76,6 +78,7 @@ test('teacher reviews private source, gives feedback, and duplicates into the cl
   await expect(page.getByText('read-only instructor view')).toBeVisible()
   await expect(page.getByText("const greeting = 'Håfa adai';")).toBeVisible()
   expect(privateSourceRequests).toHaveLength(1)
+  expect(checkpointRequests).toHaveLength(0)
 
   await page.getByLabel('Add feedback or reply').fill('Nice start. Add one sentence about block scope.')
   await page.getByRole('button', { name: 'Post' }).click()
