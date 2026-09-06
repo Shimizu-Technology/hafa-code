@@ -24,7 +24,7 @@ The current `main` branch includes durable per-project cloud sync, optimistic co
 
 The remaining launch gates are primarily repeatable browser automation and external operations:
 
-1. Add repeatable multi-role browser coverage for the critical classroom flows.
+1. Run the new repeatable multi-role browser coverage in required CI and add a production-safe Clerk smoke suite on an isolated deployed tenant.
 2. Verify the authenticated student, teacher, dual-class, and invitation flows against the real Netlify, Render, and Clerk production configuration.
 3. Obtain FDMS privacy/acceptable-use approval and confirm the school-domain and external-sharing policies.
 4. Verify database backups with a restore drill; configure monitoring, alerts, and support ownership.
@@ -282,7 +282,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-006 — Add multi-role end-to-end classroom tests
 
-**Why:** The Rails integration suite and focused React tests are a good base, but they do not prove that Clerk, React, Render, Netlify, invitations, and role-specific UI work together in a browser.
+**Why:** The Rails integration suite and focused React tests are a good base, but they do not prove the complete browser workflow. The local Playwright suite now runs React, Rails, PostgreSQL, invitations, and role-specific UI together. Real Clerk plus deployed Render/Netlify configuration still requires a production-safe staging smoke test.
 
 **Test accounts:**
 
@@ -299,23 +299,25 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 **Automated critical flows:**
 
-- [ ] Sign in and authorization resolution.
-- [ ] Create both classes and assign the teacher owner role.
-- [ ] Invite, resend, revoke, accept, reject wrong-email acceptance, and handle expiration.
-- [ ] Create/edit/reload a private class project.
-- [ ] Teacher views but cannot edit a student's project.
-- [ ] Classmate cannot view private work but can view Class work.
-- [ ] Duplicate a starter into the correct class.
-- [ ] Comment/reply/resolve feedback.
-- [ ] Archive, restore, checkpoint, and delete.
-- [ ] Remove a student and verify the selected lifecycle behavior.
-- [ ] Exercise mobile and keyboard-critical paths.
+- [x] Resolve deterministic test sessions and enforce Rails authorization.
+- [x] Provision a classroom through the UI, assign its creator as owner, and seed two-class role fixtures.
+- [x] Invite, resend, revoke, accept, reject wrong-email acceptance, and handle expiration.
+- [x] Create/edit/reload a private class project.
+- [x] Teacher views but cannot edit a student's project.
+- [x] Classmate cannot view private work but can view Class work.
+- [x] Duplicate a project into the correct class.
+- [x] Comment, reply, and resolve feedback.
+- [x] Archive, restore, checkpoint, and delete.
+- [x] Remove a student and verify their class project moves to a private Personal workspace.
+- [x] Exercise mobile navigation, horizontal-overflow, and keyboard dismissal paths.
 
 **Acceptance criteria:**
 
-- The suite runs in CI.
+- The isolated suite runs in CI against PostgreSQL and Chromium.
 - A smaller smoke suite runs against staging or a production-safe test tenant after deployment.
 - No launch-critical flow depends only on a developer's manual memory.
+
+**Implementation status:** The repeatable local suite and CI job are complete. It uses synthetic `.example.test` personas, an `_e2e` database guard, Rails test-only tokens, and a Vite development-only auth adapter. It does not claim to test real Clerk or deployed provider configuration. The post-deploy smoke acceptance criterion remains open.
 
 ### FDMS-007 — Obtain school privacy approval and define sharing rules
 
@@ -354,7 +356,7 @@ This plan is a product and engineering checklist, not legal advice.
 - [ ] Add uptime checks for the Netlify app and Rails health endpoint.
 - [ ] Alert on elevated API errors, authentication failures, email failures, and save failures.
 - [ ] Name a primary and backup support owner during school hours.
-- [ ] Write a short incident runbook covering outage, lost work, compromised account, accidental public sharing, and data deletion.
+- [x] Write a short incident runbook covering outage, lost work, compromised account, accidental public sharing, and data deletion.
 - [ ] Establish a staging environment or isolated classroom test tenant.
 
 **Acceptance criteria:**
@@ -512,6 +514,7 @@ This is an order of operations, not a guaranteed calendar estimate. Each phase m
 - [ ] Production origin and invitation URLs are correct.
 - [x] High-severity dependency audits are clear.
 - [x] CI runs on every pull request.
+- [x] The local multi-role browser suite runs in CI with deterministic classroom fixtures.
 - [x] Save failure and recovery scenarios pass.
 - [x] Class-preserving duplication passes.
 - [x] Teacher feedback workflow is implemented or FDMS accepts the documented LMS fallback.
@@ -595,8 +598,9 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
+| Local multi-role browser workflow | Pass: 11 Chromium scenarios covering session resolution, provisioning, invites, save/reload, review, feedback, role isolation, class duplication, export, dual-class switching, mobile actions, checkpoints, archive/restore/delete, and offboarding |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
-| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend` and `backend` checks are required |
+| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend` and `backend` checks are required; add `classroom-e2e` after its first successful merge run |
 | Netlify production page and headers | Reachable; security headers present |
 | Render health endpoint | Healthy |
 | Production-origin Render CORS preflight | Pass for `https://code.shimizu-technology.com` |
@@ -604,7 +608,7 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 
 ### Confidence labels
 
-- **Confirmed in the current repository:** permissions, private feedback, durable save/recovery, stale-write conflict copies, class-preserving duplication, invitation operations, archived-class immutability, export/offboarding, audit logging, class sharing defaults, quotas/cleanup, active CI, dependency advisories, metadata, PWA cache inventory, and modal keyboard behavior.
+- **Confirmed in the current repository:** permissions, private feedback, durable save/recovery, stale-write conflict copies, class-preserving duplication, invitation operations, archived-class immutability, export/offboarding, audit logging, class sharing defaults, quotas/cleanup, active CI, deterministic multi-role browser coverage, dependency advisories, metadata, PWA cache inventory, and modal keyboard behavior.
 - **Confirmed in unauthenticated production checks:** the Netlify app and Render health endpoint are reachable, the production origin passes CORS preflight, Ruby runs under the deployed CSP, and canonical metadata uses the classroom domain.
 - **Requires external configuration verification:** Clerk production settings, Render/Netlify environment variables beyond observable behavior, database plan and backups, restore capability, service billing limits, DNS ownership, email-provider delivery health, school device/network policies, and school approval.
 - **Product decision:** public sharing, exact feedback scope, use of an existing LMS, personal projects, retention duration, and support service level. The canonical domain is decided: `code.shimizu-technology.com`.

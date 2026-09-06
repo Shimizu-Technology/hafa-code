@@ -18,6 +18,9 @@ npm --prefix web test
 echo "-- web build"
 npm --prefix web run build
 
+echo "-- classroom browser tests"
+npm --prefix web run test:e2e
+
 if [ -d api ]; then
   echo "-- api tests"
   (cd api && bundle exec rails test)

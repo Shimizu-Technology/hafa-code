@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
 import { Cloud, Loader2 } from 'lucide-react'
+import { e2eAuthEnabled } from '../lib/e2eAuth'
 
 export function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
   if (!cloudEnabled) {
     return <span className="cloud-pill muted"><Cloud size={15} /> Add a valid Clerk key for cloud save</span>
+  }
+
+  if (e2eAuthEnabled) {
+    return <span className="cloud-pill"><Cloud size={15} /> Classroom test session</span>
   }
 
   return <CloudAuthControls sessionLoading={sessionLoading} />

@@ -135,3 +135,11 @@ for (const [runnerName, headerPath] of Object.entries(RUNNER_HEADERS)) {
 const pyodideAssets = (await readdir(new URL('pyodide/', ASSETS_DIRECTORY))).sort()
 assert.deepEqual(pyodideAssets, PYODIDE_RUNTIME_FILES, 'Expected only the pinned core Pyodide runtime assets')
 console.log(`Verified self-hosted Pyodide runtime: ${pyodideAssets.join(', ')}`)
+
+const productionScriptNames = assetNames.filter((name) => name.endsWith('.js'))
+const productionScripts = await Promise.all(productionScriptNames.map((name) => readFile(new URL(name, ASSETS_DIRECTORY), 'utf8')))
+const productionScriptSource = productionScripts.join('\n')
+for (const testOnlyMarker of ['test_token_', 'e2e_user', 'VITE_E2E_AUTH', 'Classroom test session']) {
+  assert(!productionScriptSource.includes(testOnlyMarker), `Production JavaScript must not include E2E auth marker: ${testOnlyMarker}`)
+}
+console.log('Verified classroom E2E authentication code is absent from production JavaScript')

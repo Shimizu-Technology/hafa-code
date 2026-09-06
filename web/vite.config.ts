@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createHash } from 'node:crypto'
@@ -85,6 +85,7 @@ export default defineConfig({
   plugins: [react(), copyPyodideRuntime(), buildServiceWorker()],
   test: {
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     setupFiles: ['./src/test/setup.ts'],
   },
   optimizeDeps: {

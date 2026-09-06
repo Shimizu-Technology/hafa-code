@@ -158,3 +158,9 @@ GET    /api/v1/organizations/:id/students/:student_id/projects
 The organization project endpoints return paginated metadata summaries, including file and unresolved-feedback counts, but never file contents. The teacher Review Work surface filters those summaries and requests `GET /api/v1/projects/:id` only when an instructor opens one project. Instructor workspace sync also sends `owned_only=true`, so ordinary editor loading does not materialize every student's private source. Reviewed source stays in transient React state rather than the teacher's local workspace backup.
 
 Auth follows the CSG LMS Clerk pattern: frontend gets a Clerk JWT, API verifies it against Clerk JWKS, and Rails finds or creates the local `User`.
+
+## Classroom browser-test boundary
+
+The Playwright suite runs the React application and Rails API together against a dedicated PostgreSQL database ending in `_e2e`. A Vite mode named `e2e` selects a fixed classroom persona and sends Rails' existing `test_token_<user-id>` credential. Both sides reject accidental production use: Vite requires development mode plus `VITE_E2E_AUTH=true`, Rails accepts these tokens only in the test environment, and the reset task exits unless the database name ends in `_e2e`.
+
+These tests exercise the real API client, authorization policies, persistence, classroom UI, and browser behavior. They do not replace a production-safe smoke test with real Clerk accounts, deployed Render/Netlify configuration, and a staging or isolated test tenant.
