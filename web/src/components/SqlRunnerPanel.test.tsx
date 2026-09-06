@@ -105,6 +105,13 @@ describe('SqlRunnerPanel', () => {
     expect(worker.errorListener).toBeNull()
   })
 
+  it('names the configured entry file in the empty-state guidance', () => {
+    const queryProject = { ...project, entryPath: 'query.sql', files: [{ ...project.files[0], path: 'query.sql' }, ...project.files.slice(1)] }
+    render(<SqlRunnerPanel project={queryProject} entryFile={queryProject.files[0]} />)
+
+    expect(screen.getByText(/Run query\.sql to see a table/)).toBeTruthy()
+  })
+
   it('shows a SQL-specific error and sends it to Coach', async () => {
     const user = userEvent.setup()
     const onRunComplete = vi.fn()

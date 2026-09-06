@@ -251,7 +251,7 @@ export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete,
           <div className="sql-message success"><strong>Statement complete.</strong><span>{result.changeCount} row{result.changeCount === 1 ? '' : 's'} changed across {result.statementCount} statement{result.statementCount === 1 ? '' : 's'}.</span></div>
         )}
         {!busy && !error && !result && !resetNotice && (
-          <div className="empty-output"><Database size={28} /><p>Run main.sql to see a table, or reset the database from schema.sql and seed.sql.</p></div>
+          <div className="empty-output"><Database size={28} /><p>Run {entryFile.path} to see a table, or reset the database from schema.sql and seed.sql.</p></div>
         )}
       </div>
 
