@@ -149,4 +149,14 @@ describe('workspace backups', () => {
     }, storage)).toThrow(/existing workspace was kept/i)
     expect(storage.snapshot()).toEqual(initial)
   })
+
+  it('confirms when every workspace record was restored', () => {
+    expect(persistWorkspaceRestore({
+      library: library('ruby'),
+      checkpoints: {},
+      practiceProgress: { completedChallengeIds: [], projectChallenges: {} },
+      theme: 'system',
+      colorMode: 'default',
+    })).toBe(true)
+  })
 })

@@ -54,11 +54,22 @@ test('personal and classroom workspaces pass automated WCAG checks', async ({ pa
     .analyze()
   expect(usefulViolations(darkColorSafeResults.violations)).toEqual([])
 
+  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
   await switchToClassroom(page)
   const classroomResults = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()
   expect(usefulViolations(classroomResults.violations)).toEqual([])
+
+  await page.getByRole('button', { name: 'Dark', exact: true }).click()
+  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  const darkColorSafeClassroomResults = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(usefulViolations(darkColorSafeClassroomResults.violations)).toEqual([])
 })
 
 test('project, file, history, sharing, and classroom controls work from the keyboard', async ({ page }) => {
@@ -98,11 +109,15 @@ test('project, file, history, sharing, and classroom controls work from the keyb
   await page.keyboard.press('Enter')
   const reviewTab = page.getByRole('tab', { name: 'Review work' })
   await reviewTab.focus()
+  await expect(reviewTab).toHaveAttribute('aria-controls', 'classroom-review-panel')
+  await expect(page.getByRole('tabpanel', { name: 'Review work' })).toBeVisible()
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { name: 'People' })).toBeFocused()
   await expect(page.getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tabpanel', { name: 'People' })).toBeVisible()
   await page.keyboard.press('End')
   await expect(page.getByRole('tab', { name: 'Settings' })).toBeFocused()
+  await expect(page.getByRole('tabpanel', { name: 'Settings' })).toBeVisible()
   await expect(page.getByLabel('School year or term')).toBeVisible()
 })
 

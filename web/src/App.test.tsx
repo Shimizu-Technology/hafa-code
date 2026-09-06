@@ -13,6 +13,7 @@ import type { ProjectLibrary } from './lib/projectStorage'
 import type { RunnerOutcome } from './lib/runnerOutcome'
 import { api } from './lib/api'
 import type { useAuthContext } from './contexts/AuthContext'
+import { createWorkspaceBackup, serializeWorkspaceBackup } from './lib/workspaceBackup'
 
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
@@ -125,17 +126,34 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('status').textContent).toMatch(/previous project is unchanged/i)
   })
 
-  it('shows recovery guidance when project autosave cannot use browser storage', async () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+  it('shows storage recovery guidance and clears it after a successful workspace restore', async () => {
+    const user = userEvent.setup()
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('Storage access denied', 'SecurityError')
     })
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
     })
 
     render(<App />)
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/local backup is unavailable/i)
+
+    getItem.mockRestore()
+    setItem.mockRestore()
+    const recoveredProject = createProject('python', 'Recovered workspace')
+    const backup = serializeWorkspaceBackup(createWorkspaceBackup({
+      library: { activeProjectId: recoveredProject.id, projects: [recoveredProject] },
+      theme: 'light',
+      colorMode: 'default',
+    }))
+    await user.click(screen.getAllByRole('button', { name: 'Workspace backup' })[0])
+    fireEvent.change(document.querySelector('.workspace-transfer-sheet input[type="file"]')!, {
+      target: { files: [{ text: async () => backup }] },
+    })
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(await screen.findByText(/Workspace restored: 1 project/)).toBeTruthy()
   })
 
   it('opens desktop error advice directly in the docked Coach', () => {

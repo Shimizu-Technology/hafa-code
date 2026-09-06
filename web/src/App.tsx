@@ -1686,13 +1686,14 @@ export default function App() {
       const nextPracticeProgress = mergePracticeProgress(loadPracticeProgress(), backup.data.practiceProgress)
       const nextProject = nextLibrary.projects.find((candidate) => candidate.id === nextLibrary.activeProjectId) ?? nextLibrary.projects[0]
 
-      persistWorkspaceRestore({
+      const localRestoreAvailable = persistWorkspaceRestore({
         library: nextLibrary,
         checkpoints: nextCheckpoints,
         practiceProgress: nextPracticeProgress,
         theme: backup.data.preferences.theme,
         colorMode: backup.data.preferences.colorMode,
       })
+      setLocalBackupAvailable(localRestoreAvailable)
       skipRestorePersistenceRef.current.library = true
       skipRestorePersistenceRef.current.theme = themePreference !== backup.data.preferences.theme
       skipRestorePersistenceRef.current.colorMode = colorModePreference !== backup.data.preferences.colorMode
@@ -1921,9 +1922,11 @@ export default function App() {
             }}
           >
             <button
+              id="classroom-review-tab"
               className={classroomTab === 'review' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-review-panel"
               aria-selected={classroomTab === 'review'}
               tabIndex={classroomTab === 'review' ? 0 : -1}
               onClick={() => setClassroomTab('review')}
@@ -1931,9 +1934,11 @@ export default function App() {
               Review work
             </button>
             <button
+              id="classroom-people-tab"
               className={classroomTab === 'people' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-people-panel"
               aria-selected={classroomTab === 'people'}
               tabIndex={classroomTab === 'people' ? 0 : -1}
               onClick={() => setClassroomTab('people')}
@@ -1941,9 +1946,11 @@ export default function App() {
               People
             </button>
             <button
+              id="classroom-invitations-tab"
               className={classroomTab === 'invitations' ? 'active' : 'secondary'}
               type="button"
               role="tab"
+              aria-controls="classroom-invitations-panel"
               aria-selected={classroomTab === 'invitations'}
               tabIndex={classroomTab === 'invitations' ? 0 : -1}
               onClick={() => setClassroomTab('invitations')}
@@ -1952,9 +1959,11 @@ export default function App() {
             </button>
             {canManageOrgMembers && (
               <button
+                id="classroom-settings-tab"
                 className={classroomTab === 'settings' ? 'active' : 'secondary'}
                 type="button"
                 role="tab"
+                aria-controls="classroom-settings-panel"
                 aria-selected={classroomTab === 'settings'}
                 tabIndex={classroomTab === 'settings' ? 0 : -1}
                 onClick={() => {
@@ -1975,19 +1984,32 @@ export default function App() {
               This classroom is archived. Projects, roster changes, invitations, and settings are read-only until an owner restores it.
             </p>
           )}
-          {classroomTab === 'review' && (
-            <ClassroomReviewPanel
-              key={activeOrganization.id}
-              organizationId={String(activeOrganization.id)}
-              members={orgMembers}
-              membersError={orgMembersError}
-              membersLoading={orgMembersLoading}
-              onOpenProject={openClassroomReviewProject}
-              onRefreshMembers={() => setOrgMembersReloadRevision((current) => current + 1)}
-            />
-          )}
-          {classroomTab === 'settings' && canManageOrgMembers && (
-            <div className="classroom-settings">
+          <div
+            id="classroom-review-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-review-tab"
+            hidden={classroomTab !== 'review'}
+          >
+            {classroomTab === 'review' && (
+              <ClassroomReviewPanel
+                key={activeOrganization.id}
+                organizationId={String(activeOrganization.id)}
+                members={orgMembers}
+                membersError={orgMembersError}
+                membersLoading={orgMembersLoading}
+                onOpenProject={openClassroomReviewProject}
+                onRefreshMembers={() => setOrgMembersReloadRevision((current) => current + 1)}
+              />
+            )}
+          </div>
+          {canManageOrgMembers && (
+            <div
+              id="classroom-settings-panel"
+              className="classroom-settings"
+              role="tabpanel"
+              aria-labelledby="classroom-settings-tab"
+              hidden={classroomTab !== 'settings'}
+            >
               <label className="file-path-field" htmlFor="school-year">
                 <span>School year or term</span>
                 <input
@@ -2024,6 +2046,12 @@ export default function App() {
               </div>
             </div>
           )}
+          <div
+            id="classroom-invitations-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-invitations-tab"
+            hidden={classroomTab !== 'invitations'}
+          >
           {classroomTab === 'invitations' && canInviteOrgMembers && (
             <div className="invite-workflow">
               <form className="invite-form" onSubmit={inviteOrgMember}>
@@ -2094,6 +2122,13 @@ export default function App() {
               ))}
             </div>
           )}
+          </div>
+          <div
+            id="classroom-people-panel"
+            role="tabpanel"
+            aria-labelledby="classroom-people-tab"
+            hidden={classroomTab !== 'people'}
+          >
           {classroomTab === 'people' && (
           <div className="people-panel">
             <label className="classroom-search" htmlFor="member-search">
@@ -2149,6 +2184,7 @@ export default function App() {
             </div>
           </div>
           )}
+          </div>
         </section>
       )}
       </>
