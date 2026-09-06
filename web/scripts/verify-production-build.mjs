@@ -5,6 +5,7 @@ import path from 'node:path'
 const DIST_DIRECTORY = new URL('../dist/', import.meta.url)
 const HEADERS_PATH = new URL('_headers', DIST_DIRECTORY)
 const ASSETS_DIRECTORY = new URL('assets/', DIST_DIRECTORY)
+const PREVIEW_FRAME_PATH = new URL('preview-frame.html', DIST_DIRECTORY)
 const RUNNER_HEADERS = {
   ruby: '/assets/rubyRunner.worker-*.js',
   javascript: '/assets/javascriptRunner.worker-*.js',
@@ -55,6 +56,7 @@ function wildcardPathMatches(pattern, candidate) {
 }
 
 const headers = parseHeaderRules(await readFile(HEADERS_PATH, 'utf8'))
+const previewFrame = await readFile(PREVIEW_FRAME_PATH, 'utf8')
 const applicationPolicy = headers.get('/*')?.get('content-security-policy')
 const rubyRunnerPolicy = headers.get(RUNNER_HEADERS.ruby)?.get('content-security-policy')
 const javascriptRunnerPolicy = headers.get(RUNNER_HEADERS.javascript)?.get('content-security-policy')
@@ -68,6 +70,12 @@ assert(javascriptRunnerPolicy, 'Missing JavaScript runner worker Content-Securit
 assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
 assert(javaBootstrapPolicy, 'Missing Java bootstrap worker Content-Security-Policy')
+assert.match(
+  previewFrame,
+  /<iframe\b[^>]*\bsandbox=["']allow-scripts["'][^>]*>/i,
+  'Nested web preview must permit scripts and no other sandbox capabilities',
+)
+assert(!/allow-modals|allow-same-origin|allow-forms|allow-popups|allow-top-navigation/i.test(previewFrame), 'Nested web preview must not regain restricted browser capabilities')
 
 const applicationScripts = directiveSources(applicationPolicy, 'script-src')
 const applicationConnections = directiveSources(applicationPolicy, 'connect-src')

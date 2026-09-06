@@ -246,6 +246,7 @@ test('student can checkpoint, restore, archive, restore, and delete a class proj
 
   await page.locator('.toolbar-actions').getByRole('button', { name: 'Archive' }).click()
   await page.getByRole('alertdialog', { name: 'Archive this project?' }).getByRole('button', { name: 'Archive project' }).click()
+  await expect(page.getByText('Class Gallery archived.')).toBeVisible()
   await page.locator('.sidebar-content').getByRole('button', { name: /Archived/ }).click()
   await page.locator('.sidebar-content').getByRole('button', { name: /Class Gallery/ }).click()
   await expect(page.locator('.toolbar-actions').getByRole('button', { name: 'Restore' })).toBeVisible()

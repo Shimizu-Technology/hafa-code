@@ -438,10 +438,10 @@ The log should capture actor, action, target, organization, timestamp, and relev
 The baseline production service worker precaches 102 generated assets. The hardening build limits the install-time cache to the lightweight application shell; language workers and the roughly 36 MiB Ruby standard-library WebAssembly asset are fetched on demand.
 
 - [ ] Measure first visit, repeat visit, offline start, and update behavior on the FDMS network.
-- [ ] Load language runtimes only when the corresponding project type is opened.
-- [ ] Limit Monaco languages and workers to the languages Hafa Code supports.
+- [x] Load language runtimes only when needed. Runner workers and their runtime assets are created on Run rather than during the application-shell load.
+- [x] Import only the supported Monaco grammars and language services, with JSON, CSS, HTML, JavaScript/TypeScript, and the base editor worker rather than the full language catalog.
 - [x] Avoid precaching every generated language asset.
-- [ ] Display runtime-loading progress and actionable offline errors.
+- [x] Display separate preparing/running states, first-run notes where needed, startup timeouts, and actionable runtime-loading/network errors.
 - [ ] Verify service-worker updates do not leave students on mismatched frontend assets.
 
 ### FDMS-108 — Harden public and web-preview behavior
@@ -452,7 +452,7 @@ The baseline production service worker precaches 102 generated assets. The harde
 - [ ] Review automatic execution when a teacher opens a student's web project.
 - [x] Remove `allow-modals` from the web-preview sandbox.
 - [ ] Confirm expected restrictions on fetches, navigation, forms, popups, remote images, and tracking requests.
-- [ ] Keep the nested sandbox and strict preview CSP; update security documentation to match the actual sandbox flags.
+- [x] Keep both preview layers at `sandbox="allow-scripts"` with no same-origin, modal, form, popup, or navigation capability; document the matching preview CSP and iframe flags.
 
 ## 6.3 P2 — First-Semester Improvements
 
