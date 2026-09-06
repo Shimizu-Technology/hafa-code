@@ -173,9 +173,9 @@ export function ClassroomReviewPanel({ organizationId, members, membersError, me
       {!membersLoading && !membersError && !loading && !error && visibleProjects.length === 0 && (
         <p className="empty-project-list">No projects match these filters.</p>
       )}
-      <div className="classroom-review-list" aria-label="Student projects">
+      <div className="classroom-review-list" role="list" aria-label="Student projects">
         {visibleProjects.map((project) => (
-          <article className="classroom-review-card" key={project.id}>
+          <article className="classroom-review-card" role="listitem" key={project.id}>
             <div className="classroom-review-card-main">
               <strong>{project.title}</strong>
               <small>{project.owner?.fullName || 'Unknown student'} · {projectKindDefinition(project.kind).label}</small>

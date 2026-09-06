@@ -13,6 +13,16 @@
   --gold: #f8b84e;
   --lagoon: #136f63;
   --terminal: #11100f;
+  --button-on-brand: #fffaf1;
+  --on-lagoon: #fffaf1;
+  --control-surface: rgba(255, 250, 241, 0.82);
+  --control-surface-hover: #fffaf1;
+  --control-ink: #38291c;
+  --chip-surface: rgba(255, 255, 255, 0.52);
+  --chip-ink: #493d34;
+  --selected-surface: #14110f;
+  --selected-ink: #fffaf1;
+  --selected-muted: #d8cbbb;
   --workspace-pane-height: clamp(360px, 58vh, 560px);
 }
 
@@ -42,6 +52,24 @@ body::before {
   mask-image: linear-gradient(to bottom, black, transparent 82%);
 }
 
+html[data-theme="dark"] {
+  background: #0f0d0b;
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 7% 9%, rgba(248, 184, 78, 0.13), transparent 25rem),
+    radial-gradient(circle at 92% 0%, rgba(86, 199, 178, 0.11), transparent 30rem),
+    linear-gradient(135deg, #15120f 0%, #100e0c 55%, #0c0b09 100%);
+}
+
+html[data-theme="dark"] body::before {
+  background-image:
+    linear-gradient(rgba(245, 239, 231, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 239, 231, 0.035) 1px, transparent 1px);
+}
+
 button,
 input { font: inherit; }
 
@@ -50,7 +78,7 @@ button {
   border-radius: 999px;
   padding: 0.78rem 1rem;
   background: var(--brand);
-  color: white;
+  color: var(--button-on-brand);
   font-weight: 800;
   display: inline-flex;
   align-items: center;
@@ -69,14 +97,14 @@ button:hover:not(:disabled) {
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 button.secondary {
-  background: rgba(255, 250, 241, 0.82);
-  color: #38291c;
+  background: var(--control-surface);
+  color: var(--control-ink);
   border: 1px solid var(--line);
 }
 
 button.secondary:hover:not(:disabled),
 button.ghost:hover:not(:disabled) {
-  background: white;
+  background: var(--control-surface-hover);
   box-shadow: 0 18px 34px rgba(56, 41, 28, 0.09);
 }
 
@@ -129,6 +157,16 @@ button.icon-button {
   --gold: #ffd166;
   --lagoon: #56c7b2;
   --terminal: #080706;
+  --button-on-brand: #14110f;
+  --on-lagoon: #14110f;
+  --control-surface: rgba(255, 255, 255, 0.08);
+  --control-surface-hover: rgba(245, 239, 231, 0.16);
+  --control-ink: #f5efe7;
+  --chip-surface: rgba(255, 255, 255, 0.08);
+  --chip-ink: #e5d8cb;
+  --selected-surface: #f5efe7;
+  --selected-ink: #14110f;
+  --selected-muted: #5f554b;
 }
 
 .app-shell[data-theme="dark"] .panel,
@@ -153,12 +191,8 @@ button.icon-button {
 .app-shell[data-theme="dark"] .classroom-review-search-field,
 .app-shell[data-theme="dark"] .mobile-actions-menu summary,
 .app-shell[data-theme="dark"] .mobile-project-menu summary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f5efe7;
-}
-
-.app-shell[data-theme="dark"] button:not(.secondary):not(.ghost):not(.danger) {
-  color: #14110f;
+  background: var(--control-surface);
+  color: var(--control-ink);
 }
 
 .app-shell[data-theme="dark"] button.ghost {
@@ -166,7 +200,7 @@ button.icon-button {
 }
 
 .app-shell[data-theme="dark"][data-color-mode="colorblind"] button:not(.secondary):not(.ghost):not(.danger):not(.active):not(.project-card) {
-  color: #fff;
+  color: var(--button-on-brand);
 }
 
 .app-shell[data-theme="dark"] .notice button.ghost {
@@ -177,8 +211,8 @@ button.icon-button {
 .app-shell[data-theme="dark"] button.context-chip.active,
 .app-shell[data-theme="dark"] .classroom-tabs button.active,
 .app-shell[data-theme="dark"] .visibility-control button.active {
-  background: #f5efe7;
-  color: #14110f;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .app-shell[data-theme="dark"] .project-card:hover:not(:disabled):not(.active) {
@@ -194,7 +228,7 @@ button.icon-button {
 .app-shell[data-theme="dark"] .project-card.active small,
 .app-shell[data-theme="dark"] .project-card.active:hover small,
 .app-shell[data-theme="dark"] .project-card.active:focus-visible small {
-  color: #5f554b;
+  color: var(--selected-muted);
 }
 
 .app-shell[data-color-mode="colorblind"] {
@@ -202,6 +236,11 @@ button.icon-button {
   --brand-dark: #005a8f;
   --gold: #e69f00;
   --lagoon: #009e73;
+  --on-lagoon: #14110f;
+}
+
+.app-shell[data-theme="dark"][data-color-mode="colorblind"] {
+  --button-on-brand: #fffaf1;
 }
 
 .app-shell[data-color-mode="colorblind"] button.active,
@@ -227,6 +266,22 @@ button.icon-button {
 .app-shell[data-color-mode="colorblind"] .preview-console-line.error {
   border-left: 4px solid currentColor;
   padding-left: 0.85rem;
+}
+
+.preference-actions button,
+button.context-chip,
+.classroom-tabs button,
+.project-view-toggle button,
+.project-card,
+.visibility-control button,
+.file-tabs button,
+.file-tab-list button,
+.guide-topic-list button,
+.practice-language-tabs button,
+.practice-tier-progress button,
+.practice-filter-row button,
+.learning-sidecar-tabs button {
+  transition: none;
 }
 
 .panel {
@@ -338,8 +393,8 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.42rem 0.65rem;
-  background: rgba(255,255,255,0.52);
-  color: #493d34;
+  background: var(--chip-surface);
+  color: var(--chip-ink);
   font-size: 0.8rem;
   font-weight: 800;
 }
@@ -534,7 +589,7 @@ h2 {
 
 .preference-actions button.active {
   background: var(--lagoon);
-  color: white;
+  color: var(--on-lagoon);
 }
 
 button.context-chip {
@@ -545,8 +600,8 @@ button.context-chip {
 
 button.context-chip.active,
 .visibility-control button.active {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .instructor-panel {
@@ -597,8 +652,8 @@ button.context-chip.active,
 }
 
 .classroom-tabs button.active {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .invite-workflow {
@@ -1135,7 +1190,7 @@ button.context-chip.active,
 }
 
 .project-view-toggle {
-  background: rgba(255,255,255,0.62);
+  background: var(--control-surface);
   border: 1px solid var(--line);
   border-radius: 0.95rem;
   display: grid;
@@ -1148,7 +1203,7 @@ button.context-chip.active,
 .project-view-toggle button {
   background: transparent;
   border-radius: 0.7rem;
-  color: #5b5048;
+  color: var(--control-ink);
   font-size: 0.78rem;
   padding: 0.48rem 0.5rem;
   box-shadow: none;
@@ -1159,8 +1214,8 @@ button.context-chip.active,
 }
 
 .project-view-toggle button.active {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .project-view-toggle span {
@@ -1218,15 +1273,15 @@ button.context-chip.active,
 }
 
 .project-card.active {
-  background: #14110f;
-  color: #fffaf1;
-  border-color: #14110f;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
+  border-color: var(--selected-surface);
 }
 
 .project-card.active:hover:not(:disabled),
 .project-card.active:focus-visible {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .project-card small {
@@ -1237,7 +1292,7 @@ button.context-chip.active,
 .project-card.active small,
 .project-card.active:hover small,
 .project-card.active:focus-visible small {
-  color: #d8cbbb;
+  color: var(--selected-muted);
 }
 
 .project-card span {
@@ -1836,23 +1891,56 @@ button.context-chip.active,
   white-space: nowrap;
 }
 
+.sql-workspace-map {
+  align-items: center;
+  background: color-mix(in srgb, var(--paper) 90%, var(--lagoon));
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.75rem 1rem;
+}
+
+.sql-workspace-map p {
+  line-height: 1.4;
+  margin: 0;
+}
+
+.sql-workspace-map p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+.sql-workspace-map p strong {
+  color: var(--ink);
+}
+
+.sql-workspace-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
 .sql-result-stage {
   background: var(--terminal);
   color: #f3eadc;
-  min-height: calc(var(--workspace-pane-height) - 94px);
-  max-height: calc(var(--workspace-pane-height) - 94px);
+  min-height: calc(var(--workspace-pane-height) - 180px);
+  max-height: calc(var(--workspace-pane-height) - 180px);
   overflow: auto;
   padding: 1rem;
 }
 
 .sql-result-stage .runner-progress {
-  min-height: calc(var(--workspace-pane-height) - 140px);
+  min-height: calc(var(--workspace-pane-height) - 226px);
   align-items: center;
   justify-content: center;
 }
 
 .sql-result-stage .empty-output {
-  min-height: calc(var(--workspace-pane-height) - 140px);
+  min-height: calc(var(--workspace-pane-height) - 226px);
 }
 
 .sql-table-region {
@@ -2297,9 +2385,9 @@ button.context-chip.active,
 
 .guide-topic-list button.active,
 .guide-topic-list button.active:hover:not(:disabled) {
-  border-color: #14110f;
-  background: #14110f;
-  color: #fffaf1;
+  border-color: var(--selected-surface);
+  background: var(--selected-surface);
+  color: var(--selected-ink);
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--gold) 72%, transparent);
 }
 
@@ -2568,9 +2656,9 @@ button.context-chip.active,
 
 .app-shell[data-theme="dark"] .guide-topic-list button.active,
 .app-shell[data-theme="dark"] .guide-topic-list button.active:hover:not(:disabled) {
-  border-color: #f5efe7;
-  background: #f5efe7;
-  color: #14110f;
+  border-color: var(--selected-surface);
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .app-shell[data-theme="dark"] .guide-output-note,
@@ -2644,8 +2732,8 @@ button.context-chip.active,
 }
 
 .practice-language-tabs button.active {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--gold) 72%, transparent);
 }
 
@@ -2939,7 +3027,7 @@ button.context-chip.active,
   justify-content: center;
   border-radius: 0.3rem 0.8rem 0.3rem 0.8rem;
   background: var(--lagoon);
-  color: white;
+  color: var(--on-lagoon);
 }
 
 .practice-session-title .eyebrow {
@@ -3116,8 +3204,8 @@ button.context-chip.active,
 }
 
 .app-shell[data-theme="dark"] .practice-language-tabs button.active {
-  background: #f5efe7;
-  color: #14110f;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .app-shell[data-theme="dark"] .practice-session-actions button.ghost {
@@ -3157,7 +3245,7 @@ button.context-chip.active,
   place-items: center;
   border-radius: 0.2rem 0.75rem 0.2rem 0.75rem;
   background: var(--lagoon);
-  color: white;
+  color: var(--on-lagoon);
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--gold) 68%, transparent);
   transform: rotate(-2deg);
 }
@@ -3197,8 +3285,8 @@ button.context-chip.active,
 }
 
 .learning-sidecar-tabs button.active {
-  background: #14110f;
-  color: #fffaf1;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--gold) 68%, transparent);
 }
 
@@ -3386,8 +3474,8 @@ button.context-chip.active,
 }
 
 .app-shell[data-theme="dark"] .learning-sidecar-tabs button.active {
-  background: #f5efe7;
-  color: #14110f;
+  background: var(--selected-surface);
+  color: var(--selected-ink);
 }
 
 .learning-sidecar-backdrop {
@@ -3910,6 +3998,20 @@ button.context-chip.active,
     min-width: 0;
   }
 
+  .sql-workspace-map {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .sql-workspace-map-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sql-workspace-map-actions button {
+    min-width: 0;
+  }
+
   .sql-result-stage {
     padding: 0.75rem;
   }
@@ -4345,16 +4447,17 @@ button.context-chip.active,
     background: transparent;
     border-radius: 0.8rem;
     box-shadow: none;
-    color: #d8cbbb;
+    color: #f5efe7;
     display: grid;
     font-size: 0.68rem;
     gap: 0.18rem;
     justify-items: center;
     padding: 0.5rem 0.25rem;
+    transition: none;
   }
 
   .mobile-bottom-nav button:hover:not(:disabled) {
-    background: rgba(255, 250, 241, 0.08);
+    background: #2b2723;
     box-shadow: none;
     transform: none;
   }

@@ -2,6 +2,8 @@
 
 Hafa Code's SQL mode is a focused SQLite learning workspace. It is designed for writing schemas, loading small starter datasets, asking questions with queries, and practicing deliberate data changes. It is not a connection tool for production or remote databases.
 
+Each SQL project gets its own temporary database inside the learner's browser. Hafa Code does not connect students to a shared school database, the Rails PostgreSQL database, or a third-party database.
+
 ## Project Files
 
 - `schema.sql` defines tables, keys, and constraints.
@@ -9,7 +11,9 @@ Hafa Code's SQL mode is a focused SQLite learning workspace. It is designed for 
 - `main.sql` is the default entry file run from the editor.
 - Other `.sql` files can be created and selected as the entry file. They are not executed automatically.
 
-The starter opens on a useful three-row result instead of an empty database. Guide examples and all fifteen challenges create separate practice projects, so trying them never replaces current work.
+The Results panel keeps this file model visible: “View schema” opens the table and column definitions, and “View starter rows” opens the inserted data. On a phone, either action also moves to the Code view so the selected file is immediately visible. A learner never has to guess which tables exist before writing a query.
+
+The starter opens on a useful three-row result instead of an empty database. The SQL guide has eight runnable topics, and Practice has fifteen SQL challenges—five Starter, five Builder, and five Stretch. Guide examples and challenges create separate practice projects, so trying them never replaces current work.
 
 ## Run and Reset Lifecycle
 

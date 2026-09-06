@@ -11,6 +11,7 @@ type SqlAction = 'run' | 'reset'
 interface SqlRunnerPanelProps {
   project: SavedProject
   entryFile: ProjectFile
+  onOpenFile?: (path: string) => void
   onRunCancel?: () => void
   onRunComplete?: (outcome: RunnerOutcome) => void
   onErrorAdviceChange?: (context: ErrorCoachContext) => void
@@ -25,7 +26,7 @@ function resultAsText(result: SqlQueryResult) {
   return [result.columns.join(' | '), ...result.rows.map((row) => row.map(displayCell).join(' | '))].join('\n')
 }
 
-export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete, onErrorAdviceChange }: SqlRunnerPanelProps) {
+export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, onRunComplete, onErrorAdviceChange }: SqlRunnerPanelProps) {
   const [status, setStatus] = useState<SqlStatus>('idle')
   const [result, setResult] = useState<SqlQueryResult | null>(null)
   const [error, setError] = useState('')
@@ -205,6 +206,8 @@ export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete,
 
   const busy = status === 'loading' || status === 'running'
   const rowLabel = result ? `${result.rowCount} row${result.rowCount === 1 ? '' : 's'}` : ''
+  const schemaFile = project.files.find((file) => file.path === 'schema.sql')
+  const seedFile = project.files.find((file) => file.path === 'seed.sql')
 
   return (
     <section className="panel output-panel sql-output-panel surface-grid">
@@ -223,6 +226,21 @@ export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete,
           ) : (
             <button type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()}><Play size={16} /> Run SQL</button>
           )}
+        </div>
+      </div>
+
+      <div className="sql-workspace-map" aria-label="SQL database setup">
+        <div>
+          <p className="eyebrow">What can I query?</p>
+          <p><strong>schema.sql</strong> defines the tables and columns. <strong>seed.sql</strong> shows the starting rows. <strong>{entryFile.path}</strong> is the query that runs.</p>
+        </div>
+        <div className="sql-workspace-map-actions">
+          <button className="secondary compact" type="button" onClick={() => onOpenFile?.('schema.sql')} disabled={!schemaFile || !onOpenFile}>
+            View schema
+          </button>
+          <button className="secondary compact" type="button" onClick={() => onOpenFile?.('seed.sql')} disabled={!seedFile || !onOpenFile}>
+            View starter rows
+          </button>
         </div>
       </div>
 
@@ -251,7 +269,7 @@ export function SqlRunnerPanel({ project, entryFile, onRunCancel, onRunComplete,
           <div className="sql-message success"><strong>Statement complete.</strong><span>{result.changeCount} row{result.changeCount === 1 ? '' : 's'} changed across {result.statementCount} statement{result.statementCount === 1 ? '' : 's'}.</span></div>
         )}
         {!busy && !error && !result && !resetNotice && (
-          <div className="empty-output"><Database size={28} /><p>Run {entryFile.path} to see a table, or reset the database from schema.sql and seed.sql.</p></div>
+          <div className="empty-output"><Database size={28} /><p>Run {entryFile.path} to query the project database. Use the setup links above whenever you need to check its shape or starter data.</p></div>
         )}
       </div>
 

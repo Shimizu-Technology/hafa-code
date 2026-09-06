@@ -13,6 +13,8 @@ Hafa Code's TypeScript mode is a focused browser workspace for learning how type
 
 The starter deliberately demonstrates typed values and a relative helper import without requiring setup.
 
+The TypeScript guide has eight runnable topics covering annotations, inference and unions, functions, interfaces, narrowing, generics, modules, and safe error handling. Practice adds fifteen TypeScript challenges: five Starter, five Builder, and five Stretch. Each guide example or challenge opens as a separate practice project, leaving the learner's current project unchanged.
+
 ## Run pipeline
 
 1. The UI sends one immutable snapshot of the project's files and configured entry path to a dedicated worker.
