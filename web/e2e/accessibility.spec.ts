@@ -167,6 +167,17 @@ test('the selective Monaco build keeps core editing commands', async ({ page }) 
   await expect(findDialog).toContainText('1 of 1')
   await page.keyboard.press('Escape')
 
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.quickCommand'))).toBe(true)
+  const commandPalette = page.locator('.quick-input-widget')
+  await expect(commandPalette).toBeVisible()
+  await expect(commandPalette.locator('.monaco-list-row').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await editorSurface.click()
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.gotoLine'))).toBe(true)
+  await expect(page.getByRole('textbox', { name: /Type a line number to go to/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+
   await editorSurface.click()
   expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.triggerSuggest'))).toBe(true)
   await expect(page.locator('.suggest-widget.visible')).toBeVisible()

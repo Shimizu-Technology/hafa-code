@@ -4,6 +4,14 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/iPadShowKeyboard/iPadShowKeyboard.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/inspectTokens/inspectTokens.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneHelpQuickAccess.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/referenceSearch/standaloneReferenceSearch.js'
+import 'monaco-editor/esm/vs/editor/standalone/browser/toggleHighContrast/toggleHighContrast.js'
 import 'monaco-editor/esm/vs/basic-languages/css/css.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/html/html.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/java/java.contribution.js'
@@ -25,6 +33,7 @@ import App from './App.tsx'
 import { AuthProvider, configureE2EAuthToken, E2EAuthProvider } from './contexts/AuthContext.tsx'
 import { hasClerkPublishableKey } from './lib/clerk.ts'
 import { e2eAuthEnabled } from './lib/e2eAuth.ts'
+import { runE2EEditorAction } from './lib/e2eEditorBridge.ts'
 import { registerServiceWorker } from './pwa.ts'
 
 declare global {
@@ -57,12 +66,7 @@ if (e2eAuthEnabled) {
   configureE2EAuthToken()
   window.__HAFA_E2E_EDITOR__ = {
     async runAction(actionId) {
-      const editors = monaco.editor.getEditors()
-      const editor = editors.find((candidate) => candidate.hasTextFocus()) ?? editors.at(-1)
-      const action = editor?.getAction(actionId)
-      if (!action) return false
-      await action.run()
-      return true
+      return runE2EEditorAction(monaco.editor.getEditors(), actionId)
     },
   }
 }
