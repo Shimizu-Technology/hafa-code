@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a small, open-source coding playground for students and alumni to practice Ruby, JavaScript, Python, Java, HTML, and CSS without installing a local dev environment.
+Create a small, open-source coding workspace where students and alumni can write, run, understand, save, and review Ruby, JavaScript, Python, Java, and HTML/CSS/JavaScript projects without installing a local development environment.
 
 ## Primary Users
 
@@ -31,7 +31,8 @@ Create a small, open-source coding playground for students and alumni to practic
 
 - I can create starter templates.
 - I can send students a challenge link.
-- I can view student submissions/projects if they share them.
+- I can manage a class roster and view its student projects, including teacher-only work.
+- I can leave private feedback without receiving permission to edit a student's source.
 
 ### Contributor
 
@@ -83,7 +84,7 @@ Create a small, open-source coding playground for students and alumni to practic
 
 ### Practice Lab
 
-- Three progressive challenges for every supported project kind: Ruby, JavaScript, Python, Java, and HTML/CSS/JS
+- Fifteen challenges for every supported project kind: five Starter, five Builder, and five Stretch challenges for Ruby, JavaScript, Python, Java, and HTML/CSS/JS
 - Separate private practice projects so a learner's current work is never overwritten
 - Plain-language steps, concept labels, and progressive hints that stay available while coding
 - Deterministic checks for required syntax and runtime output, or HTML/CSS/JS file requirements for Web projects
@@ -133,6 +134,15 @@ Phase 2:
 - Course-style grading, scores, and gradebook workflows
 
 These can come later, but only after the simple learning loop is excellent.
+
+## Next Supported Modes
+
+The next language additions are intentionally narrow:
+
+1. TypeScript as a first-class browser project with diagnostics and JavaScript output, without packages or a Node server.
+2. SQL as a focused SQLite learning workspace with a resettable browser database, schema/data tables, and query results.
+
+Go, C/C++, Perl, unrestricted package installation, and remote terminals are deferred. Each future language must justify its learner need, runtime cost, security boundary, guide content, practice progression, and school-device behavior before implementation.
 
 ## Recommended Stack
 

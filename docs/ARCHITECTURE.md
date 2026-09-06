@@ -37,6 +37,8 @@ Benefits:
 - works well for snippets and web pages
 - easy for OSS contributors to run locally
 
+This boundary is also a product decision. Hafa Code is optimized for the short beginner loop, not for packages, shell access, deployment, or arbitrary backend frameworks. A future remote advanced workspace would be a separate authenticated system with its own isolation, cost, and operations model; it must not weaken the Learn workspace.
+
 ## Runners
 
 ### Ruby
@@ -123,6 +125,8 @@ type ProjectFile = {
   content: string
 }
 ```
+
+`ProjectKind` and file-language behavior are implemented through the frontend language registry. New language work must extend that registry, runner protocol, guide, Practice Lab, error coaching, storage validation, import/export behavior, and documentation together rather than adding component-specific switches.
 
 ## Backend Choice
 
