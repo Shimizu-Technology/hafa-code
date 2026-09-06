@@ -64,6 +64,8 @@ test('personal and classroom workspaces pass automated WCAG checks', async ({ pa
 
   await page.getByRole('button', { name: 'Dark', exact: true }).click()
   await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
   await expectNoWcagViolations(page)
 
   await openPersona(page, 'teacher')
