@@ -259,7 +259,7 @@ For the initial FDMS launch, default every class project to **Teacher only**, of
 
 ### FDMS-005 — Repair CI and clear high-severity dependency advisories
 
-**Status:** Complete. GitHub previously did not execute the workflow stored under `api/.github/workflows`, and earlier dependency audits reported high-severity JavaScript and Ruby advisories. The workflow now runs from the repository root, the September 6 audits are clean, and the active `main` ruleset requires strict current-head frontend and backend checks plus resolved review threads.
+**Status:** Complete. GitHub previously did not execute the workflow stored under `api/.github/workflows`, and earlier dependency audits reported high-severity JavaScript and Ruby advisories. The workflow now runs from the repository root, the September 6 audits are clean, and the active `main` ruleset requires strict current-head frontend, backend, and classroom browser checks plus resolved review threads.
 
 **Work:**
 
@@ -593,14 +593,14 @@ Unless FDMS changes the requirements, do not make these launch blockers:
 | `npm --prefix web run build` | Pass, with large-chunk warnings |
 | `npm --prefix web test` | Pass: 24 files, 219 tests |
 | `bundle exec rails test` | Pass: 55 runs, 444 assertions |
-| `bundle exec rubocop` | Pass: 73 files, no offenses |
+| `bundle exec rubocop` | Pass: 75 files, no offenses |
 | `bundle exec brakeman --no-pager` | Pass: 0 warnings |
 | `npm audit --audit-level=high` | Pass: 0 vulnerabilities |
 | `bundle exec bundler-audit check` | Pass after updating Rails and Active Storage from 8.1.3 to the 8.1.3.1 security patch for CVE-2026-66066 |
 | Local multi-role API workflow | Pass: teacher/student/classmate feedback, private isolation, bulk invite, export, archive, audit, CORS, and stale-save conflict |
 | Local multi-role browser workflow | Pass: 11 Chromium scenarios covering session resolution, provisioning, invites, save/reload, review, feedback, role isolation, class duplication, export, dual-class switching, mobile actions, checkpoints, archive/restore/delete, and offboarding |
 | Local visible browser smoke test | Pass under Netlify's local CSP: editor loads and the default Ruby program prints all expected output |
-| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend` and `backend` checks are required; add `classroom-e2e` after its first successful merge run |
+| GitHub `main` ruleset | Active: pull requests, resolved review threads, and current-head `frontend`, `backend`, and `classroom-e2e` checks are required |
 | Netlify production page and headers | Reachable; security headers present |
 | Render health endpoint | Healthy |
 | Production-origin Render CORS preflight | Pass for `https://code.shimizu-technology.com` |
