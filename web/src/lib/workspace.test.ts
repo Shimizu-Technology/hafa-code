@@ -105,6 +105,19 @@ describe('class starter duplication', () => {
     expect(otherClassCopy.title).toHaveLength(120)
     expect(otherClassCopy.title).toMatch(/ Copy$/)
   })
+
+  test('keeps astral Unicode titles on valid code-point boundaries', () => {
+    const source = {
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: '😀'.repeat(120),
+    }
+
+    const copy = duplicateProject(source)
+
+    expect(Array.from(copy.title)).toHaveLength(120)
+    expect(copy.title).toMatch(/ Copy$/)
+    expect(copy.title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+  })
 })
 
 describe('save conflict recovery', () => {
@@ -125,6 +138,17 @@ describe('save conflict recovery', () => {
     expect(copy.organizationId).toBe(source.organizationId)
     expect(copy.lockVersion).toBeUndefined()
     expect(copy.files[0].content).toBe(source.files[0].content)
+  })
+
+  test('keeps astral Unicode conflict titles on valid code-point boundaries', () => {
+    const copy = createConflictCopy({
+      ...project('42', '2026-07-25T01:00:00.000Z'),
+      title: '🚀'.repeat(120),
+    })
+
+    expect(Array.from(copy.title)).toHaveLength(120)
+    expect(copy.title).toMatch(/ Conflict Copy$/)
+    expect(copy.title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
   })
 })
 

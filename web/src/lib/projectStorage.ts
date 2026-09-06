@@ -211,6 +211,10 @@ export function createProject(kind: ProjectKind, title?: string): SavedProject {
 
 type DuplicateProjectDestination = Pick<SavedProject, 'organizationId' | 'organization'>
 
+function titleWithSuffix(title: string, suffix: string) {
+  return `${Array.from(title).slice(0, 120 - Array.from(suffix).length).join('')}${suffix}`
+}
+
 export function duplicateProject(project: SavedProject, destination?: DuplicateProjectDestination): SavedProject {
   const now = new Date().toISOString()
   const titleSuffix = ' Copy'
@@ -219,7 +223,7 @@ export function duplicateProject(project: SavedProject, destination?: DuplicateP
   return {
     ...project,
     id: crypto.randomUUID(),
-    title: `${project.title.slice(0, 120 - titleSuffix.length)}${titleSuffix}`,
+    title: titleWithSuffix(project.title, titleSuffix),
     visibility: 'private',
     organizationId,
     owner: null,
@@ -236,7 +240,7 @@ export function createConflictCopy(project: SavedProject): SavedProject {
   const suffix = ' Conflict Copy'
   return {
     ...duplicateProject(project),
-    title: `${project.title.slice(0, 120 - suffix.length)}${suffix}`,
+    title: titleWithSuffix(project.title, suffix),
   }
 }
 
