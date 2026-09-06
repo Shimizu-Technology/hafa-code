@@ -137,7 +137,7 @@ The pilot expands only when no unresolved data-loss, authorization, enrollment, 
 
 | Date | Environment | Release SHA | Check | Result | Owner | Evidence / follow-up |
 | --- | --- | --- | --- | --- | --- | --- |
-| September 6, 2026 | Local E2E and PR CI | `98138bb` | Deterministic multi-role browser suite | Pass locally and in required `classroom-e2e` CI | Engineering | [PR #40 checks](https://github.com/Shimizu-Technology/hafa-code/pull/40/checks) |
+| September 6, 2026 | Local E2E and PR CI | `98138bb` | Deterministic multi-role browser suite | Pass locally and in required `classroom-e2e` CI | Engineering | [Immutable CI run](https://github.com/Shimizu-Technology/hafa-code/actions/runs/34024355848) |
 |  | Staging/test tenant |  | Real Clerk and deployed classroom smoke | Open | _Name required_ |  |
 |  | Non-production restore |  | Backup restore drill | Open | _Name required_ |  |
 |  | Production |  | Monitoring alert delivery | Open | _Name required_ |  |
