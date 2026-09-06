@@ -292,6 +292,9 @@ export default function App() {
     setMobileTab(nextTab)
     setCheckpointMenuOpen(nextTab === 'history')
   }
+  useEffect(() => {
+    if (mobileTab !== 'history') setCheckpointMenuOpen(false)
+  }, [mobileTab])
   const optimisticInvitationOrganization = pendingInvitation?.organization && activeOrganizationId === String(pendingInvitation.organization.id)
     ? {
         id: pendingInvitation.organization.id,

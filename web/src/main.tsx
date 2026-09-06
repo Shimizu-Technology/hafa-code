@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ClerkProvider } from '@clerk/clerk-react'
 import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
+import 'monaco-editor/esm/vs/editor/editor.all.js'
 import 'monaco-editor/esm/vs/basic-languages/css/css.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/html/html.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/java/java.contribution.js'
@@ -28,6 +29,9 @@ import { registerServiceWorker } from './pwa.ts'
 
 declare global {
   interface Window {
+    __HAFA_E2E_EDITOR__?: {
+      runAction: (actionId: string) => Promise<boolean>
+    }
     MonacoEnvironment?: {
       getWorker: (_workerId: string, label: string) => Worker
     }
@@ -49,7 +53,19 @@ window.MonacoEnvironment = {
 
 loader.config({ monaco })
 
-if (e2eAuthEnabled) configureE2EAuthToken()
+if (e2eAuthEnabled) {
+  configureE2EAuthToken()
+  window.__HAFA_E2E_EDITOR__ = {
+    async runAction(actionId) {
+      const editors = monaco.editor.getEditors()
+      const editor = editors.find((candidate) => candidate.hasTextFocus()) ?? editors.at(-1)
+      const action = editor?.getAction(actionId)
+      if (!action) return false
+      await action.run()
+      return true
+    },
+  }
+}
 
 const app = e2eAuthEnabled ? (
   <E2EAuthProvider>

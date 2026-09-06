@@ -128,6 +128,54 @@ test('project, file, history, sharing, and classroom controls work from the keyb
   await expect(page.getByRole('tab', { name: 'Settings' })).toBeFocused()
   await expect(page.getByRole('tabpanel', { name: 'Settings' })).toBeVisible()
   await expect(page.getByLabel('School year or term')).toBeVisible()
+  await page.keyboard.press('ArrowRight')
+  await expect(reviewTab).toBeFocused()
+  await expect(reviewTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tabpanel', { name: 'Review work' })).toBeVisible()
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.getByRole('tab', { name: 'Settings' })).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(reviewTab).toBeFocused()
+  await expect(reviewTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tabpanel', { name: 'Review work' })).toBeVisible()
+})
+
+test('the selective Monaco build keeps core editing commands', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'EditContext', { configurable: true, value: undefined })
+  })
+  await openPersona(page, 'student')
+  await page.locator('.sidebar-content').getByRole('button', { name: 'JS', exact: true }).click()
+
+  const editor = page.getByRole('textbox', { name: 'Editor content' })
+  const editorSurface = page.locator('.monaco-editor .view-lines')
+  await editorSurface.click()
+  await expect(editor).toBeFocused()
+  await page.keyboard.insertText('function clipboardProof() {\n  console.log("copy-me")\n}')
+
+  await editorSurface.click({ button: 'right' })
+  const contextMenu = page.locator('.context-view.monaco-menu-container')
+  await expect(contextMenu).toContainText('Copy')
+  await expect(contextMenu).toContainText('Paste')
+  await page.keyboard.press('Escape')
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('actions.find'))).toBe(true)
+  const findDialog = page.getByRole('dialog', { name: 'Find / Replace' })
+  const findInput = findDialog.getByRole('textbox', { name: 'Find' })
+  await expect(findInput).toBeVisible()
+  await findInput.fill('copy-me')
+  await expect(findDialog).toContainText('1 of 1')
+  await page.keyboard.press('Escape')
+
+  await editorSurface.click()
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.triggerSuggest'))).toBe(true)
+  await expect(page.locator('.suggest-widget.visible')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  const foldControl = page.locator('.margin-view-overlays .codicon-folding-expanded').first()
+  await expect(foldControl).toBeVisible()
+  await foldControl.click()
+  await expect(page.locator('.margin-view-overlays .codicon-folding-collapsed').first()).toBeVisible()
 })
 
 test('zoom-equivalent and mobile layouts keep content and primary targets usable', async ({ page }) => {
