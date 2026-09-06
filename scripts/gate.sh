@@ -18,11 +18,23 @@ npm --prefix web test
 echo "-- web build"
 npm --prefix web run build
 
+reset_classroom_fixtures() {
+  exit_code=$?
+  trap - EXIT
+  echo "-- reset classroom fixtures"
+  if ! (cd api && RAILS_ENV=test DATABASE_URL="${E2E_DATABASE_URL:-postgresql:///hafa_code_e2e}" bundle exec rails e2e:reset); then
+    echo "Classroom fixture reset failed." >&2
+    if [ "$exit_code" -eq 0 ]; then
+      exit_code=1
+    fi
+  fi
+  exit "$exit_code"
+}
+
+trap reset_classroom_fixtures EXIT
+
 echo "-- classroom browser tests"
 npm --prefix web run test:e2e
-
-echo "-- repeatable classroom fixture reset"
-(cd api && RAILS_ENV=test DATABASE_URL="${E2E_DATABASE_URL:-postgresql:///hafa_code_e2e}" bundle exec rails e2e:reset)
 
 if [ -d api ]; then
   echo "-- api tests"
