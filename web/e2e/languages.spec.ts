@@ -52,6 +52,32 @@ test('TypeScript stays usable without horizontal overflow on a phone viewport', 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
+test('Python survives a slow first runtime download and runs again from the warm workspace', async ({ page }) => {
+  test.setTimeout(120_000)
+  await openStudent(page)
+  await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
+  await expect(page.getByLabel('Project name')).toHaveValue('Python Playground')
+
+  let delayedRuntime = false
+  await page.route('**/assets/pyodide/pyodide.asm.wasm', async (route) => {
+    delayedRuntime = true
+    await new Promise((resolve) => setTimeout(resolve, 31_000))
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: 'Run Python' }).click()
+  await expect(page.getByText('Loading runtime')).toBeVisible()
+  await expect(page.getByText(/first Python run downloads a larger browser runtime/i)).toBeVisible()
+  await expect(page.locator('.terminal')).toContainText('Hafa adai, Python!', { timeout: 90_000 })
+  expect(delayedRuntime).toBe(true)
+  await expect(page.locator('.terminal-footer')).toContainText('success')
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('print("Warm Python run")'))).toBe(true)
+  await page.getByRole('button', { name: 'Run again' }).click()
+  await expect(page.locator('.terminal')).toContainText('Warm Python run', { timeout: 15_000 })
+  await expect(page.locator('.terminal-footer')).toContainText('success')
+})
+
 test('TypeScript and SQL expose complete guides and three-tier practice catalogs', async ({ page }) => {
   await openStudent(page)
 

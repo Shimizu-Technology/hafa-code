@@ -3,6 +3,7 @@ import type { ProjectFile, ProjectFileLanguage, ProjectKind, RunnerLanguage } fr
 
 export const RUNNER_TIMEOUT_MS = 3_000
 export const RUNNER_STARTUP_TIMEOUT_MS = 30_000
+export const PYTHON_STARTUP_TIMEOUT_MS = 90_000
 
 function shellArgument(value: string) {
   return /^[a-zA-Z0-9_./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
@@ -201,6 +202,8 @@ export const PROJECT_KIND_DEFINITIONS = {
       runLabel: 'Python',
       terminalCommand: (entryPath) => `python ${entryPath}`,
       createWorker: () => new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), { type: 'module' }),
+      startupTimeoutMs: PYTHON_STARTUP_TIMEOUT_MS,
+      startupNote: 'The first Python run downloads a larger browser runtime and may take longer on a mobile connection. Later runs are faster.',
     },
   },
   java: {

@@ -26,6 +26,14 @@ The product is intentionally not a general cloud IDE or a replacement for the sc
 6. Treat mobile, keyboard, zoom, reduced motion, and screen-reader use as release criteria.
 7. Require school approval before collecting optional analytics or enabling external sharing for classroom work.
 
+## Code School focused courses
+
+Hafa Code is the browser coding workspace for CSG's invited December 2026 Python Fundamentals pilot. Learners can work from Guam or elsewhere without local Python setup. CSG Learn remains the record for lessons, submissions, feedback, and private meeting bookings. A Hafa Code snapshot link currently imports a copy into the recipient's workspace; instructors need the submitted code in Learn or another reviewable record until a safe read-only sharing flow is ready.
+
+The focused-course teaching sequence is fundamentals, a small project built and explained independently, then an optional agent-assisted extension of the same ideas with human diff and test review. Hafa Code should make the independent project and the saved extension examples easy to run, but it is not required to host the coding agent. No AI subscription is necessary to complete a fundamentals course. Keep the exercise submission and final review copy in CSG Learn; an editable Hafa import link alone does not establish which code was assessed. For the Python pilot, rehearse both the original six-expense $118 report and the optional two-month example in the deployed Python runner before recording claims about them.
+
+The longer-term course plan includes independent practice and limited guided runs with private instructor support. Hafa Code should serve both formats without tying a project to one instructor or cohort. Before opening courses to minors, review account access, sharing, retention, guardian workflows, and instructor visibility for each age group. The first pilot is for invited adults; no public youth enrollment is implied by this roadmap.
+
 ## Current baseline
 
 Hafa Code currently supports:

@@ -10,6 +10,7 @@ export {
   PROJECT_KINDS,
   PROJECT_KIND_DEFINITIONS,
   RUNNER_STARTUP_TIMEOUT_MS,
+  PYTHON_STARTUP_TIMEOUT_MS,
   RUNNER_TIMEOUT_MS,
   fileLanguageDefinition,
   isProjectFileLanguage,

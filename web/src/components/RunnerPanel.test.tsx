@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition } from '../lib/codeRunner'
+import { PYTHON_STARTUP_TIMEOUT_MS, RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition } from '../lib/codeRunner'
 import type { RunnerRequest, RunnerResponse } from '../workers/runnerProtocol'
 import { RunnerPanel } from './RunnerPanel'
 
@@ -237,7 +237,7 @@ describe('RunnerPanel', () => {
 
     act(() => {
       window.dispatchEvent(new Event('hafa-code-run-active-project'))
-      vi.advanceTimersByTime(RUNNER_STARTUP_TIMEOUT_MS)
+      vi.advanceTimersByTime(PYTHON_STARTUP_TIMEOUT_MS)
     })
 
     const worker = FakeWorker.instances.at(-1)!
@@ -248,12 +248,39 @@ describe('RunnerPanel', () => {
       status: 'timeout',
       stdout: '',
       stderr: 'The browser runtime took too long to load. Check your connection, then try again.',
-      durationMs: RUNNER_STARTUP_TIMEOUT_MS,
+      durationMs: PYTHON_STARTUP_TIMEOUT_MS,
     })
     expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
       kind: 'python',
       advice: expect.objectContaining({ guideTopicId: 'python-loops' }),
     }))
+  })
+
+  it('lets a cold Python runtime finish after the default startup limit without extending execution time', () => {
+    vi.useFakeTimers()
+    const onRunComplete = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
+
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances.at(-1)!
+    const run = worker.messages.find((message) => message.type === 'run')
+    if (!run || run.type !== 'run') throw new Error('Expected a Python run request')
+    expect(run.startupTimeoutMs).toBe(PYTHON_STARTUP_TIMEOUT_MS)
+    expect(screen.getByText(/first Python run downloads a larger browser runtime/i)).toBeTruthy()
+
+    act(() => vi.advanceTimersByTime(RUNNER_STARTUP_TIMEOUT_MS + 1_000))
+    expect(worker.terminated).toBe(false)
+    expect(screen.getByText('Loading runtime')).toBeTruthy()
+    expect(onRunComplete).not.toHaveBeenCalled()
+
+    act(() => {
+      worker.respond({ id: run.id, type: 'started' })
+      worker.respond({ id: run.id, type: 'result', stdout: 'Ready\n', stderr: '', exitCode: 0, durationMs: 25 })
+      vi.advanceTimersByTime(PYTHON_STARTUP_TIMEOUT_MS)
+    })
+    expect(screen.getByText('Ready')).toBeTruthy()
+    expect(worker.terminated).toBe(false)
+    expect(onRunComplete).toHaveBeenCalledOnce()
   })
 
   it('reports an execution timeout with streamed output exactly once', () => {
