@@ -30,6 +30,8 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   const [status, setStatus] = useState<SqlStatus>('idle')
   const [result, setResult] = useState<SqlQueryResult | null>(null)
   const [error, setError] = useState('')
+  const [failurePhase, setFailurePhase] = useState<RunnerOutcome['failurePhase']>()
+  const phaseRef = useRef<RunnerOutcome['failurePhase']>('startup')
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const [resetNotice, setResetNotice] = useState('')
   const [action, setAction] = useState<SqlAction>('run')
@@ -72,6 +74,7 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   }, [clearTimer])
 
   const finishWithError = useCallback((message: string, nextStatus: SqlStatus = 'error') => {
+    setFailurePhase(phaseRef.current)
     clearTimer()
     requestIdRef.current = null
     const elapsed = startedAtRef.current === null ? 0 : Math.round(performance.now() - startedAtRef.current)
@@ -80,7 +83,7 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
     setResult(null)
     setDurationMs(elapsed)
     if (actionRef.current === 'run') {
-      onRunCompleteRef.current?.({ status: nextStatus === 'stopped' ? 'stopped' : 'error', stdout: '', stderr: message, durationMs: elapsed })
+      onRunCompleteRef.current?.({ status: nextStatus === 'stopped' ? 'stopped' : 'error', stdout: '', stderr: message, durationMs: elapsed, failurePhase: phaseRef.current })
     }
     startedAtRef.current = null
   }, [clearTimer])
@@ -91,6 +94,7 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
     const handleMessage = (event: MessageEvent<SqlRunnerResponse>) => {
       if (event.data.id !== requestIdRef.current) return
       if (event.data.type === 'started') {
+        phaseRef.current = 'execution'
         clearTimer()
         setStatus('running')
         timerRef.current = window.setTimeout(() => {
@@ -104,11 +108,13 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
       requestIdRef.current = null
       setDurationMs(event.data.durationMs)
       if (event.data.error) {
+        const nextPhase = event.data.errorKind === 'validation' ? 'validation' : phaseRef.current
+        setFailurePhase(nextPhase)
         setStatus('error')
         setError(event.data.error)
         setResult(null)
         if (actionRef.current === 'run') {
-          onRunCompleteRef.current?.({ status: 'error', stdout: '', stderr: event.data.error, durationMs: event.data.durationMs })
+          onRunCompleteRef.current?.({ status: 'error', stdout: '', stderr: event.data.error, durationMs: event.data.durationMs, failurePhase: nextPhase })
         }
       } else if (actionRef.current === 'reset') {
         setStatus('success')
@@ -148,6 +154,8 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
     setAction(action)
     startedAtRef.current = performance.now()
     setStatus('loading')
+    phaseRef.current = 'startup'
+    setFailurePhase(undefined)
     setError('')
     setResetNotice('')
     if (action === 'run') setResult(null)
@@ -197,8 +205,8 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   }, [destroyWorker])
 
   const advice = useMemo(() => error
-    ? coachRunnerError('sql', entryFile.path, { status: 'error', stdout: '', stderr: error, durationMs: durationMs ?? 0 })
-    : null, [durationMs, entryFile.path, error])
+    ? coachRunnerError('sql', entryFile.path, { status: 'error', stdout: '', stderr: error, durationMs: durationMs ?? 0, failurePhase })
+    : null, [durationMs, entryFile.path, error, failurePhase])
 
   useEffect(() => {
     onErrorAdviceChange?.(advice ? { advice, kind: 'sql' } : null)

@@ -5,5 +5,5 @@ export interface RunnerOutcome {
   stdout: string
   stderr: string
   durationMs: number | null
-  failurePhase?: 'startup' | 'execution'
+  failurePhase?: 'startup' | 'execution' | 'validation'
 }

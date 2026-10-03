@@ -213,7 +213,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         : (event.data.exitCode === 0 ? 'success' : 'error')
       const outcome: RunnerOutcome = {
         status,
-        ...(status === 'error' ? { failurePhase: programStarted ? 'execution' as const : 'startup' as const } : {}),
+        ...(status === 'error' ? { failurePhase: event.data.errorKind === 'validation' ? 'validation' as const : programStarted ? 'execution' as const : 'startup' as const } : {}),
         stdout,
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),

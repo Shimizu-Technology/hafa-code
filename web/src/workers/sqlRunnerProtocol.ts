@@ -34,4 +34,4 @@ export type SqlRunnerRequest = SqlRunRequest | SqlResetRequest | SqlAbortRequest
 
 export type SqlRunnerResponse =
   | { id: string; type: 'started'; action: 'run' | 'reset' }
-  | { id: string; type: 'result'; durationMs: number; error?: string; result?: SqlQueryResult; tableCount?: number }
+  | { id: string; type: 'result'; durationMs: number; errorKind?: 'validation'; error?: string; result?: SqlQueryResult; tableCount?: number }

@@ -20,10 +20,9 @@ function stringifyQuickJsValue(value: unknown) {
 }
 
 async function runTypeScript({ id, files, entryPath, timeoutMs }: RunRequest) {
-  postRunnerMessage({ id, type: 'started' })
   const compiled = compileTypeScriptProject(files, entryPath, typeScriptLibraries)
   if (compiled.diagnostics.length || !compiled.entryModule) {
-    return { stdout: '', stderr: `${compiled.diagnostics.join('\n')}\n`, exitCode: 1 }
+    return { stdout: '', stderr: `${compiled.diagnostics.join('\n')}\n`, exitCode: 1, errorKind: 'validation' as const }
   }
 
   const quickjs = await quickJsModulePromise
@@ -33,6 +32,7 @@ async function runTypeScript({ id, files, entryPath, timeoutMs }: RunRequest) {
     maxStackSizeBytes: 512 * 1024,
   })
   const vm = runtime.newContext()
+  postRunnerMessage({ id, type: 'started' })
   const output = { stdout: '', stderr: '' }
   let outputBytes = 0
   let outputTruncated = false
