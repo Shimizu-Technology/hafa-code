@@ -1,10 +1,9 @@
 import type { Plugin } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 interface BundleEntry {
@@ -34,15 +33,47 @@ const PYODIDE_RUNTIME_FILES = [
   'python_stdlib.zip',
 ]
 
-function copyPyodideRuntime() {
+// Only these pinned core files are served; arbitrary package paths stay private.
+function copyPyodideRuntime(): Plugin {
   const pyodideDirectory = dirname(createRequire(import.meta.url).resolve('pyodide'))
-  return viteStaticCopy({
-    targets: PYODIDE_RUNTIME_FILES.map((fileName) => ({
-      src: join(pyodideDirectory, fileName).replace(/\\/g, '/'),
-      dest: 'assets/pyodide',
-      rename: { stripBase: true },
-    })),
-  })
+  const contentTypes: Record<string, string> = {
+    'pyodide.asm.mjs': 'application/javascript',
+    'pyodide.asm.wasm': 'application/wasm',
+    'pyodide-lock.json': 'application/json',
+    'python_stdlib.zip': 'application/zip',
+  }
+  return {
+    name: 'hafa-code-pyodide-runtime',
+    configureServer(server) {
+      const routes = new Map(PYODIDE_RUNTIME_FILES.map((fileName) => [
+        `${server.config.base}assets/pyodide/${fileName}`, fileName,
+      ]))
+      server.middlewares.use((request, response, next) => {
+        const fileName = routes.get(request.url?.split('?')[0] ?? '')
+        if (!fileName || !['GET', 'HEAD'].includes(request.method ?? '')) return next()
+        const stream = createReadStream(join(pyodideDirectory, fileName))
+        stream.on('error', next)
+        stream.on('open', () => {
+          response.setHeader('Content-Type', contentTypes[fileName])
+          if (request.method === 'HEAD') {
+            stream.destroy()
+            response.end()
+          } else {
+            stream.pipe(response)
+          }
+        })
+        response.on('close', () => stream.destroy())
+      })
+    },
+    generateBundle() {
+      for (const fileName of PYODIDE_RUNTIME_FILES) {
+        this.emitFile({
+          type: 'asset', fileName: `assets/pyodide/${fileName}`,
+          source: readFileSync(join(pyodideDirectory, fileName)),
+        })
+      }
+    },
+  }
 }
 
 const VIRTUAL_TYPESCRIPT_LIBRARIES = 'virtual:hafa-typescript-libraries'
@@ -93,6 +124,7 @@ function buildServiceWorker(): Plugin {
       })
 
       Object.values(bundle).forEach((item) => {
+        if (item.fileName.startsWith('assets/pyodide/')) return
         const isLightweightAsset = /\.(css|json|png|svg|ttf)$/i.test(item.fileName)
         if (!isLightweightAsset && !entryImports.has(item.fileName)) return
         appShell.add(`/${item.fileName}`)

@@ -248,11 +248,12 @@ describe('RunnerPanel', () => {
       status: 'timeout',
       stdout: '',
       stderr: 'The browser runtime took too long to load. Check your connection, then try again.',
+      failurePhase: 'startup',
       durationMs: PYTHON_STARTUP_TIMEOUT_MS,
     })
     expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
       kind: 'python',
-      advice: expect.objectContaining({ guideTopicId: 'python-loops' }),
+      advice: expect.objectContaining({ title: 'The browser runtime could not start', location: null, guideTopicId: 'python-output-comments' }),
     }))
   })
 
@@ -303,6 +304,7 @@ describe('RunnerPanel', () => {
       status: 'timeout',
       stdout: 'Before timeout\n',
       stderr: `Execution stopped after ${RUNNER_TIMEOUT_MS}ms.`,
+      failurePhase: 'execution',
       durationMs: RUNNER_TIMEOUT_MS + 250,
     })
     expect(worker.onmessage).toBeNull()
@@ -366,15 +368,41 @@ describe('RunnerPanel', () => {
       status: 'error',
       stdout: '',
       stderr: 'Runtime broke',
+      failurePhase: 'startup',
       durationMs: expect.any(Number),
     })
     expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({
       kind: 'python',
       advice: expect.objectContaining({
-        title: 'Let’s decode this python error',
+        title: 'The browser runtime could not start',
         guideTopicId: 'python-output-comments',
       }),
     }))
+  })
+
+  it('gives startup recovery when the loader returns a failure before started', () => {
+    const onErrorAdviceChange = vi.fn()
+    const onRunComplete = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} onErrorAdviceChange={onErrorAdviceChange} />)
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances[0]
+    const request = worker.messages.find((message) => message.type === 'run')!
+    act(() => worker.respond({ id: request.id, type: 'result', stdout: '', stderr: 'Failed to fetch runtime', exitCode: 1 }))
+    expect(onRunComplete).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', failurePhase: 'startup' }))
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({ advice: expect.objectContaining({ title: 'The browser runtime could not start', location: null }) }))
+  })
+
+  it('keeps learner-code advice after the worker reports started', () => {
+    const onErrorAdviceChange = vi.fn()
+    render(<RunnerPanel project={project} entryFile={project.files[0]} onErrorAdviceChange={onErrorAdviceChange} />)
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeWorker.instances[0]
+    const request = worker.messages.find((message) => message.type === 'run')!
+    act(() => {
+      worker.respond({ id: request.id, type: 'started' })
+      worker.respond({ id: request.id, type: 'result', stdout: '', stderr: 'NameError: missing is not defined', exitCode: 1 })
+    })
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({ advice: expect.objectContaining({ title: 'Python does not know that name', location: 'main.py' }) }))
   })
 
   it('notifies the owner when an active run is cancelled by unmounting', () => {

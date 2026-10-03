@@ -640,6 +640,44 @@ describe('App language guide practice projects', () => {
     expect(screen.getByRole('status').textContent).toMatch(/duplicated into Robotics/i)
   })
 
+  it('keeps the selected cloud copy when another autosave completes in the same turn', async () => {
+    const user = userEvent.setup()
+    const source = { ...createProject('ruby'), id: '42', title: 'Cloud starter', owner: { id: 7, fullName: 'Student One' }, lockVersion: 0 }
+    const copy = { ...source, id: '43', title: 'Cloud starter Copy' }
+    authHarness.value = {
+      isSignedIn: true, isLoading: false,
+      user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
+      organizations: [], syncSession: vi.fn(),
+    }
+    vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [source], error: null })
+    vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    vi.spyOn(api, 'getCheckpoints').mockResolvedValue({ data: [], error: null })
+    vi.spyOn(api, 'updateProject').mockResolvedValue({ data: source, error: null, status: 200, code: null, conflictProject: null })
+    let resolveCreate!: (result: Awaited<ReturnType<typeof api.createProject>>) => void
+    const createResult = new Promise<Awaited<ReturnType<typeof api.createProject>>>((resolve) => { resolveCreate = resolve })
+    const create = vi.spyOn(api, 'createProject').mockReturnValue(createResult)
+    let resolveDuplicate!: (result: Awaited<ReturnType<typeof api.duplicateProject>>) => void
+    const duplicateResult = new Promise<Awaited<ReturnType<typeof api.duplicateProject>>>((resolve) => { resolveDuplicate = resolve })
+    const duplicate = vi.spyOn(api, 'duplicateProject').mockReturnValue(duplicateResult)
+
+    render(<App />)
+    await waitFor(() => expect(create).toHaveBeenCalled(), { timeout: 2_000 })
+    const autosavingProject = create.mock.calls[0][0]
+    await user.click(screen.getAllByRole('button', { name: 'Cloud starter Ruby' })[0])
+    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+    await user.click(within(screen.getByRole('dialog', { name: 'Where should the copy live?' })).getByRole('button', { name: 'Duplicate here' }))
+    await waitFor(() => expect(duplicate).toHaveBeenCalled())
+    await act(async () => {
+      resolveDuplicate({ data: copy, error: null })
+      resolveCreate({ data: { ...autosavingProject, id: '44', owner: source.owner, lockVersion: 0 }, error: null, status: 201, code: null, conflictProject: null })
+      await Promise.all([duplicateResult, createResult])
+    })
+    expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Cloud starter Copy')
+    expect(storedLibrary().activeProjectId).toBe('43')
+    expect(storedLibrary().projects.some((candidate) => candidate.id === '43')).toBe(true)
+    expect(storedLibrary().projects.some((candidate) => candidate.id === '44')).toBe(true)
+  })
+
   it('keeps student source out of teacher workspace storage until a review is opened', async () => {
     const user = userEvent.setup()
     const organization = { id: 20, name: 'Robotics', slug: 'robotics', role: 'instructor' as const }

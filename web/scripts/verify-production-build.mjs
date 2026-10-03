@@ -170,6 +170,9 @@ console.log(`Verified lazy SQLite runtime assets: ${sqliteRuntimeAssets.sort().j
 
 const pyodideAssets = (await readdir(new URL('pyodide/', ASSETS_DIRECTORY))).sort()
 assert.deepEqual(pyodideAssets, PYODIDE_RUNTIME_FILES, 'Expected only the pinned core Pyodide runtime assets')
+for (const assetName of pyodideAssets) {
+  assert(!serviceWorker.includes(`/assets/pyodide/${assetName}`), `Pyodide runtime asset ${assetName} must remain lazy and outside the service-worker app shell`)
+}
 console.log(`Verified self-hosted Pyodide runtime: ${pyodideAssets.join(', ')}`)
 
 const productionScriptNames = assetNames.filter((name) => name.endsWith('.js'))

@@ -2124,7 +2124,7 @@ button.context-chip.active,
 .error-coach p { color: #594a24; line-height: 1.5; margin: 0; }
 .error-coach ol { display: grid; gap: 0.3rem; margin: 0; padding-left: 1.3rem; }
 .error-coach li { line-height: 1.4; padding-left: 0.15rem; }
-.error-coach button { justify-self: start; }
+.error-coach button { justify-self: start; min-height: 44px; }
 
 .app-shell[data-theme="dark"] .error-coach {
   background: #29230f;

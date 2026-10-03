@@ -12,6 +12,7 @@ interface RunState {
   stdout: string
   stderr: string
   durationMs: number | null
+  failurePhase?: RunnerOutcome['failurePhase']
 }
 
 type TerminalLine = {
@@ -104,6 +105,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
 
     const runId = crypto.randomUUID()
     const startedAt = performance.now()
+    let programStarted = false
     const worker = workerRef.current ?? runner.createWorker()
 
     workerRef.current = worker
@@ -130,6 +132,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       appendTerminalLine({ kind: 'system', text: message })
       const outcome: RunnerOutcome = {
         status: 'timeout',
+        failurePhase: 'startup',
         stdout: streamedOutputRef.current.stdout,
         stderr: streamedOutputRef.current.stderr || message,
         durationMs: Math.round(performance.now() - startedAt),
@@ -147,6 +150,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         const message = `Execution stopped after ${executionTimeoutMs}ms.`
         const outcome: RunnerOutcome = {
           status: 'timeout',
+          failurePhase: 'execution',
           stdout: streamedOutputRef.current.stdout,
           stderr: streamedOutputRef.current.stderr || message,
           durationMs: Math.round(performance.now() - startedAt),
@@ -171,6 +175,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       if (event.data.id !== runIdRef.current) return
 
       if (event.data.type === 'started') {
+        programStarted = true
         setRunPhase('executing')
         armExecutionTimeout()
         return
@@ -208,6 +213,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         : (event.data.exitCode === 0 ? 'success' : 'error')
       const outcome: RunnerOutcome = {
         status,
+        ...(status === 'error' ? { failurePhase: programStarted ? 'execution' as const : 'startup' as const } : {}),
         stdout,
         stderr,
         durationMs: event.data.durationMs ?? Math.round(performance.now() - startedAt),
@@ -227,6 +233,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         : details
       const outcome: RunnerOutcome = {
         status: 'error',
+        failurePhase: programStarted ? 'execution' : 'startup',
         stdout: streamedOutputRef.current.stdout,
         stderr: streamedOutputRef.current.stderr || message,
         durationMs: Math.round(performance.now() - startedAt),
@@ -264,6 +271,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
           stdout: runState.stdout,
           stderr: runState.stderr,
           durationMs: runState.durationMs ?? 0,
+          failurePhase: runState.failurePhase,
         })
       : null
   ), [entryFile.path, project.kind, runState])

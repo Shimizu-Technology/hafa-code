@@ -113,9 +113,18 @@ function errorLocation(message: string, entryPath: string) {
 
 export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: RunnerOutcome, source?: ErrorSourceLocation): ErrorCoachAdvice | null {
   if (outcome.status !== 'error' && outcome.status !== 'timeout') return null
+  if (outcome.failurePhase === 'startup') {
+    return {
+      title: 'The browser runtime could not start',
+      explanation: 'The runtime stopped before your program started. Its download or initialization may have failed or taken too long.',
+      location: null,
+      steps: ['Check your connection, then try running once more.', 'Save or export your project before reloading the page.', 'If startup keeps failing, share the loading message with your instructor.'],
+      guideTopicId: basicsTopic[kind],
+    }
+  }
   if (outcome.status === 'timeout') {
     const topic = kind === 'web' ? 'web-dom-events' : loopsTopic[kind]
-    return { title: 'The program kept running too long', explanation: 'This often means a loop never reaches its stopping condition, or the browser runtime could not finish loading.', location: entryPath || null, steps: ['Check loop conditions and whether their values change.', 'Temporarily add output inside the loop to follow its progress.', 'If the runtime was still loading, check the connection and try once more.'], guideTopicId: topic }
+    return { title: 'The program kept running too long', explanation: 'This often means a loop never reaches its stopping condition or the program needs more time than the browser allows.', location: entryPath || null, steps: ['Check loop conditions and whether their values change.', 'Temporarily add output inside the loop to follow its progress.', 'Reduce the amount of work in one run, then try again.'], guideTopicId: topic }
   }
 
   const message = outcome.stderr.trim()

@@ -19,6 +19,13 @@ describe('contextual error coach', () => {
     expect(advice?.steps).toHaveLength(3)
   })
 
+  it.each(['python', 'java'] as const)('separates %s startup failure from learner loop advice', (kind) => {
+    const advice = coachRunnerError(kind, kind === 'python' ? 'main.py' : 'Main.java', { status: 'timeout', failurePhase: 'startup', stdout: '', stderr: 'The browser runtime took too long to load.', durationMs: 90_000 })
+    expect(advice).toMatchObject({ title: 'The browser runtime could not start', location: null })
+    expect(advice?.guideTopicId).not.toContain('loop')
+    expect(advice?.steps.join(' ')).not.toContain('loop')
+  })
+
   it('turns a timeout into a loop-focused diagnostic', () => {
     const advice = coachRunnerError('java', 'Main.java', { status: 'timeout', stdout: '', stderr: 'Execution stopped after 30000ms.', durationMs: 30_250 })
     expect(advice).toMatchObject({ title: 'The program kept running too long', guideTopicId: 'java-loops' })

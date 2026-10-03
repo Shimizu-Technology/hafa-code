@@ -78,6 +78,46 @@ test('Python survives a slow first runtime download and runs again from the warm
   await expect(page.locator('.terminal-footer')).toContainText('success')
 })
 
+test('Python runtime download failure explains startup recovery and can retry', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.clock.install()
+  await openStudent(page)
+  await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
+  let abortedRuntime = false
+  await page.route('**/assets/pyodide/pyodide.asm.wasm', async (route) => {
+    abortedRuntime = true
+    await route.abort('failed')
+  })
+  await page.getByRole('button', { name: 'Run Python' }).click()
+  await expect.poll(() => abortedRuntime).toBe(true)
+  // Pyodide can stay initializing after this fetch fails. Exercise the real
+  // startup watchdog without spending 90 wall-clock seconds on the fault.
+  await page.clock.fastForward(90_001)
+  await expect(page.getByText('The browser runtime could not start')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('Check your connection, then try running once more.')).toBeVisible()
+  await expect(page.getByText('The program kept running too long')).not.toBeVisible()
+  for (const viewport of [
+    { width: 390, height: 844 }, { width: 768, height: 1024 },
+    { width: 1280, height: 720 }, { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await expect(page.getByText('The browser runtime could not start')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { message: `No horizontal overflow at ${viewport.width}×${viewport.height}` }).toBe(true)
+    const review = page.getByRole('button', { name: 'Review Output and comments' })
+    // Crossing the overlay breakpoint remounts the sidecar. Wait for the
+    // current control rather than measuring the outgoing layout.
+    await expect.poll(async () => {
+      const box = await review.boundingBox()
+      return Boolean(box && box.width >= 44 && box.height >= 44)
+    }, { message: `Visible 44px review target at ${viewport.width}×${viewport.height}` }).toBe(true)
+  }
+
+  await page.unroute('**/assets/pyodide/pyodide.asm.wasm')
+  await page.getByRole('button', { name: 'Run again' }).click()
+  await expect(page.locator('.terminal')).toContainText('Hafa adai, Python!', { timeout: 30_000 })
+  await expect(page.locator('.terminal-footer')).toContainText('success')
+})
+
 test('TypeScript and SQL expose complete guides and three-tier practice catalogs', async ({ page }) => {
   await openStudent(page)
 
