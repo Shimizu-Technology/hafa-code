@@ -29,7 +29,7 @@
     "typescript": "~6.0.2"
   },
   "overrides": {
-    "dompurify": "^3.4.1"
+    "dompurify": "^3.4.16"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -48,7 +48,6 @@
     "jsdom": "^26.1.0",
     "typescript-eslint": "^8.58.2",
     "vite": "8.0.16",
-    "vite-plugin-static-copy": "4.1.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   }
 }

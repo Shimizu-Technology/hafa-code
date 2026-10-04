@@ -1,5 +1,12 @@
 import type { ProjectFile } from '../lib/projectTypes'
 
+export class RunnerValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RunnerValidationError'
+  }
+}
+
 export interface RunRequest {
   id: string
   type: 'run'
@@ -33,12 +40,14 @@ export interface RunnerResponse {
   stderr?: string
   durationMs?: number
   exitCode?: number
+  errorKind?: 'validation'
 }
 
 export interface RunnerResult {
   stdout: string
   stderr: string
   exitCode: number
+  errorKind?: 'validation'
 }
 
 export type RunHandler = (request: RunRequest) => Promise<RunnerResult>
@@ -68,13 +77,14 @@ export function installRunner(
 
     const startedAt = performance.now()
     run(request)
-      .then(({ stdout, stderr, exitCode }) => {
+      .then(({ stdout, stderr, exitCode, errorKind }) => {
         postRunnerMessage({
           id: request.id,
           type: 'result',
           stdout,
           stderr,
           exitCode,
+          ...(errorKind ? { errorKind } : {}),
           durationMs: Math.round(performance.now() - startedAt),
         })
       })
@@ -85,6 +95,7 @@ export function installRunner(
           stdout: '',
           stderr: error instanceof Error ? error.message : String(error),
           exitCode: 1,
+          ...(error instanceof RunnerValidationError ? { errorKind: 'validation' as const } : {}),
           durationMs: Math.round(performance.now() - startedAt),
         })
       })

@@ -1,3 +1,4 @@
+import { RunnerValidationError } from './runnerProtocol'
 import sqlite3InitModule, { type Database, type Sqlite3Static } from '@sqlite.org/sqlite-wasm'
 import sqliteWasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url'
 import { enableSqlDefensiveMode, executeSql, initializeSqlDatabase, sqlBootstrapSignature, validateSqlProject } from './sqlRunnerCore'
@@ -60,7 +61,7 @@ self.onmessage = async (event: MessageEvent<SqlRunnerRequest>) => {
   const startedAt = performance.now()
   try {
     const validationError = validateSqlProject(request.files, request.type === 'run' ? request.entryPath : undefined)
-    if (validationError) throw new Error(validationError)
+    if (validationError) throw new RunnerValidationError(validationError)
     await loadSqlite()
     respond({ id: request.id, type: 'started', action: request.type })
 
@@ -82,6 +83,7 @@ self.onmessage = async (event: MessageEvent<SqlRunnerRequest>) => {
       id: request.id,
       type: 'result',
       durationMs: Math.round(performance.now() - startedAt),
+      ...(error instanceof RunnerValidationError ? { errorKind: 'validation' as const } : {}),
       error: error instanceof Error ? error.message : String(error),
     })
   }

@@ -1368,10 +1368,14 @@ export default function App() {
       clearPendingPracticeCheck()
       if (copyDestinationId !== activeOrganizationId) suppressNextCloudLoadNoticeRef.current = true
       setActiveOrganizationId(copyDestinationId)
-      setLibrary((current) => ({
+      const nextLibrary = {
         activeProjectId: copy.id,
-        projects: [copy, ...current.projects.filter((candidate) => candidate.id !== copy.id)],
-      }))
+        projects: [copy, ...libraryRef.current.projects.filter((candidate) => candidate.id !== copy.id)],
+      }
+      // An in-flight autosave can settle before React's library effect runs.
+      // Publish this selection immediately so its merge preserves the copy.
+      libraryRef.current = nextLibrary
+      setLibrary(nextLibrary)
       setReviewProject(null)
       setActivePath(copy.files[0].path)
       setShowArchived(false)

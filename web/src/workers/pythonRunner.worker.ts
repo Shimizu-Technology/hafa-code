@@ -1,5 +1,5 @@
 import { loadPyodide } from 'pyodide'
-import { installRunner, postRunnerMessage, type RunRequest } from './runnerProtocol'
+import { installRunner, postRunnerMessage, RunnerValidationError, type RunRequest } from './runnerProtocol'
 import { createStdinBridge } from './stdinBridge'
 
 const PROJECT_ROOT = '/home/pyodide/project'
@@ -14,7 +14,7 @@ type PythonWorkerGlobal = typeof globalThis & {
 function safeProjectPath(path: string) {
   const segments = path.replace(/\\/g, '/').split('/')
   if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-    throw new Error(`Unsupported project path: ${path}`)
+    throw new RunnerValidationError(`Unsupported project path: ${path}`)
   }
   return segments.join('/')
 }

@@ -1,3 +1,5 @@
+import { RunnerValidationError } from './runnerProtocol'
+
 export const JAVA_MAX_PROJECT_FILES = 50
 export const JAVA_MAX_PROJECT_BYTES = 2_000_000
 export const JAVA_MAX_OUTPUT_BYTES = 256 * 1024
@@ -41,14 +43,14 @@ export function safeJavaProjectPath(path: string) {
   const normalized = path.replace(/\\/g, '/')
   const segments = normalized.split('/')
   if (segments.some((segment) => !segment || segment === '.' || segment === '..' || segment.startsWith('.'))) {
-    throw new Error(`Unsupported Java file path: ${path}`)
+    throw new RunnerValidationError(`Unsupported Java file path: ${path}`)
   }
   return segments.join('/')
 }
 
 export function validateJavaProject(request: JavaRunRequest) {
   if (request.files.length > JAVA_MAX_PROJECT_FILES) {
-    throw new Error(`Java projects support up to ${JAVA_MAX_PROJECT_FILES} files.`)
+    throw new RunnerValidationError(`Java projects support up to ${JAVA_MAX_PROJECT_FILES} files.`)
   }
 
   const entryPath = safeJavaProjectPath(request.entryPath)
@@ -58,24 +60,24 @@ export function validateJavaProject(request: JavaRunRequest) {
   })
   const totalBytes = effectiveFiles.reduce((total, file) => total + encoder.encode(file.content).byteLength, 0)
   if (totalBytes > JAVA_MAX_PROJECT_BYTES) {
-    throw new Error(`Java projects support up to ${JAVA_MAX_PROJECT_BYTES.toLocaleString('en-US')} bytes of source code.`)
+    throw new RunnerValidationError(`Java projects support up to ${JAVA_MAX_PROJECT_BYTES.toLocaleString('en-US')} bytes of source code.`)
   }
 
   const javaFiles = effectiveFiles.filter((file) => file.language === 'java' || file.path.toLowerCase().endsWith('.java'))
   if (!javaFiles.some((file) => file.path === entryPath)) {
-    throw new Error(`Java entry file not found: ${entryPath}`)
+    throw new RunnerValidationError(`Java entry file not found: ${entryPath}`)
   }
-  if (!entryPath.toLowerCase().endsWith('.java')) throw new Error('The Java entry file must end in .java.')
+  if (!entryPath.toLowerCase().endsWith('.java')) throw new RunnerValidationError('The Java entry file must end in .java.')
 
   for (const file of javaFiles) {
     if (/^\s*package\s+[\w.]+\s*;/m.test(file.content)) {
-      throw new Error('Java packages are not supported yet. Keep Main.java and helper classes in the default package.')
+      throw new RunnerValidationError('Java packages are not supported yet. Keep Main.java and helper classes in the default package.')
     }
   }
 
   const basenames = javaFiles.map((file) => file.path.split('/').pop() ?? '')
   if (new Set(basenames).size !== basenames.length) {
-    throw new Error('Java files must have unique filenames while packages are disabled.')
+    throw new RunnerValidationError('Java files must have unique filenames while packages are disabled.')
   }
 
   return { entryPath, javaFiles }

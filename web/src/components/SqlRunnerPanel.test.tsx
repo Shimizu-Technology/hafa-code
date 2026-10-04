@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RUNNER_STARTUP_TIMEOUT_MS } from '../lib/codeRunner'
 import type { SqlRunnerRequest, SqlRunnerResponse } from '../workers/sqlRunnerProtocol'
 import { SqlRunnerPanel } from './SqlRunnerPanel'
 
@@ -63,6 +64,7 @@ describe('SqlRunnerPanel', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('renders query rows as an accessible table and reuses the project worker for reset', async () => {
@@ -140,8 +142,29 @@ describe('SqlRunnerPanel', () => {
     })
 
     expect(screen.getByRole('alert').textContent).toContain('no such table: missing_table')
-    expect(onRunComplete).toHaveBeenCalledWith({ status: 'error', stdout: '', stderr: 'no such table: missing_table', durationMs: 9 })
+    expect(onRunComplete).toHaveBeenCalledWith({ status: 'error', stdout: '', stderr: 'no such table: missing_table', durationMs: 9, failurePhase: 'execution' })
     expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'sql', advice: expect.objectContaining({ title: 'SQLite cannot find that table' }) }))
+  })
+
+  it('gives runtime recovery for SQL startup timeout', () => {
+    vi.useFakeTimers()
+    const onErrorAdviceChange = vi.fn()
+    render(<SqlRunnerPanel project={project} entryFile={project.files[0]} onErrorAdviceChange={onErrorAdviceChange} />)
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    act(() => vi.advanceTimersByTime(RUNNER_STARTUP_TIMEOUT_MS))
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({ advice: expect.objectContaining({ title: 'The browser runtime could not start', location: null }) }))
+  })
+
+  it('preserves SQL project validation before the runtime starts', () => {
+    const onErrorAdviceChange = vi.fn()
+    const onRunComplete = vi.fn()
+    render(<SqlRunnerPanel project={project} entryFile={project.files[0]} onErrorAdviceChange={onErrorAdviceChange} onRunComplete={onRunComplete} />)
+    act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+    const worker = FakeSqlWorker.instances[0]
+    const request = worker.messages[0]
+    act(() => worker.respond({ id: request.id, type: 'result', durationMs: 1, errorKind: 'validation', error: 'SQL entry file not found: main.sql' }))
+    expect(onRunComplete).toHaveBeenCalledWith(expect.objectContaining({ failurePhase: 'validation', stderr: 'SQL entry file not found: main.sql' }))
+    expect(onErrorAdviceChange).toHaveBeenLastCalledWith(expect.objectContaining({ advice: expect.objectContaining({ location: 'main.sql', title: 'Let’s decode this sql error' }) }))
   })
 
   it('terminates the database worker when a learner stops a query', async () => {

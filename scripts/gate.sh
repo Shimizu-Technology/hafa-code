@@ -44,6 +44,8 @@ npm --prefix web run test:e2e
 if [ -d api ]; then
   echo "-- api tests"
   (cd api && bundle exec rails test)
+  echo "-- api style and security"
+  (cd api && bin/rubocop && bin/brakeman --no-pager && bundle exec bundler-audit check --update)
 fi
 
 echo "-- audit all web deps"

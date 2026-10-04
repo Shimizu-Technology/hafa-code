@@ -5,7 +5,7 @@ import {
   validateJavaProject,
   type JavaOutputState,
 } from './javaRunnerCore'
-import type { RunRequest } from './runnerProtocol'
+import { RunnerValidationError, type RunRequest } from './runnerProtocol'
 
 declare function cheerpjInit(options?: {
   version?: number
@@ -395,6 +395,7 @@ self.onmessage = (event: MessageEvent<RunnerRequest>) => {
         stdout: '',
         stderr: error instanceof Error ? error.message : String(error),
         exitCode: 1,
+        ...(error instanceof RunnerValidationError ? { errorKind: 'validation' as const } : {}),
         durationMs: Math.round(performance.now() - startedAt),
       })
     })
