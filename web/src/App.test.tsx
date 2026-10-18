@@ -818,6 +818,22 @@ describe('App language guide practice projects', () => {
       expect(writeText).toHaveBeenCalledOnce()
     })
 
+    it('ignores a share link that finishes after the learner closed Share', async () => {
+      const user = userEvent.setup()
+      let finish: (value: Awaited<ReturnType<typeof api.createShare>>) => void = () => {}
+      vi.spyOn(api, 'createShare').mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      await user.click(screen.getByRole('button', { name: 'Create share link' }))
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      await act(async () => { finish({ data: { token: 'stale' } as never, error: null }) })
+      expect(writeText).not.toHaveBeenCalled()
+      expect(screen.getByRole('dialog', { name: 'Share a copy of this project?' })).toBeTruthy()
+    })
+
     it('copies the code in the open file from the editor header', async () => {
       const user = userEvent.setup()
       const writeText = vi.fn().mockResolvedValue(undefined)

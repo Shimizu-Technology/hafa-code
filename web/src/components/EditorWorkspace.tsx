@@ -53,7 +53,7 @@ type EditorWorkspaceProps = {
 }
 
 type Monaco = Parameters<OnMount>[1]
-type CopyStatus = { state: 'idle' | 'copied' | 'failed'; path: string }
+type CopyStatus = { state: 'idle' | 'copied' | 'failed'; projectId: string; path: string }
 
 const MODIFIER_KEY_CODES = new Set([4, 5, 6, 57]) // Shift, Ctrl, Alt, Meta
 
@@ -93,9 +93,9 @@ export function EditorWorkspace({
   const managedTypeScriptModelsRef = useRef(new Set<string>())
   const onRunShortcutRef = useRef(onRunShortcut)
   const copyResetRef = useRef<number | null>(null)
-  const [copyResult, setCopyResult] = useState<CopyStatus>({ state: 'idle', path: '' })
-  // Feedback belongs to the file that was copied; switching files clears it.
-  const copyStatus = copyResult.path === activeFile.path ? copyResult.state : 'idle'
+  const [copyResult, setCopyResult] = useState<CopyStatus>({ state: 'idle', projectId: '', path: '' })
+  // Feedback belongs to the file that was copied; switching files or projects clears it.
+  const copyStatus = copyResult.projectId === project.id && copyResult.path === activeFile.path ? copyResult.state : 'idle'
   const runnable = projectKindCanRun(project.kind)
   const modifierLabel = isApplePlatform() ? '⌘' : 'Ctrl'
 
@@ -108,11 +108,12 @@ export function EditorWorkspace({
   }, [])
 
   const copyCode = async () => {
+    const projectId = project.id
     const path = activeFile.path
     const copied = await writeClipboardText(activeFile.content)
-    setCopyResult({ state: copied ? 'copied' : 'failed', path })
+    setCopyResult({ state: copied ? 'copied' : 'failed', projectId, path })
     if (copyResetRef.current) window.clearTimeout(copyResetRef.current)
-    copyResetRef.current = window.setTimeout(() => setCopyResult({ state: 'idle', path: '' }), copied ? 2000 : 6000)
+    copyResetRef.current = window.setTimeout(() => setCopyResult({ state: 'idle', projectId: '', path: '' }), copied ? 2000 : 6000)
   }
 
   const syncTypeScriptModels = useCallback((monaco: Monaco) => {

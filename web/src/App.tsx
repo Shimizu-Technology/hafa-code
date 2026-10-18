@@ -277,11 +277,13 @@ export default function App() {
     setFileDialog(null)
     setFileDialogError('')
   })
-  const shareDialogRef = useModalFocus<HTMLElement>(Boolean(shareDialog), () => setShareDialog(null))
-  const shareDialogOpenRef = useRef(false)
-  useEffect(() => {
-    shareDialogOpenRef.current = Boolean(shareDialog)
-  }, [shareDialog])
+  // Each time Share opens or closes, earlier share requests become stale.
+  const shareSessionRef = useRef(0)
+  const closeShareDialog = useCallback(() => {
+    shareSessionRef.current += 1
+    setShareDialog(null)
+  }, [])
+  const shareDialogRef = useModalFocus<HTMLElement>(Boolean(shareDialog), closeShareDialog)
   const workspaceTransferDialogRef = useModalFocus<HTMLElement>(workspaceTransferOpen, () => setWorkspaceTransferOpen(false))
   const orgDialogRef = useModalFocus<HTMLElement>(orgCreateOpen, () => setOrgCreateOpen(false))
   const projectActionsDialogRef = useModalFocus<HTMLElement>(projectActionsOpen, () => setProjectActionsOpen(false))
@@ -1694,6 +1696,7 @@ export default function App() {
       setNotice('External snapshot sharing is disabled for classroom projects. Use Teacher only or Class visibility instead.')
       return
     }
+    shareSessionRef.current += 1
     setShareDialog({ stage: 'confirm', creating: false })
   }
 
@@ -1703,10 +1706,11 @@ export default function App() {
       return
     }
 
+    const session = shareSessionRef.current
     setShareDialog({ stage: 'confirm', creating: true })
     const share = await api.createShare(project)
-    // The learner closed the dialog while the link was being created.
-    if (!shareDialogOpenRef.current) return
+    // The learner closed or reopened Share while the link was being created.
+    if (shareSessionRef.current !== session) return
     if (!share.data) {
       // An offline link has different terms (no expiry, the code lives in the URL), so ask again.
       setShareDialog({ stage: 'failed', error: share.error })
@@ -1714,15 +1718,17 @@ export default function App() {
     }
     const url = `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
     const didCopy = await writeClipboardText(url)
+    if (shareSessionRef.current !== session) return
     setShareDialog({ stage: 'ready', url, mode: 'server', copied: didCopy, error: null })
     setNotice(didCopy ? 'Share snapshot link copied.' : 'Share snapshot link is ready to copy.')
   }
 
   const createOfflineShareLink = async () => {
     if (project.organizationId) return
+    const session = shareSessionRef.current
     const url = `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
     const didCopy = await writeClipboardText(url)
-    if (!shareDialogOpenRef.current) return
+    if (shareSessionRef.current !== session) return
     setShareDialog({ stage: 'ready', url, mode: 'offline', copied: didCopy, error: null })
     setNotice(didCopy ? 'Offline share link copied.' : 'Offline share link is ready to copy.')
   }
@@ -2505,7 +2511,7 @@ export default function App() {
         onCloseProjectCopy={() => {
           if (!copySubmitting) setCopyDialogOpen(false)
         }}
-        onCloseShareDialog={() => setShareDialog(null)}
+        onCloseShareDialog={closeShareDialog}
         onConfirmProjectAction={confirmProjectAction}
         onConfirmProjectCopy={() => { void confirmProjectCopy() }}
         onConfirmShare={() => { void copyShareLink() }}
