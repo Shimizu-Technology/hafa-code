@@ -12,7 +12,11 @@ import { PracticeLabContent } from './PracticeLab'
 export type LearningTab = 'guide' | 'practice' | 'coach'
 
 const LEARNING_TABS: LearningTab[] = ['guide', 'practice', 'coach']
-export const LEARNING_SIDECAR_OVERLAY_QUERY = '(max-width: 1100px)'
+/**
+ * Below this width a side column would squeeze the editor under ~480px, so the
+ * Guide, Practice, and Coach open as a drawer and the Coach waits for "Fix this error".
+ */
+export const LEARNING_SIDECAR_OVERLAY_QUERY = '(max-width: 1599px)'
 
 interface LearningSidecarProps {
   activeTab: LearningTab

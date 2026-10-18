@@ -750,4 +750,75 @@ describe('App language guide practice projects', () => {
     expect(within(actions).getByRole('button', { name: 'Duplicate' })).toHaveProperty('disabled', false)
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain('student secret')
   })
+
+  describe('pilot learner trust', () => {
+    it('shows the guide for the open project language, not the language the page started with', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Python' })[0])
+      await user.click(screen.getAllByRole('button', { name: /practice lab/i })[0])
+      await user.click(screen.getByRole('tab', { name: /Guide/ }))
+      expect(screen.getByRole('complementary', { name: 'Python learning' })).toBeTruthy()
+      expect(screen.queryByRole('complementary', { name: 'Ruby learning' })).toBeNull()
+    })
+
+    it('numbers a second default project instead of repeating its name', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Python' })[0])
+      await user.click(screen.getAllByRole('button', { name: 'Python' })[0])
+      expect(storedLibrary().projects.map((project) => project.title)).toEqual(['Python Playground (2)', 'Python Playground', 'Ruby Playground'])
+      expect(screen.getAllByText('1 file · entry main.py').length).toBeGreaterThan(0)
+    })
+
+    it('restores a default name when the project name is cleared', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      const name = screen.getByLabelText('Project name')
+      await user.clear(name)
+      await user.type(name, '   {Enter}')
+      expect(name).toHaveProperty('value', 'Ruby Playground')
+      expect(name.getAttribute('maxlength')).toBe('120')
+    })
+
+    it('asks before Share creates a server snapshot', async () => {
+      const user = userEvent.setup()
+      const createShare = vi.spyOn(api, 'createShare').mockResolvedValue({ data: { token: 'abc' } as never, error: null })
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true })
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      expect(screen.getByRole('dialog', { name: 'Share a copy of this project?' }).textContent).toContain('Anyone with the link can open and copy this snapshot for 30 days')
+      expect(createShare).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(createShare).not.toHaveBeenCalled()
+
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      await user.click(screen.getByRole('button', { name: 'Create share link' }))
+      await waitFor(() => expect(createShare).toHaveBeenCalledOnce())
+      expect(await screen.findByRole('dialog', { name: 'Copy project link' })).toBeTruthy()
+      expect((screen.getByLabelText('Share URL') as HTMLInputElement).value).toMatch(/#share=abc$/)
+    })
+
+    it('copies the code in the open file from the editor header', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      render(<App />)
+      await user.click(screen.getByRole('button', { name: 'Copy code' }))
+      expect(writeText).toHaveBeenCalledWith(storedLibrary().projects[0].files[0].content)
+      expect(screen.getByRole('button', { name: 'Code copied' })).toBeTruthy()
+    })
+
+    it('downloads a one-file project as source code', async () => {
+      const user = userEvent.setup()
+      const createObjectURL = vi.fn(() => 'blob:hafa')
+      Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+      Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Download code (.rb)' })[0])
+      expect(click).toHaveBeenCalled()
+      expect(screen.getByText(/Downloaded ruby-playground.rb/)).toBeTruthy()
+    })
+  })
 })

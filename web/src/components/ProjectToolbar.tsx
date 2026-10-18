@@ -1,6 +1,7 @@
 import { Archive, BookOpen, Copy, Dumbbell, History, MoreHorizontal, RotateCcw, Save, Trash2 } from 'lucide-react'
 import type { RefObject } from 'react'
 import { projectKindDefinition, type ProjectCheckpoint, type ProjectVisibility, type SavedProject } from '../lib/codeRunner'
+import { PROJECT_TITLE_MAX_LENGTH } from '../lib/projectStorage'
 import {
   availableVisibilityOptions,
   formatCheckpointTime,
@@ -32,6 +33,7 @@ type ProjectToolbarProps = {
   onOpenPractice: () => void
   onOpenProjectActions: () => void
   onRename: (title: string) => void
+  onRenameDone?: () => void
   onRestore: () => void
   onRestoreCheckpoint: (checkpoint: ProjectCheckpoint) => void
   onSaveCheckpoint: () => void
@@ -58,6 +60,7 @@ export function ProjectToolbar({
   onOpenPractice,
   onOpenProjectActions,
   onRename,
+  onRenameDone,
   onRestore,
   onRestoreCheckpoint,
   onSaveCheckpoint,
@@ -69,7 +72,16 @@ export function ProjectToolbar({
     <div className="project-toolbar panel surface-grid">
       <div className="title-field">
         <label htmlFor="project-title">Project name</label>
-        <input id="project-title" value={project.title} onChange={(event) => onRename(event.target.value)} disabled={!canEditProject} />
+        <input
+          id="project-title"
+          value={project.title}
+          maxLength={PROJECT_TITLE_MAX_LENGTH}
+          title={project.title}
+          onChange={(event) => onRename(event.target.value)}
+          onBlur={onRenameDone}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+          disabled={!canEditProject}
+        />
         <small>
           {cloudSaveLabel}
           {activeOrganizationId && currentProjectOwnerLabel ? ` · by ${currentProjectOwnerLabel}` : ''}

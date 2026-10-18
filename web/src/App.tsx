@@ -41,8 +41,13 @@ import {
   createConflictCopy,
   createProject,
   duplicateProject,
+  addImportedProject,
   encodeProjectForShare,
   exportProject,
+  importNotice,
+  normalizeProjectTitle,
+  projectExportFormat,
+  uniqueProjectTitle,
   loadLocalCheckpoints,
   loadCheckpointLibrary,
   parseImportedProject,
@@ -189,10 +194,11 @@ export default function App() {
   const [colorModePreference, setColorModePreference] = useState<ColorModePreference>(() => loadColorModePreference())
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpoint[]>(() => loadLocalCheckpoints(initialProject.id))
   const [checkpointMenuOpen, setCheckpointMenuOpen] = useState(false)
-  const [mobileTab, setMobileTab] = useState<MobileTab>('home')
+  const [mobileTab, setMobileTab] = useState<MobileTab>(initial.openCode ? 'code' : 'home')
   const [learningSidecarOpen, setLearningSidecarOpen] = useState(false)
   const [learningTab, setLearningTab] = useState<LearningTab>('guide')
   const [languageGuideKind, setLanguageGuideKind] = useState<ProjectKind>(initialProject.kind)
+  const [languageGuideProjectKind, setLanguageGuideProjectKind] = useState<ProjectKind>(initialProject.kind)
   const [languageGuideTopicId, setLanguageGuideTopicId] = useState<string | null>(null)
   const [guideNavigationRevision, setGuideNavigationRevision] = useState(0)
   const [learningCoachContext, setLearningCoachContext] = useState<ErrorCoachContext>(null)
@@ -225,6 +231,12 @@ export default function App() {
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
   const project = reviewProject ?? library.projects.find((candidate) => candidate.id === library.activeProjectId) ?? library.projects[0]
+  // The guide follows the open project's language; a topic from another language only lasts until the project changes.
+  if (languageGuideProjectKind !== project.kind) {
+    setLanguageGuideProjectKind(project.kind)
+    setLanguageGuideKind(project.kind)
+    setLanguageGuideTopicId(null)
+  }
   const clearPracticeCheckWatchdog = useCallback(() => {
     if (practiceCheckWatchdogRef.current !== null) window.clearTimeout(practiceCheckWatchdogRef.current)
     practiceCheckWatchdogRef.current = null
@@ -264,6 +276,10 @@ export default function App() {
     setFileDialogError('')
   })
   const shareDialogRef = useModalFocus<HTMLElement>(Boolean(shareDialog), () => setShareDialog(null))
+  const shareDialogOpenRef = useRef(false)
+  useEffect(() => {
+    shareDialogOpenRef.current = Boolean(shareDialog)
+  }, [shareDialog])
   const workspaceTransferDialogRef = useModalFocus<HTMLElement>(workspaceTransferOpen, () => setWorkspaceTransferOpen(false))
   const orgDialogRef = useModalFocus<HTMLElement>(orgCreateOpen, () => setOrgCreateOpen(false))
   const projectActionsDialogRef = useModalFocus<HTMLElement>(projectActionsOpen, () => setProjectActionsOpen(false))
@@ -530,10 +546,23 @@ export default function App() {
       return
     }
 
-    const fallback = createProject('ruby')
+    const fallback = createProject(project.kind)
     setLibrary({ activeProjectId: fallback.id, projects: [fallback] })
     setActivePath(fallback.files[0].path)
   }
+
+  useEffect(() => {
+    // A learner who followed a project or language link lands on the code and Run, not the welcome header.
+    if (!initial.openCode || typeof window.matchMedia !== 'function' || window.matchMedia('(max-width: 640px)').matches) return
+    let cancelled = false
+    const scrollToCode = () => {
+      if (!cancelled) document.querySelector('.main-workspace .workspace')?.scrollIntoView({ block: 'start' })
+    }
+    scrollToCode()
+    // Web fonts change the header height, so settle the position once they load.
+    void document.fonts?.ready.then(() => window.requestAnimationFrame(scrollToCode))
+    return () => { cancelled = true }
+  }, [initial.openCode])
 
   useEffect(() => {
     libraryRef.current = library
@@ -613,11 +642,13 @@ export default function App() {
 
     api.getShare(shareToken).then((res) => {
       if (res.data) {
+        const result = addImportedProject(libraryRef.current, res.data)
         clearPendingPracticeCheck()
-        setLibrary((current) => ({ activeProjectId: res.data!.id, projects: [res.data!, ...current.projects] }))
-        setActivePath(res.data.files[0].path)
+        setLibrary(result.library)
+        setActivePath(result.project.files[0].path)
         setShowArchived(false)
-        setNotice('Shared project imported locally.')
+        changeMobileTab('code')
+        setNotice(importNotice(result, res.data, 'link'))
         window.history.replaceState(null, '', window.location.pathname)
       } else {
         setNotice(`Could not import share: ${res.error || 'unknown error'}`)
@@ -847,6 +878,7 @@ export default function App() {
     const starter = createProject(kind)
     const next = {
       ...starter,
+      title: uniqueProjectTitle(starter.title, libraryRef.current.projects.filter((candidate) => projectContextMatches(candidate, activeOrganizationId))),
       organizationId: activeOrganizationId,
       organization: activeOrganization,
       visibility: 'private' as ProjectVisibility,
@@ -1411,6 +1443,13 @@ export default function App() {
     }))
   }
 
+  /** Empty or padded names are fixed when the learner leaves the field, not while typing. */
+  const finishRenamingProject = () => {
+    if (!canEditProject) return
+    const normalized = normalizeProjectTitle(project.title, project.kind)
+    if (normalized !== project.title) renameProject(normalized)
+  }
+
   const updateActiveFile = (content: string) => {
     if (!canEditProject) return
     setLibrary((current) => ({
@@ -1648,18 +1687,30 @@ export default function App() {
     setNotice(`Restored ${checkpoint.title}.`)
   }
 
+  const requestShareLink = () => {
+    if (project.organizationId) {
+      setNotice('External snapshot sharing is disabled for classroom projects. Use Teacher only or Class visibility instead.')
+      return
+    }
+    setShareDialog({ stage: 'confirm', creating: false })
+  }
+
   const copyShareLink = async () => {
     if (project.organizationId) {
       setNotice('External snapshot sharing is disabled for classroom projects. Use Teacher only or Class visibility instead.')
       return
     }
 
+    setShareDialog({ stage: 'confirm', creating: true })
     const share = await api.createShare(project)
+    // The learner closed the dialog while the link was being created.
+    if (!shareDialogOpenRef.current) return
     const url = share.data
       ? `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
       : `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
     const didCopy = await writeClipboardText(url)
     setShareDialog({
+      stage: 'ready',
       url,
       mode: share.data ? 'server' : 'offline',
       copied: didCopy,
@@ -1674,15 +1725,37 @@ export default function App() {
     }
   }
 
+  const skipToEditor = () => {
+    changeMobileTab('code')
+    window.setTimeout(() => {
+      const editorInput = document.querySelector<HTMLElement>('.editor-panel .monaco-editor textarea')
+      editorInput?.focus()
+      editorInput?.closest('.workspace')?.scrollIntoView({ block: 'start' })
+    }, 0)
+  }
+
+  const exportFormat = projectExportFormat(project)
+  const exportLabel = exportFormat.kind === 'source'
+    ? `Download code (${exportFormat.fileName.slice(exportFormat.fileName.lastIndexOf('.')) || 'file'})`
+    : 'Export project (.json)'
+
+  const downloadCurrentProject = () => {
+    const format = exportProject(project)
+    setNotice(format.kind === 'source'
+      ? `Downloaded ${format.fileName}. Use Workspace backup to keep every project.`
+      : `Exported ${format.fileName}. Import it later to restore every file.`)
+  }
+
   const handleImportFile = async (file: File | undefined) => {
     if (!file) return
     try {
       const imported = parseImportedProject(await file.text())
+      const result = addImportedProject(libraryRef.current, imported)
       clearPendingPracticeCheck()
-      setLibrary((current) => ({ activeProjectId: imported.id, projects: [imported, ...current.projects] }))
-      setActivePath(imported.files[0].path)
+      setLibrary(result.library)
+      setActivePath(result.project.files[0].path)
       setShowArchived(false)
-      setNotice('Project imported.')
+      setNotice(importNotice(result, imported, 'file'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Import failed.')
     } finally {
@@ -1747,6 +1820,7 @@ export default function App() {
       data-theme={resolvedTheme}
       data-color-mode={colorModePreference}
     >
+      <button className="skip-link" type="button" onClick={skipToEditor}>Skip to code editor</button>
       <header className="hero panel hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Open-source coding playground</p>
@@ -1769,11 +1843,11 @@ export default function App() {
         </div>
         <div className="hero-actions desktop-hero-actions">
           <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-          <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export project</button>
+          <button className="secondary" onClick={downloadCurrentProject} title={exportFormat.kind === 'source' ? `Download ${exportFormat.fileName}` : 'Export every file as a .json project you can import later'}><Download size={16} /> {exportLabel}</button>
           <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
           <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
           <button
-            onClick={copyShareLink}
+            onClick={requestShareLink}
             disabled={Boolean(project.organizationId)}
             title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
           >
@@ -1788,11 +1862,11 @@ export default function App() {
           </summary>
           <div className="mobile-actions-content">
             <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-            <button className="secondary" onClick={() => exportProject(project)}><Download size={16} /> Export project</button>
+            <button className="secondary" onClick={downloadCurrentProject} title={exportFormat.kind === 'source' ? `Download ${exportFormat.fileName}` : 'Export every file as a .json project you can import later'}><Download size={16} /> {exportLabel}</button>
             <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
             <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
             <button
-              onClick={copyShareLink}
+              onClick={requestShareLink}
               disabled={Boolean(project.organizationId)}
               title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
             >
@@ -2289,6 +2363,7 @@ export default function App() {
               onOpenPractice={openPracticeLab}
               onOpenProjectActions={() => setProjectActionsOpen(true)}
               onRename={renameProject}
+              onRenameDone={finishRenamingProject}
               onRestore={restoreProject}
               onRestoreCheckpoint={(checkpoint) => {
                 setCheckpointMenuOpen(false)
@@ -2338,6 +2413,9 @@ export default function App() {
               onRunnerCancel={clearPendingPracticeCheck}
               onRunnerComplete={handlePracticeRunComplete}
               onRunFromMobileCode={runFromMobileCode}
+              onRunShortcut={() => {
+                if (project.kind !== 'web') window.dispatchEvent(new Event('hafa-code-run-active-project'))
+              }}
               onSelectFile={setActivePath}
               onSetEntryPath={setEntryPath}
               onUpdateActiveFile={updateActiveFile}
@@ -2429,8 +2507,9 @@ export default function App() {
         onCloseShareDialog={() => setShareDialog(null)}
         onConfirmProjectAction={confirmProjectAction}
         onConfirmProjectCopy={() => { void confirmProjectCopy() }}
+        onConfirmShare={() => { void copyShareLink() }}
         onCopyShareLink={async () => {
-          if (!shareDialog) return
+          if (shareDialog?.stage !== 'ready') return
           const copied = await writeClipboardText(shareDialog.url)
           setShareDialog((current) => current ? { ...current, copied } : current)
           setNotice(copied ? "Share link copied." : "Clipboard blocked. Select the link to copy it.")

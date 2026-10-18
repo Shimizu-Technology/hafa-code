@@ -2,13 +2,22 @@ import {
   FILE_LANGUAGE_DEFINITIONS,
   PROJECT_KINDS,
   inferFileLanguage,
+  isProjectKind,
   projectKindDefinition,
   type ProjectFile,
   type ProjectKind,
   type ProjectVisibility,
   type SavedProject,
 } from './codeRunner'
-import { decodeSharedProject, loadProjectLibrary, type ProjectLibrary } from './projectStorage'
+import {
+  addImportedProject,
+  createProject,
+  decodeSharedProject,
+  importNotice,
+  loadProjectLibraryWithStatus,
+  uniqueProjectTitle,
+  type ProjectLibrary,
+} from './projectStorage'
 import { pendingCloudProjectIds } from './cloudSyncStorage'
 
 export type FileDialogMode = 'create' | 'rename' | 'duplicate'
@@ -159,22 +168,73 @@ export function projectSourceUsage(project: Pick<SavedProject, 'files'>) {
   } as const
 }
 
-export function loadInitialLibraryWithSharedProject(): { library: ProjectLibrary; notice: string } {
-  const library = loadProjectLibrary()
+export interface InitialWorkspace {
+  library: ProjectLibrary
+  notice: string
+  /** True when the visitor arrived for a specific project or language and should land on the code. */
+  openCode: boolean
+}
+
+/** Reads `?lang=python` or `#lang=python` from a Learn or class link. */
+export function requestedStarterKind(location: Pick<Location, 'search' | 'hash'> = window.location): ProjectKind | null {
+  const value = new URLSearchParams(location.search).get('lang')
+    ?? new URLSearchParams(location.hash.replace(/^#/, '')).get('lang')
+  const kind = value?.trim().toLowerCase()
+  return kind && isProjectKind(kind) ? kind : null
+}
+
+function cleanLaunchParams() {
+  const query = new URLSearchParams(window.location.search)
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  query.delete('lang')
+  hash.delete('lang')
+  hash.delete('project')
+  const search = query.toString()
+  const nextHash = hash.toString()
+  window.history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}${nextHash ? `#${nextHash}` : ''}`)
+}
+
+function openRequestedKind(library: ProjectLibrary, kind: ProjectKind): { library: ProjectLibrary; notice: string } {
+  const active = library.projects.find((candidate) => candidate.id === library.activeProjectId)
+  if (active?.kind === kind && !active.archivedAt && !active.organizationId) return { library, notice: '' }
+  const label = projectKindDefinition(kind).label
+  const recent = library.projects
+    .filter((candidate) => candidate.kind === kind && !candidate.archivedAt && !candidate.organizationId)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
+  if (recent) return { library: { ...library, activeProjectId: recent.id }, notice: `Opened your ${label} project “${recent.title}”.` }
+  const starter = createProject(kind)
+  const project = { ...starter, title: uniqueProjectTitle(starter.title, library.projects) }
+  return { library: { activeProjectId: project.id, projects: [project, ...library.projects] }, notice: `${project.title} created.` }
+}
+
+export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   const sharedProject = params.get('project')
-  if (!sharedProject) return { library, notice: '' }
+  const requestedKind = requestedStarterKind()
+  const { library, isNew } = loadProjectLibraryWithStatus(requestedKind ?? undefined)
 
-  try {
-    const imported = decodeSharedProject(sharedProject)
-    window.history.replaceState(null, '', window.location.pathname)
-    return {
-      library: { activeProjectId: imported.id, projects: [imported, ...library.projects] },
-      notice: 'Shared project imported locally.',
+  if (sharedProject) {
+    try {
+      const imported = decodeSharedProject(sharedProject)
+      cleanLaunchParams()
+      // A first-time visitor arriving with a project only needs that project, not an extra starter.
+      if (isNew) {
+        return { library: { activeProjectId: imported.id, projects: [imported] }, notice: 'Shared project imported locally.', openCode: true }
+      }
+      const result = addImportedProject(library, imported)
+      return { library: result.library, notice: importNotice(result, imported, 'link'), openCode: true }
+    } catch {
+      return { library, notice: 'Could not import the shared project link.', openCode: false }
     }
-  } catch {
-    return { library, notice: 'Could not import the shared project link.' }
   }
+
+  if (requestedKind) {
+    cleanLaunchParams()
+    if (isNew) return { library, notice: '', openCode: true }
+    return { ...openRequestedKind(library, requestedKind), openCode: true }
+  }
+
+  return { library, notice: '', openCode: false }
 }
 
 export function isCloudProjectId(id: string) {
