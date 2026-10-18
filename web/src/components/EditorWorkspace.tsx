@@ -251,7 +251,7 @@ export function EditorWorkspace({
           <button className="secondary" type="button" onClick={onOpenPractice} aria-label={`Open ${projectKindDefinition(project.kind).label} practice lab`}>
             <Dumbbell size={16} /> Practice
           </button>
-          <button type="button" onClick={onRunFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()}>
+          <button type="button" onClick={onRunFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()} data-hafa-run-button>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : `Run ${projectKindDefinition(project.kind).shortLabel}`}
           </button>

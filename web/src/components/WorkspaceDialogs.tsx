@@ -113,6 +113,17 @@ export function WorkspaceDialogs({
   onRestoreProject,
   onSubmitFileDialog,
 }: WorkspaceDialogsProps) {
+  const shareStage = shareDialog?.stage
+  const previousShareStageRef = useRef(shareStage)
+  useEffect(() => {
+    const previousStage = previousShareStageRef.current
+    previousShareStageRef.current = shareStage
+    // Opening is handled by useModalFocus. Later steps replace the focused button, so keep focus inside the dialog.
+    const dialog = shareDialogRef.current
+    if (!previousStage || !shareStage || previousStage === shareStage || !dialog || dialog.contains(document.activeElement)) return
+    ;(dialog.querySelector<HTMLElement>('[data-share-primary]') ?? dialog).focus()
+  }, [shareDialogRef, shareStage])
+
   return (
     <>
       {fileDialog && (
@@ -177,6 +188,7 @@ export function WorkspaceDialogs({
                   <button className="secondary" type="button" onClick={onCloseShareDialog}>Cancel</button>
                   <button
                     type="button"
+                    data-share-primary
                     onClick={() => { if (!shareDialog.creating) onConfirmShare() }}
                     aria-disabled={shareDialog.creating || undefined}
                   >
@@ -201,7 +213,7 @@ export function WorkspaceDialogs({
                 </div>
                 <div className="confirm-actions">
                   <button className="secondary" type="button" onClick={onCreateOfflineShare}>Create offline link</button>
-                  <button type="button" onClick={onConfirmShare}>Try again</button>
+                  <button type="button" data-share-primary onClick={onConfirmShare}>Try again</button>
                 </div>
               </>
             ) : (
@@ -316,9 +328,6 @@ export function WorkspaceDialogs({
 type ReadyShareDialog = Extract<NonNullable<ShareDialogState>, { stage: 'ready' }>
 
 function ShareLinkReady({ shareDialog, onClose, onCopy }: { shareDialog: ReadyShareDialog; onClose: () => void; onCopy: () => void }) {
-  const copyRef = useRef<HTMLButtonElement | null>(null)
-  // The confirm step's button is gone now; keep keyboard focus inside the dialog.
-  useEffect(() => { copyRef.current?.focus() }, [])
   return (
     <>
       <div className="modal-header">
@@ -332,7 +341,7 @@ function ShareLinkReady({ shareDialog, onClose, onCopy }: { shareDialog: ReadySh
       </label>
       <div className="confirm-actions">
         <button className="secondary" type="button" onClick={onClose}>Done</button>
-        <button ref={copyRef} type="button" onClick={onCopy}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
+        <button type="button" data-share-primary onClick={onCopy}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
       </div>
     </>
   )
