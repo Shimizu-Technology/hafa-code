@@ -1,8 +1,10 @@
 import { loadPyodide } from 'pyodide'
+import { cleanPythonTraceback, PYTHON_PROJECT_ROOT } from './pythonTraceback'
+import { createRunOutput, type RunOutput } from './runOutput'
 import { installRunner, postRunnerMessage, RunnerValidationError, type RunRequest } from './runnerProtocol'
 import { createStdinBridge } from './stdinBridge'
 
-const PROJECT_ROOT = '/home/pyodide/project'
+const PROJECT_ROOT = PYTHON_PROJECT_ROOT
 const inputBridges = new Map<string, ReturnType<typeof createStdinBridge>>()
 let pyodidePromise: ReturnType<typeof loadPyodide> | null = null
 
@@ -23,13 +25,25 @@ function parentDirectory(path: string) {
   return path.includes('/') ? path.split('/').slice(0, -1).join('/') : ''
 }
 
-function appendOutput(id: string, stream: 'stdout' | 'stderr', message: string, output: string[]) {
-  const text = message.endsWith('\n') ? message : `${message}\n`
-  output.push(text)
-  postRunnerMessage({ id, type: 'output', stream, text })
+/** Streams raw bytes from Python's stdout/stderr, decoding UTF-8 across chunk boundaries. */
+function streamWriter(output: RunOutput, stream: 'stdout' | 'stderr') {
+  const decoder = new TextDecoder()
+  return {
+    // A TTY keeps Python line-buffered, so prints arrive as they happen.
+    isatty: true,
+    write: (buffer: Uint8Array) => {
+      // Past the limit, output is dropped; the page terminates this worker as soon as it hears about it.
+      output.write(stream, decoder.decode(buffer, { stream: true }))
+      return buffer.length
+    },
+  }
 }
 
-function getPyodide(indexURL: string) {
+function pyodideIndexUrl() {
+  return new URL(`${import.meta.env.BASE_URL}assets/pyodide/`, self.location.origin).href
+}
+
+function getPyodide(indexURL = pyodideIndexUrl()) {
   pyodidePromise ??= loadPyodide({
     indexURL,
     packages: [],
@@ -44,16 +58,15 @@ function getPyodide(indexURL: string) {
 async function runPython(request: RunRequest) {
   const { id, code, files } = request
   const entryPath = safeProjectPath(request.entryPath)
-  const stdout: string[] = []
-  const stderr: string[] = []
+  const output = createRunOutput(id, postRunnerMessage)
+  let fullTraceback: string | undefined
   const workerGlobal = globalThis as PythonWorkerGlobal
   const previousReadline = workerGlobal.__hafa_readline
   const previousWritePrompt = workerGlobal.__hafa_write_prompt
-  const indexURL = new URL(`${import.meta.env.BASE_URL}assets/pyodide/`, self.location.origin).href
-  const pyodide = await getPyodide(indexURL)
+  const pyodide = await getPyodide()
   const originalInput = pyodide.runPython('import builtins\nbuiltins.input')
-  pyodide.setStdout({ batched: (message) => appendOutput(id, 'stdout', message, stdout) })
-  pyodide.setStderr({ batched: (message) => appendOutput(id, 'stderr', message, stderr) })
+  pyodide.setStdout(streamWriter(output, 'stdout'))
+  pyodide.setStderr(streamWriter(output, 'stderr'))
   pyodide.setStdin({ stdin: () => null })
 
   pyodide.runPython(`
@@ -72,11 +85,14 @@ os.makedirs(${JSON.stringify(PROJECT_ROOT)}, exist_ok=True)
 
   postRunnerMessage({ id, type: 'started' })
 
-  const inputBridge = createStdinBridge(() => postRunnerMessage({ id, type: 'input_request' }))
+  const inputBridge = createStdinBridge(() => {
+    output.flush()
+    postRunnerMessage({ id, type: 'input_request' })
+  })
   inputBridges.set(id, inputBridge)
   workerGlobal.__hafa_readline = inputBridge.read
   workerGlobal.__hafa_write_prompt = (prompt) => {
-    if (prompt) appendOutput(id, 'stdout', prompt, stdout)
+    if (prompt) output.write('stdout', prompt)
   }
 
   try {
@@ -93,6 +109,7 @@ from pyodide.ffi import can_run_sync, run_sync
 def __hafa_input(prompt=""):
     if not can_run_sync():
         raise RuntimeError("Interactive input requires a browser with WebAssembly JSPI support.")
+    sys.stdout.flush()
     if prompt:
         __hafa_write_prompt(str(prompt))
     return run_sync(__hafa_readline())
@@ -114,7 +131,12 @@ runpy.run_path(entry_file, run_name="__main__")
 `)
     if (result && typeof result === 'object' && 'destroy' in result) result.destroy()
   } catch (error) {
-    appendOutput(id, 'stderr', error instanceof Error ? error.message : String(error), stderr)
+    if (!output.limited) {
+      const message = error instanceof Error ? error.message : String(error)
+      const cleaned = cleanPythonTraceback(message)
+      if (cleaned.hiddenFrames > 0) fullTraceback = message
+      output.write('stderr', cleaned.text.endsWith('\n') ? cleaned.text : `${cleaned.text}\n`)
+    }
   } finally {
     try {
       pyodide.globals.set('__hafa_original_input__', originalInput)
@@ -126,13 +148,20 @@ runpy.run_path(entry_file, run_name="__main__")
       inputBridges.delete(id)
       workerGlobal.__hafa_readline = previousReadline
       workerGlobal.__hafa_write_prompt = previousWritePrompt
+      output.flush()
     }
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
+  return {
+    stdout: output.stdout(),
+    stderr: output.stderr(),
+    exitCode: output.hasStderr() || output.limited ? 1 : 0,
+    ...(fullTraceback ? { fullTraceback } : {}),
+  }
 }
 
 installRunner(runPython, {
   onStdin: ({ id, value }) => inputBridges.get(id)?.write(value),
   onAbort: ({ id }) => inputBridges.get(id)?.abort(),
+  onWarmup: async () => { await getPyodide() },
 })

@@ -2,6 +2,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PYTHON_STARTUP_TIMEOUT_MS, RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition } from '../lib/codeRunner'
+import { resetRunnerWorkerPool } from '../lib/runnerWorkerPool'
 import type { RunnerRequest, RunnerResponse } from '../workers/runnerProtocol'
 import { RunnerPanel } from './RunnerPanel'
 
@@ -66,6 +67,8 @@ const javaProject = {
 
 describe('RunnerPanel', () => {
   beforeEach(() => {
+    resetRunnerWorkerPool()
+    localStorage.clear()
     FakeWorker.instances = []
     vi.stubGlobal('Worker', FakeWorker)
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true })
@@ -83,7 +86,7 @@ describe('RunnerPanel', () => {
     const { unmount } = render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
 
     await user.click(screen.getByRole('button', { name: 'Run Python' }))
-    expect(screen.getByText('Preparing Python…')).toBeTruthy()
+    expect(screen.getByText('Downloading Python (first time only)')).toBeTruthy()
     expect(FakeWorker.instances).toHaveLength(1)
 
     const worker = FakeWorker.instances.at(-1)!
@@ -425,5 +428,107 @@ describe('RunnerPanel', () => {
     unmount()
 
     expect(onRunCancel).toHaveBeenCalledOnce()
+  })
+
+  describe('learner trust', () => {
+    function startPythonRun() {
+      render(<RunnerPanel project={project} entryFile={project.files[0]} onRunComplete={onRunComplete} />)
+      act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+      const worker = FakeWorker.instances.at(-1)!
+      const run = worker.messages.find((message) => message.type === 'run')
+      if (!run || run.type !== 'run') throw new Error('Expected a run request')
+      act(() => worker.respond({ id: run.id, type: 'started' }))
+      return { worker, run }
+    }
+    let onRunComplete = vi.fn()
+    beforeEach(() => { onRunComplete = vi.fn() })
+
+    it('stops a flooding program with a friendly limit message and terminates the worker', () => {
+      vi.useFakeTimers()
+      const { worker, run } = startPythonRun()
+      act(() => {
+        worker.respond({ id: run.id, type: 'output', stream: 'stdout', text: '0\n1\n2\n' })
+        worker.respond({ id: run.id, type: 'output_limit', text: 'limit' })
+        vi.advanceTimersByTime(20)
+      })
+      expect(screen.getByRole('alert').textContent).toContain('Output limit reached — check your loop')
+      expect(screen.getByText(/stopped this program because it printed more than 10,000 lines/)).toBeTruthy()
+      expect(worker.terminated).toBe(true)
+      expect(onRunComplete).toHaveBeenCalledOnce()
+      expect(onRunComplete.mock.calls[0][0]).toMatchObject({ status: 'error', outputLimited: true, stdout: '0\n1\n2\n' })
+      act(() => worker.respond({ id: run.id, type: 'result', stdout: '', stderr: 'late', exitCode: 1 }))
+      expect(onRunComplete).toHaveBeenCalledOnce()
+    })
+
+    it('enforces the output cap on the page even when a runtime does not', () => {
+      vi.useFakeTimers()
+      const { worker, run } = startPythonRun()
+      const chunk = 'line\n'.repeat(1_000)
+      act(() => {
+        for (let index = 0; index < 11; index += 1) worker.respond({ id: run.id, type: 'output', stream: 'stdout', text: chunk })
+        vi.advanceTimersByTime(20)
+      })
+      expect(onRunComplete.mock.calls[0][0]).toMatchObject({ outputLimited: true })
+      expect(worker.terminated).toBe(true)
+      expect(screen.getByText(/earlier lines are hidden to keep the page fast/)).toBeTruthy()
+    })
+
+    it('headlines the final Python error and keeps the full traceback behind a disclosure', () => {
+      const { worker, run } = startPythonRun()
+      act(() => worker.respond({
+        id: run.id,
+        type: 'result',
+        stdout: '',
+        stderr: 'Traceback (most recent call last):\n  File "main.py", line 2, in <module>\n    print(totl)\nNameError: name \'totl\' is not defined. Did you mean: \'total\'?\n',
+        exitCode: 1,
+        fullTraceback: 'Traceback (most recent call last):\n  File "/lib/python314.zip/_pyodide/_base.py", line 597\nNameError: …',
+      }))
+      const headline = screen.getByRole('alert')
+      expect(headline.textContent).toContain("NameError: name 'totl' is not defined. Did you mean: 'total'?")
+      expect(headline.textContent).toContain('main.py · line 2')
+      expect(screen.getByText(/Show full traceback/)).toBeTruthy()
+      expect(document.querySelector('.terminal-full-traceback pre')?.textContent).toContain('_pyodide')
+    })
+
+    it('copies the whole output transcript and explains a blocked clipboard', async () => {
+      const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      const { worker, run } = startPythonRun()
+      act(() => {
+        worker.respond({ id: run.id, type: 'output', stream: 'stdout', text: 'Total: 12\n' })
+        worker.respond({ id: run.id, type: 'result', stdout: 'Total: 12\n', stderr: '', exitCode: 0 })
+      })
+      await act(async () => { screen.getByRole('button', { name: 'Copy output' }).click() })
+      expect(writeText).toHaveBeenCalledWith('Total: 12\n')
+      expect(screen.getByRole('button', { name: 'Output copied' })).toBeTruthy()
+      await act(async () => { screen.getByRole('button', { name: 'Output copied' }).click() })
+      expect(screen.getByRole('alert').textContent).toContain('Copy was blocked')
+    })
+
+    it('starts Python in the background and reuses that runtime for the first run', () => {
+      vi.useFakeTimers()
+      render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+      expect(screen.getByText('3s run limit')).toBeTruthy()
+      act(() => vi.advanceTimersByTime(700))
+      expect(FakeWorker.instances).toHaveLength(1)
+      expect(FakeWorker.instances[0].messages[0]).toMatchObject({ type: 'warmup' })
+      act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+      expect(FakeWorker.instances).toHaveLength(1)
+      expect(FakeWorker.instances[0].messages.at(-1)).toMatchObject({ type: 'run' })
+    })
+
+    it('says when Python is downloading for the first time and counts the wait', () => {
+      vi.useFakeTimers()
+      render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+      act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+      expect(screen.getByText('Downloading Python (first time only)')).toBeTruthy()
+      act(() => vi.advanceTimersByTime(3_100))
+      expect(screen.getByText('3s')).toBeTruthy()
+      expect(screen.getByText(/startup limit 90s/)).toBeTruthy()
+      const worker = FakeWorker.instances.at(-1)!
+      const run = worker.messages.find((message) => message.type === 'run')!
+      act(() => worker.respond({ id: run.id, type: 'started' }))
+      expect(localStorage.getItem('hafa-code-runtime-ready:python')).toBe('1')
+    })
   })
 })

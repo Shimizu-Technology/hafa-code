@@ -1,5 +1,6 @@
 import { DefaultRubyVM } from '@ruby/wasm-wasi/dist/browser'
 import rubyWasmUrl from '@ruby/3.3-wasm-wasi/dist/ruby+stdlib.wasm?url'
+import { createRunOutput, type RunOutput } from './runOutput'
 import { installRunner, postRunnerMessage, type RunRequest } from './runnerProtocol'
 
 let rubyModulePromise: Promise<WebAssembly.Module> | null = null
@@ -17,16 +18,13 @@ function rubyStringLiteral(value: string) {
   return `[${bytes.join(',')}].pack('C*').force_encoding('UTF-8')`
 }
 
-function captureRubyOutput(id: string, args: unknown[], streamName: 'stdout' | 'stderr', stream: string[]) {
+function captureRubyOutput(output: RunOutput, args: unknown[], streamName: 'stdout' | 'stderr') {
   const text = args.map(String).join(' ')
-  const output = text.endsWith('\n') ? text : `${text}\n`
-  stream.push(output)
-  postRunnerMessage({ id, type: 'output', stream: streamName, text: output })
+  output.write(streamName, text.endsWith('\n') ? text : `${text}\n`)
 }
 
 async function runRuby({ id, code, files, entryPath, stdin = '' }: RunRequest) {
-  const stdout: string[] = []
-  const stderr: string[] = []
+  const output = createRunOutput(id, postRunnerMessage)
   const stdinQueue = (stdin.match(/[^\n]*\n|[^\n]+/g) ?? [])[Symbol.iterator]()
   const originalLog = console.log
   const originalWarn = console.warn
@@ -36,6 +34,7 @@ async function runRuby({ id, code, files, entryPath, stdin = '' }: RunRequest) {
     const queuedLine = stdinQueue.next()
     if (!queuedLine.done) return Promise.resolve(queuedLine.value)
 
+    output.flush()
     postRunnerMessage({ id, type: 'input_request' })
     return new Promise<string>((resolve, reject) => {
       pendingInputResolvers.set(id, {
@@ -52,8 +51,8 @@ async function runRuby({ id, code, files, entryPath, stdin = '' }: RunRequest) {
   }
 
   ;(globalThis as { __hafa_gets?: () => Promise<string> }).__hafa_gets = readLine
-  console.log = (...args: unknown[]) => captureRubyOutput(id, args, 'stdout', stdout)
-  console.warn = (...args: unknown[]) => captureRubyOutput(id, args, 'stderr', stderr)
+  console.log = (...args: unknown[]) => captureRubyOutput(output, args, 'stdout')
+  console.warn = (...args: unknown[]) => captureRubyOutput(output, args, 'stderr')
 
   try {
     const module = await getRubyModule()
@@ -101,16 +100,17 @@ async function runRuby({ id, code, files, entryPath, stdin = '' }: RunRequest) {
         TOPLEVEL_BINDING.eval($hafa_code_files.fetch(${rubyStringLiteral(entryPath)}), ${rubyStringLiteral(entryPath)})
       `)
     } catch (error) {
-      captureRubyOutput(id, [error instanceof Error ? error.message : String(error)], 'stderr', stderr)
+      if (!output.limited) captureRubyOutput(output, [error instanceof Error ? error.message : String(error)], 'stderr')
     }
   } finally {
     console.log = originalLog
     console.warn = originalWarn
     ;(globalThis as { __hafa_gets?: () => Promise<string> }).__hafa_gets = previousGets
     pendingInputResolvers.delete(id)
+    output.flush()
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
+  return { stdout: output.stdout(), stderr: output.stderr(), exitCode: output.hasStderr() || output.limited ? 1 : 0 }
 }
 
 installRunner(runRuby, {

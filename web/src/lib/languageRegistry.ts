@@ -38,6 +38,10 @@ export interface RunnerDefinition {
   startupTimeoutMs?: number
   executionTimeoutMs?: number
   startupNote?: string
+  /** Shown while a runtime this browser has never loaded is downloading. */
+  firstLoadLabel?: string
+  /** Start the runtime in the background when a project of this kind opens. */
+  prewarm?: boolean
 }
 
 export interface ProjectKindDefinition {
@@ -204,6 +208,8 @@ export const PROJECT_KIND_DEFINITIONS = {
       createWorker: () => new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), { type: 'module' }),
       startupTimeoutMs: PYTHON_STARTUP_TIMEOUT_MS,
       startupNote: 'The first Python run downloads a larger browser runtime and may take longer on a mobile connection. Later runs are faster.',
+      firstLoadLabel: 'Downloading Python (first time only)',
+      prewarm: true,
     },
   },
   java: {

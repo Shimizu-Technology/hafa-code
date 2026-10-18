@@ -98,9 +98,25 @@ export function errorCoachGuideTopicIds(kind: ProjectKind) {
   return [...new Set(topics)]
 }
 
+const PYTHON_PROJECT_PREFIX = '/home/pyodide/project/'
+
+function isRuntimeInternalPath(path: string) {
+  return path.startsWith('<') || (path.startsWith('/') && !path.startsWith(PYTHON_PROJECT_PREFIX))
+}
+
+/** Python lists the failing line last, so prefer the last frame that points into the learner's files. */
+function pythonFrameLocation(message: string) {
+  const frames = Array.from(message.matchAll(/File ["']([^"']+)["'], line (\d+)/g))
+    .map((match) => ({ path: match[1], line: match[2] }))
+    .filter((frame) => !isRuntimeInternalPath(frame.path))
+  const frame = frames[frames.length - 1]
+  return frame ? `${frame.path.replace(PYTHON_PROJECT_PREFIX, '')} · line ${frame.line}` : null
+}
+
 function errorLocation(message: string, entryPath: string) {
+  const pythonLocation = pythonFrameLocation(message)
+  if (pythonLocation) return pythonLocation
   const candidates = [
-    /File ["']([^"']+)["'], line (\d+)/,
     /([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?/,
     /\(([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?\)/,
   ]
@@ -122,6 +138,10 @@ export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: 
       guideTopicId: basicsTopic[kind],
     }
   }
+  if (outcome.outputLimited) {
+    const topic = kind === 'web' ? 'web-dom-events' : loopsTopic[kind]
+    return { title: 'Your program printed too much', explanation: 'Hafa Code stopped the program after a very large amount of output. A loop that never reaches its stopping condition is the usual cause.', location: entryPath || null, steps: ['Find the loop that prints and check its stopping condition.', 'Make sure the loop variable changes each time through.', 'Print less often, or add a counter that stops after a few rounds.'], guideTopicId: topic }
+  }
   if (outcome.status === 'timeout') {
     const topic = kind === 'web' ? 'web-dom-events' : loopsTopic[kind]
     return { title: 'The program kept running too long', explanation: 'This often means a loop never reaches its stopping condition or the program needs more time than the browser allows.', location: entryPath || null, steps: ['Check loop conditions and whether their values change.', 'Temporarily add output inside the loop to follow its progress.', 'Reduce the amount of work in one run, then try again.'], guideTopicId: topic }
@@ -137,4 +157,18 @@ export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: 
     steps: rule?.steps ?? ['Read the final error line for the immediate cause.', 'Open the first referenced line in your file.', 'Make one focused change, then run again.'],
     guideTopicId: rule?.topic ?? basicsTopic[kind],
   }
+}
+
+/**
+ * The one line a learner should read first. Python prints the cause (including
+ * "Did you mean …") on the last line; other runtimes lead with it.
+ */
+export function errorHeadline(kind: ProjectKind, stderr: string) {
+  const lines = stderr.split('\n').map((line) => line.trimEnd()).filter((line) => line.trim())
+  if (lines.length === 0) return null
+  if (kind === 'python') {
+    const unindented = lines.filter((line) => !/^\s/.test(line) && !/^Traceback \(most recent call last\):$/.test(line))
+    return unindented[unindented.length - 1] ?? lines[lines.length - 1]
+  }
+  return lines[0].trim()
 }
