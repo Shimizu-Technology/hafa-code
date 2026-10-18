@@ -47,6 +47,7 @@ import {
   importNotice,
   normalizeProjectTitle,
   projectExportFormat,
+  projectExportLabel,
   uniqueProjectTitle,
   loadLocalCheckpoints,
   loadCheckpointLibrary,
@@ -135,6 +136,7 @@ import {
   type MobileTab,
 } from './lib/workspace'
 import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
+import { projectKindCanRun } from './lib/languageRegistry'
 import { e2eAuthEnabled } from './lib/e2eAuth'
 import {
   createWorkspaceBackup,
@@ -1592,7 +1594,7 @@ export default function App() {
 
   const runFromMobileCode = () => {
     changeMobileTab('output')
-    if (project.kind !== 'web') window.setTimeout(() => window.dispatchEvent(new CustomEvent('hafa-code-run-active-project')), 0)
+    if (projectKindCanRun(project.kind)) window.setTimeout(() => window.dispatchEvent(new CustomEvent('hafa-code-run-active-project')), 0)
   }
 
   const requestRestoreCheckpoint = (checkpoint: ProjectCheckpoint) => {
@@ -1705,24 +1707,24 @@ export default function App() {
     const share = await api.createShare(project)
     // The learner closed the dialog while the link was being created.
     if (!shareDialogOpenRef.current) return
-    const url = share.data
-      ? `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
-      : `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
-    const didCopy = await writeClipboardText(url)
-    setShareDialog({
-      stage: 'ready',
-      url,
-      mode: share.data ? 'server' : 'offline',
-      copied: didCopy,
-      error: share.error,
-    })
-    if (share.data) {
-      setNotice(didCopy ? 'Share snapshot link copied.' : 'Share snapshot link is ready to copy.')
-    } else {
-      setNotice(didCopy
-        ? `Offline share link copied.${share.error ? ` Server share failed: ${share.error}` : ''}`
-        : 'Offline share link is ready to copy.')
+    if (!share.data) {
+      // An offline link has different terms (no expiry, the code lives in the URL), so ask again.
+      setShareDialog({ stage: 'failed', error: share.error })
+      return
     }
+    const url = `${window.location.origin}${window.location.pathname}#share=${share.data.token}`
+    const didCopy = await writeClipboardText(url)
+    setShareDialog({ stage: 'ready', url, mode: 'server', copied: didCopy, error: null })
+    setNotice(didCopy ? 'Share snapshot link copied.' : 'Share snapshot link is ready to copy.')
+  }
+
+  const createOfflineShareLink = async () => {
+    if (project.organizationId) return
+    const url = `${window.location.origin}${window.location.pathname}#project=${encodeProjectForShare(project)}`
+    const didCopy = await writeClipboardText(url)
+    if (!shareDialogOpenRef.current) return
+    setShareDialog({ stage: 'ready', url, mode: 'offline', copied: didCopy, error: null })
+    setNotice(didCopy ? 'Offline share link copied.' : 'Offline share link is ready to copy.')
   }
 
   const skipToEditor = () => {
@@ -1735,9 +1737,7 @@ export default function App() {
   }
 
   const exportFormat = projectExportFormat(project)
-  const exportLabel = exportFormat.kind === 'source'
-    ? `Download code (${exportFormat.fileName.slice(exportFormat.fileName.lastIndexOf('.')) || 'file'})`
-    : 'Export project (.json)'
+  const exportLabel = projectExportLabel(exportFormat)
 
   const downloadCurrentProject = () => {
     const format = exportProject(project)
@@ -2414,7 +2414,8 @@ export default function App() {
               onRunnerComplete={handlePracticeRunComplete}
               onRunFromMobileCode={runFromMobileCode}
               onRunShortcut={() => {
-                if (project.kind !== 'web') window.dispatchEvent(new Event('hafa-code-run-active-project'))
+                // Match the Run button: a blank entry file cannot run.
+                if (projectKindCanRun(project.kind) && entryFile.content.trim()) window.dispatchEvent(new Event('hafa-code-run-active-project'))
               }}
               onSelectFile={setActivePath}
               onSetEntryPath={setEntryPath}
@@ -2508,6 +2509,7 @@ export default function App() {
         onConfirmProjectAction={confirmProjectAction}
         onConfirmProjectCopy={() => { void confirmProjectCopy() }}
         onConfirmShare={() => { void copyShareLink() }}
+        onCreateOfflineShare={() => { void createOfflineShareLink() }}
         onCopyShareLink={async () => {
           if (shareDialog?.stage !== 'ready') return
           const copied = await writeClipboardText(shareDialog.url)

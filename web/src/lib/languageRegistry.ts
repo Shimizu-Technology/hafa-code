@@ -42,6 +42,8 @@ export interface RunnerDefinition {
   firstLoadLabel?: string
   /** Start the runtime in the background when a project of this kind opens. */
   prewarm?: boolean
+  /** Disclosure label for the unfiltered traceback when the runner hides runtime frames. */
+  fullTracebackLabel?: string
 }
 
 export interface ProjectKindDefinition {
@@ -210,6 +212,7 @@ export const PROJECT_KIND_DEFINITIONS = {
       startupNote: 'The first Python run downloads a larger browser runtime and may take longer on a mobile connection. Later runs are faster.',
       firstLoadLabel: 'Downloading Python (first time only)',
       prewarm: true,
+      fullTracebackLabel: 'Show full traceback (includes Python’s internal steps)',
     },
   },
   java: {
@@ -305,4 +308,9 @@ export function isProjectKind(value: unknown): value is ProjectKind {
 
 export function isProjectFileLanguage(value: unknown): value is ProjectFileLanguage {
   return typeof value === 'string' && FILE_LANGUAGES.includes(value as ProjectFileLanguage)
+}
+
+/** Kinds with a runner panel can be run from the editor; web projects use the live preview instead. */
+export function projectKindCanRun(kind: ProjectKind) {
+  return Boolean(projectKindDefinition(kind).runner)
 }

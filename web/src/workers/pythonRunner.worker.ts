@@ -95,6 +95,14 @@ os.makedirs(${JSON.stringify(PROJECT_ROOT)}, exist_ok=True)
     if (prompt) output.write('stdout', prompt)
   }
 
+  const flushPythonStreams = () => {
+    try {
+      pyodide.runPython('import sys\nsys.stdout.flush()\nsys.stderr.flush()')
+    } catch {
+      // A stream that cannot flush has nothing more to show.
+    }
+  }
+
   try {
     const projectRoot = JSON.stringify(PROJECT_ROOT)
     const entryFile = JSON.stringify(`${PROJECT_ROOT}/${entryPath}`)
@@ -130,7 +138,10 @@ builtins.input = __hafa_input
 runpy.run_path(entry_file, run_name="__main__")
 `)
     if (result && typeof result === 'object' && 'destroy' in result) result.destroy()
+    flushPythonStreams()
   } catch (error) {
+    // Text printed without a newline is still in Python's buffer; keep it before the traceback.
+    flushPythonStreams()
     if (!output.limited) {
       const message = error instanceof Error ? error.message : String(error)
       const cleaned = cleanPythonTraceback(message)

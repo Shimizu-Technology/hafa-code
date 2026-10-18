@@ -224,7 +224,12 @@ export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
       const result = addImportedProject(library, imported)
       return { library: result.library, notice: importNotice(result, imported, 'link'), openCode: true }
     } catch {
-      return { library, notice: 'Could not import the shared project link.', openCode: false }
+      // Clear the broken link so a reload does not repeat the error, then honor ?lang= if present.
+      cleanLaunchParams()
+      const notice = 'Could not import the shared project link.'
+      if (!requestedKind) return { library, notice, openCode: false }
+      if (isNew) return { library, notice, openCode: true }
+      return { library: openRequestedKind(library, requestedKind).library, notice, openCode: true }
     }
   }
 

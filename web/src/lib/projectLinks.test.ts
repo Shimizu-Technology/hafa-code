@@ -8,6 +8,7 @@ import {
   importNotice,
   normalizeProjectTitle,
   projectExportFormat,
+  projectExportLabel,
   saveProjectLibrary,
   uniqueProjectTitle,
   type ProjectLibrary,
@@ -79,6 +80,9 @@ describe('imports and project names', () => {
     expect(projectExportFormat(pythonProject('Expense Tracker', ''))).toEqual({ kind: 'source', fileName: 'expense-tracker.py' })
     expect(projectExportFormat({ title: '🌺', files: [{ path: 'main.py', language: 'python', content: '' }] })).toEqual({ kind: 'source', fileName: 'main.py' })
     expect(projectExportFormat(createProject('sql'))).toMatchObject({ kind: 'json', fileName: 'sql-data-playground.json' })
+    expect(projectExportLabel(projectExportFormat(pythonProject('Expense Tracker', '')))).toBe('Download code (.py)')
+    expect(projectExportLabel(projectExportFormat({ title: 'My Project', files: [{ path: 'Makefile', language: 'python', content: '' }] }))).toBe('Download code (file)')
+    expect(projectExportLabel(projectExportFormat(createProject('sql')))).toBe('Export project (.json)')
   })
 })
 
@@ -120,5 +124,20 @@ describe('first visit from a Learn or class link', () => {
     expect(second.library.projects).toHaveLength(1)
     expect(second.notice).toContain('already in your projects')
     expect(JSON.parse(localStorage.getItem(PROJECT_LIBRARY_STORAGE_KEY) ?? '{}').projects).toHaveLength(1)
+  })
+
+  test('a broken project link is cleared from the URL and ?lang=python still applies', () => {
+    const initial = visit('/?lang=python#project=not-a-project')
+    expect(initial.notice).toBe('Could not import the shared project link.')
+    expect(initial.library.projects.map((project) => project.kind)).toEqual(['python'])
+    expect(initial.openCode).toBe(true)
+    expect(window.location.search + window.location.hash).toBe('')
+  })
+
+  test('an import renamed only because of a same-named project says so plainly', () => {
+    const mine = pythonProject('Python Playground', 'print("mine")\n')
+    const theirs = pythonProject('Python Playground', 'print("theirs")\n')
+    const result = addImportedProject({ activeProjectId: mine.id, projects: [mine] }, theirs)
+    expect(importNotice(result, theirs)).toBe('You already have a project named “Python Playground”, so this link was added as “Python Playground (2)”. Your other projects are unchanged.')
   })
 })

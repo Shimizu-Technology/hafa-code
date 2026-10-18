@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
+import { projectKindCanRun } from '../lib/languageRegistry'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
 import type { ErrorCoachContext } from '../lib/errorCoach'
 import { focusOutside, focusRunControl, isApplePlatform } from '../lib/focusNavigation'
@@ -52,7 +53,7 @@ type EditorWorkspaceProps = {
 }
 
 type Monaco = Parameters<OnMount>[1]
-type CopyStatus = 'idle' | 'copied' | 'failed'
+type CopyStatus = { state: 'idle' | 'copied' | 'failed'; path: string }
 
 const MODIFIER_KEY_CODES = new Set([4, 5, 6, 57]) // Shift, Ctrl, Alt, Meta
 
@@ -92,8 +93,10 @@ export function EditorWorkspace({
   const managedTypeScriptModelsRef = useRef(new Set<string>())
   const onRunShortcutRef = useRef(onRunShortcut)
   const copyResetRef = useRef<number | null>(null)
-  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
-  const runnable = project.kind !== 'web'
+  const [copyResult, setCopyResult] = useState<CopyStatus>({ state: 'idle', path: '' })
+  // Feedback belongs to the file that was copied; switching files clears it.
+  const copyStatus = copyResult.path === activeFile.path ? copyResult.state : 'idle'
+  const runnable = projectKindCanRun(project.kind)
   const modifierLabel = isApplePlatform() ? '⌘' : 'Ctrl'
 
   useEffect(() => {
@@ -105,10 +108,11 @@ export function EditorWorkspace({
   }, [])
 
   const copyCode = async () => {
+    const path = activeFile.path
     const copied = await writeClipboardText(activeFile.content)
-    setCopyStatus(copied ? 'copied' : 'failed')
+    setCopyResult({ state: copied ? 'copied' : 'failed', path })
     if (copyResetRef.current) window.clearTimeout(copyResetRef.current)
-    copyResetRef.current = window.setTimeout(() => setCopyStatus('idle'), copied ? 2000 : 6000)
+    copyResetRef.current = window.setTimeout(() => setCopyResult({ state: 'idle', path: '' }), copied ? 2000 : 6000)
   }
 
   const syncTypeScriptModels = useCallback((monaco: Monaco) => {

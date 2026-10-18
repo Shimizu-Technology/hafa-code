@@ -799,6 +799,25 @@ describe('App language guide practice projects', () => {
       expect((screen.getByLabelText('Share URL') as HTMLInputElement).value).toMatch(/#share=abc$/)
     })
 
+    it('asks again before falling back to an offline link when the server share fails', async () => {
+      const user = userEvent.setup()
+      const createShare = vi.spyOn(api, 'createShare').mockResolvedValue({ data: null, error: 'Service unavailable' })
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      await user.click(screen.getByRole('button', { name: 'Create share link' }))
+      const failed = await screen.findByRole('dialog', { name: 'The share link could not be created' })
+      expect(failed.textContent).toContain('It does not expire')
+      expect(writeText).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      await waitFor(() => expect(createShare).toHaveBeenCalledTimes(2))
+      await user.click(await screen.findByRole('button', { name: 'Create offline link' }))
+      expect(await screen.findByRole('dialog', { name: 'Copy project link' })).toBeTruthy()
+      expect((screen.getByLabelText('Share URL') as HTMLInputElement).value).toMatch(/#project=[A-Za-z0-9_-]+$/)
+      expect(writeText).toHaveBeenCalledOnce()
+    })
+
     it('copies the code in the open file from the editor header', async () => {
       const user = userEvent.setup()
       const writeText = vi.fn().mockResolvedValue(undefined)

@@ -306,7 +306,7 @@ export function addImportedProject(library: ProjectLibrary, imported: SavedProje
 export function importNotice(result: { project: SavedProject; reused: boolean }, imported: SavedProject, source: 'link' | 'file' = 'link') {
   if (result.reused) return `“${result.project.title}” is already in your projects, so Hafa Code opened that copy.`
   if (result.project.title !== imported.title) {
-    return `You already have “${imported.title}” with changes, so this ${source === 'link' ? 'link' : 'file'} was added as “${result.project.title}”. Your earlier copy is unchanged.`
+    return `You already have a project named “${imported.title}”, so this ${source === 'link' ? 'link' : 'file'} was added as “${result.project.title}”. Your other projects are unchanged.`
   }
   return source === 'link' ? 'Shared project imported locally.' : 'Project imported.'
 }
@@ -369,6 +369,12 @@ export function projectExportFormat(project: Pick<SavedProject, 'files' | 'title
   const extension = baseName.includes('.') ? baseName.slice(baseName.lastIndexOf('.')) : ''
   const slug = projectSlug(project.title)
   return { kind: 'source' as const, fileName: slug ? `${slug}${extension}` : baseName }
+}
+
+export function projectExportLabel(format: ReturnType<typeof projectExportFormat>) {
+  if (format.kind === 'json') return 'Export project (.json)'
+  const extensionIndex = format.fileName.lastIndexOf('.')
+  return `Download code (${extensionIndex > 0 ? format.fileName.slice(extensionIndex) : 'file'})`
 }
 
 export function exportProject(project: SavedProject) {

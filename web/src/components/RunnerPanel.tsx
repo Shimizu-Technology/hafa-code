@@ -502,7 +502,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       {copyStatus === 'failed' && (
         <p className="runner-copy-error" role="alert">Copy was blocked by this browser. Select the output below and copy it manually.</p>
       )}
-      <div className="terminal" ref={terminalScrollRef} tabIndex={0} aria-label="Program output">
+      <div className="terminal" ref={terminalScrollRef} tabIndex={0} role="region" aria-label="Program output">
         {headline && (
           <div className="run-error-headline" role="alert">
             <TriangleAlert size={17} aria-hidden="true" />
@@ -542,7 +542,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         ))}
         {runState.fullTraceback && runState.status === 'error' && (
           <details className="terminal-full-traceback">
-            <summary>Show full traceback (includes Python’s internal steps)</summary>
+            <summary>{runner?.fullTracebackLabel ?? 'Show full error details'}</summary>
             <pre>{runState.fullTraceback}</pre>
           </details>
         )}

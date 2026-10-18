@@ -7,6 +7,9 @@ export type ShareDialogState = {
   stage: 'confirm'
   creating: boolean
 } | {
+  stage: 'failed'
+  error?: string | null
+} | {
   stage: 'ready'
   url: string
   mode: 'server' | 'offline'
@@ -53,6 +56,7 @@ type WorkspaceDialogsProps = {
   onConfirmProjectAction: () => void
   onConfirmProjectCopy: () => void
   onConfirmShare: () => void
+  onCreateOfflineShare: () => void
   onCopyShareLink: () => void
   onCreateOrganization: () => void
   onDuplicateProject: () => void
@@ -98,6 +102,7 @@ export function WorkspaceDialogs({
   onConfirmProjectAction,
   onConfirmProjectCopy,
   onConfirmShare,
+  onCreateOfflineShare,
   onCopyShareLink,
   onCreateOrganization,
   onDuplicateProject,
@@ -177,6 +182,26 @@ export function WorkspaceDialogs({
                   >
                     {shareDialog.creating ? 'Creating link…' : 'Create share link'}
                   </button>
+                </div>
+              </>
+            ) : shareDialog.stage === 'failed' ? (
+              <>
+                <div className="modal-header">
+                  <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">The share link could not be created</h2></div>
+                  <button className="ghost icon-button" aria-label="Close share dialog" onClick={onCloseShareDialog}><X size={18} /></button>
+                </div>
+                <div className="share-confirm-copy">
+                  {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
+                  <p>You can try again, or make an offline link instead. An offline link is different:</p>
+                  <ul>
+                    <li>The whole project is stored inside the link itself.</li>
+                    <li>It does not expire. Anyone who has the link can open a copy for as long as they keep it.</li>
+                    <li>Long projects make very long links that some apps cut off.</li>
+                  </ul>
+                </div>
+                <div className="confirm-actions">
+                  <button className="secondary" type="button" onClick={onCreateOfflineShare}>Create offline link</button>
+                  <button type="button" onClick={onConfirmShare}>Try again</button>
                 </div>
               </>
             ) : (
@@ -300,8 +325,7 @@ function ShareLinkReady({ shareDialog, onClose, onCopy }: { shareDialog: ReadySh
         <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">Copy project link</h2></div>
         <button className="ghost icon-button" aria-label="Close share dialog" onClick={onClose}><X size={18} /></button>
       </div>
-      <p className="helper-text">{shareDialog.mode === 'server' ? 'Anyone with this link can open a copy of this snapshot for 30 days.' : 'The server share could not be created, so this offline link carries a copy of the project in the URL.'}</p>
-      {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
+      <p className="helper-text">{shareDialog.mode === 'server' ? 'Anyone with this link can open a copy of this snapshot for 30 days.' : 'This offline link carries a copy of the project in the URL and does not expire.'}</p>
       <label className="file-path-field" htmlFor="share-url">
         <span>Share URL</span>
         <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
