@@ -241,6 +241,10 @@ export default function App() {
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const practiceCheckWatchdogRef = useRef<number | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
+  // A learner who arrived from a project or lesson link keeps that message (and its Start over) over the cloud-load summary.
+  const showCloudLoadNotice = useCallback((message: string) => {
+    setNotice((current) => (initial.notice && current === initial.notice ? current : message))
+  }, [initial.notice])
   const updateLessonLinks = useCallback((update: (current: LessonLinks) => LessonLinks) => {
     setLessonLinks((current) => {
       const next = update(current)
@@ -803,7 +807,7 @@ export default function App() {
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
         if (!suppressLoadedNotice) {
-          setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
+          showCloudLoadNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
         }
       } else {
         if (activeOrganizationId) {
@@ -821,12 +825,12 @@ export default function App() {
             setActivePath(orgProject.files[0].path)
           }
         } else {
-          setNotice('Signed in. Local projects will sync to your account as you edit.')
+          showCloudLoadNotice('Signed in. Local projects will sync to your account as you edit.')
         }
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [activeOrganization, activeOrganizationId, canUseInstructorPanel, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, canUseInstructorPanel, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, showCloudLoadNotice])
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
