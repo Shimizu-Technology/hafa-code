@@ -28,6 +28,8 @@ interface FileLanguageDefinition {
   monacoLanguage: string
   extensions: readonly string[]
   starterContent: string
+  /** Spaces per indent level in the editor; PEP 8 expects 4 for Python. Defaults to 2. */
+  tabSize?: number
 }
 
 export interface RunnerDefinition {
@@ -85,6 +87,7 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     monacoLanguage: 'python',
     extensions: ['py', 'pyw'],
     starterContent: '# Write Python here\n',
+    tabSize: 4,
   },
   java: {
     label: 'Java',
@@ -293,6 +296,14 @@ export function projectKindDefinition(kind: ProjectKind): ProjectKindDefinition 
 
 export function fileLanguageDefinition(language: ProjectFileLanguage): FileLanguageDefinition {
   return FILE_LANGUAGE_DEFINITIONS[language]
+}
+
+const DEFAULT_TAB_SIZE = 2
+
+/** Indent width for a file in the editor: 4 for Python, 2 for everything else. */
+export function editorTabSize(language: ProjectFileLanguage): number {
+  const definition: FileLanguageDefinition = FILE_LANGUAGE_DEFINITIONS[language]
+  return definition.tabSize ?? DEFAULT_TAB_SIZE
 }
 
 export function fileLanguageForPath(path: string): ProjectFileLanguage | null {

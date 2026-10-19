@@ -24,12 +24,24 @@ export function useSystemDarkMode() {
   return useSyncExternalStore(subscribeSystemTheme, getSystemThemeSnapshot, getServerSystemThemeSnapshot)
 }
 
+/**
+ * Phones and touch-first devices (including a phone turned sideways, wider than 640px)
+ * get 16px code so iOS does not zoom into the editor; desktops get 14px.
+ */
+export const LARGE_CODE_QUERY = '(max-width: 640px), (pointer: coarse)'
+export const CODE_SIZE_DESKTOP = 14
+export const CODE_SIZE_TOUCH = 16
+
+export function codeSizeFor(matchesLargeCode: boolean) {
+  return matchesLargeCode ? CODE_SIZE_TOUCH : CODE_SIZE_DESKTOP
+}
+
 export function useResponsiveEditorFontSize() {
-  const [fontSize, setFontSize] = useState(() => window.matchMedia('(max-width: 640px)').matches ? 16 : 14)
+  const [fontSize, setFontSize] = useState(() => codeSizeFor(window.matchMedia(LARGE_CODE_QUERY).matches))
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 640px)')
-    const updateFontSize = () => setFontSize(query.matches ? 16 : 14)
+    const query = window.matchMedia(LARGE_CODE_QUERY)
+    const updateFontSize = () => setFontSize(codeSizeFor(query.matches))
 
     updateFontSize()
     query.addEventListener('change', updateFontSize)
