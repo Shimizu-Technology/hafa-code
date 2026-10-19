@@ -1,6 +1,6 @@
-import { Files, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
+import { FolderOpen, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { PROJECT_KINDS, projectKindDefinition, type ProjectKind, type SavedProject } from '../lib/codeRunner'
-import { kindLabels, projectOwnerLabel } from '../lib/workspace'
+import { formatCheckpointTime, kindLabels, projectOwnerLabel } from '../lib/workspace'
 
 type ProjectSidebarProps = {
   activeOrganizationId: string | null
@@ -14,6 +14,8 @@ type ProjectSidebarProps = {
   showArchived: boolean
   userId?: number
   userName?: string | null
+  workspaceName: string
+  workspaceNote?: string
   onAddProject: (kind: ProjectKind) => void
   onCollapse: () => void
   onExpand: () => void
@@ -34,6 +36,8 @@ export function ProjectSidebar({
   showArchived,
   userId,
   userName,
+  workspaceName,
+  workspaceNote,
   onAddProject,
   onCollapse,
   onExpand,
@@ -72,8 +76,8 @@ export function ProjectSidebar({
               onClick={() => onSelectProject(candidate.id)}
               title={candidate.title || 'Untitled Project'}
             >
-              <span>{candidate.title || 'Untitled Project'}</span>
-              <small>{kindLabels[candidate.kind]}{ownerLabel ? ` · ${ownerLabel}` : ''}</small>
+              <span className="project-card-title">{candidate.title || 'Untitled Project'}</span>
+              <small>{kindLabels[candidate.kind]}{ownerLabel ? ` · ${ownerLabel}` : ''} · {formatCheckpointTime(candidate.updatedAt)}</small>
             </button>
           )
         })}
@@ -84,9 +88,12 @@ export function ProjectSidebar({
   return (
     <aside className="panel project-sidebar surface-grid">
       <div className="sidebar-header">
-        <h2><Files size={18} /> Projects</h2>
+        <div className="sidebar-heading">
+          <p className="sidebar-kicker"><FolderOpen size={14} aria-hidden="true" /> Projects</p>
+          <h2 title={workspaceName}>{workspaceName}</h2>
+        </div>
         <div className="sidebar-tools">
-          <span>{projectCount}</span>
+          <span className="count-badge" aria-label={`${projectCount} ${showArchived ? 'archived' : 'active'} projects`}>{projectCount}</span>
           <button className="ghost icon-button desktop-only" type="button" aria-label="Collapse project sidebar" onClick={onCollapse}>
             <PanelLeftClose size={17} />
           </button>
@@ -104,9 +111,9 @@ export function ProjectSidebar({
       </details>
       <div className="sidebar-content">
         <p className="sidebar-note">
-          {isSignedIn
+          {workspaceNote ?? (isSignedIn
             ? `Signed in${userName ? ` as ${userName}` : ''}. Projects sync to your account.`
-            : 'Everything is private to this browser until you export, share, or sign in.'}
+            : 'Everything is private to this browser until you export, share, or sign in.')}
         </p>
         {projectControls}
       </div>

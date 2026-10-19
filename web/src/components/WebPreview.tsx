@@ -105,15 +105,14 @@ export function WebPreview({ files, entryPath, onErrorAdviceChange }: { files: P
   }, [])
 
   return (
-    <section className="panel preview-panel surface-grid">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Preview</p>
-          <h2><Globe size={18} /> Web page</h2>
-          <p className="helper-text">{previewIsStale ? 'Preview has unsaved changes.' : 'Sandboxed iframe, no same-origin access.'}</p>
+    <section className="panel preview-panel">
+      <div className="panel-header runner-header">
+        <div className="runner-title">
+          <h2><Globe size={18} aria-hidden="true" /> Preview</h2>
+          <p className="helper-text">{previewIsStale ? 'You have changes the preview has not shown yet.' : 'Your page runs in a sandboxed frame.'}</p>
         </div>
-        <button className={previewIsStale ? '' : 'secondary'} type="button" onClick={refreshPreview} data-hafa-run-button>
-          <RefreshCw size={16} /> Refresh
+        <button className={previewIsStale ? 'primary' : 'secondary'} type="button" onClick={refreshPreview} data-hafa-run-button>
+          <RefreshCw size={16} aria-hidden="true" /> Refresh
         </button>
       </div>
       <iframe

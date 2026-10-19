@@ -20,12 +20,27 @@ async function openPersona(page: Page, persona: keyof typeof personaIds, hash = 
   expect((await session).status()).toBe(200)
 }
 
-async function switchToClassroom(page: Page) {
+/** The workspace switcher lives in the app bar's settings popover. */
+async function workspaceSelect(page: Page) {
   const workspace = page.getByLabel('Switch workspace')
-  if (!await workspace.isVisible()) {
-    await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Projects' }).click()
-  }
-  await workspace.selectOption(CLASSROOM_ID)
+  if (!await workspace.isVisible()) await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  return workspace
+}
+
+async function closeSettings(page: Page) {
+  if (await page.getByRole('group', { name: 'Workspace and display settings' }).isVisible()) await page.keyboard.press('Escape')
+}
+
+async function openProjectMenu(page: Page) {
+  await page.getByRole('button', { name: 'More project actions' }).click()
+  return page.getByRole('group', { name: 'Project actions' })
+}
+
+async function switchToClassroom(page: Page) {
+  await (await workspaceSelect(page)).selectOption(CLASSROOM_ID)
+  await closeSettings(page)
+  const navigation = page.getByRole('navigation', { name: 'Workspace sections' })
+  if (await navigation.isVisible()) await navigation.getByRole('button', { name: 'Projects' }).click()
   await expect(page.getByRole('heading', { name: 'FDMS Web Development', exact: true })).toBeVisible()
 }
 
@@ -87,7 +102,7 @@ test('teacher reviews private source, gives feedback, and duplicates into the cl
   await newFeedback.getByRole('button', { name: 'Resolve' }).click()
   await expect(newFeedback.getByRole('button', { name: 'Reopen' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
+  await (await openProjectMenu(page)).getByRole('button', { name: 'Duplicate', exact: true }).click()
   const copyDialog = page.getByRole('dialog', { name: 'Where should the copy live?' })
   await expect(copyDialog.getByLabel('FDMS Web Development')).toBeChecked()
   await copyDialog.getByRole('button', { name: 'Duplicate here' }).click()
@@ -149,7 +164,7 @@ test('wrong-account and expired invitations fail without exposing the invitee em
 test('invited student joins the correct classroom from the invitation link', async ({ page }) => {
   await openPersona(page, 'invitee', '#invite=e2e-classroom-invite')
   await expect(page.getByText('Joined FDMS Web Development.')).toBeVisible()
-  await expect(page.getByLabel('Switch workspace').getByRole('option', { name: 'FDMS Web Development' })).toHaveCount(1)
+  await expect((await workspaceSelect(page)).getByRole('option', { name: 'FDMS Web Development' })).toHaveCount(1)
   await switchToClassroom(page)
   await expect(page.getByText('student workspace')).toBeVisible()
 })
@@ -184,7 +199,8 @@ test('teacher can send, resend, revoke, and export from the classroom controls',
 
 test('platform admin can create a classroom and receives its owner role', async ({ page, request }) => {
   await openPersona(page, 'admin')
-  await page.getByRole('button', { name: 'Org', exact: true }).click()
+  await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  await page.getByRole('button', { name: 'New organization workspace' }).click()
   const dialog = page.getByRole('dialog', { name: 'Create workspace' })
   await dialog.getByLabel('Name').fill('E2E Created Classroom')
   const created = page.waitForResponse((response) => response.url().endsWith('/api/v1/organizations') && response.request().method() === 'POST')
@@ -209,7 +225,7 @@ test('instructor boundaries and dual-class switching stay visible in the UI', as
 
   await page.goto('/?e2e_user=dualStudent')
   await expect(page.getByText('Classroom test session').first()).toBeVisible()
-  const workspace = page.getByLabel('Switch workspace')
+  const workspace = await workspaceSelect(page)
   await expect(workspace.getByRole('option', { name: 'FDMS Web Development' })).toHaveCount(1)
   await expect(workspace.getByRole('option', { name: 'FDMS Programming Foundations' })).toHaveCount(1)
   await workspace.selectOption('92002')
@@ -221,10 +237,12 @@ test('mobile project actions are keyboard dismissible without horizontal overflo
   await openPersona(page, 'student')
   await switchToClassroom(page)
   await page.getByRole('button', { name: 'Code', exact: true }).click()
-  await page.getByRole('button', { name: 'Actions' }).click()
-  await expect(page.getByRole('dialog', { name: 'Actions' })).toBeVisible()
+  const menu = await openProjectMenu(page)
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Delete' })).toBeVisible()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: 'Actions' })).toHaveCount(0)
+  await expect(menu).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'More project actions' })).toBeFocused()
 })
 
 test('student can checkpoint, restore, archive, restore, and delete a class project', async ({ page }) => {
@@ -244,16 +262,16 @@ test('student can checkpoint, restore, archive, restore, and delete a class proj
   await page.getByRole('alertdialog', { name: 'Restore this checkpoint?' }).getByRole('button', { name: 'Restore checkpoint' }).click()
   await expect(page.getByLabel('Project name')).toHaveValue('Class Gallery')
 
-  await page.locator('.toolbar-actions').getByRole('button', { name: 'Archive' }).click()
+  await (await openProjectMenu(page)).getByRole('button', { name: 'Archive' }).click()
   await page.getByRole('alertdialog', { name: 'Archive this project?' }).getByRole('button', { name: 'Archive project' }).click()
   await expect(page.getByText('Class Gallery archived.')).toBeVisible()
   await page.locator('.sidebar-content').getByRole('button', { name: /Archived/ }).click()
   await page.locator('.sidebar-content').getByRole('button', { name: /Class Gallery/ }).click()
-  await expect(page.locator('.toolbar-actions').getByRole('button', { name: 'Restore' })).toBeVisible()
-  await page.locator('.toolbar-actions').getByRole('button', { name: 'Restore' }).click()
+  await expect(page.locator('.status-banner').getByRole('button', { name: 'Restore' })).toBeVisible()
+  await (await openProjectMenu(page)).getByRole('button', { name: 'Restore' }).click()
   await expect(page.getByText('Class Gallery restored.')).toBeVisible()
 
-  await page.locator('.toolbar-actions').getByRole('button', { name: 'Delete' }).click()
+  await (await openProjectMenu(page)).getByRole('button', { name: 'Delete' }).click()
   await page.getByRole('alertdialog', { name: 'Delete this project?' }).getByRole('button', { name: 'Delete project' }).click()
   await expect(page.locator('.sidebar-content').getByRole('button', { name: /Class Gallery/ })).toHaveCount(0)
 })

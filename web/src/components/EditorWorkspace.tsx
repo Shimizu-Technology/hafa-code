@@ -1,4 +1,4 @@
-import MonacoEditor, { type OnMount } from '@monaco-editor/react'
+import MonacoEditor, { type BeforeMount, type OnMount } from '@monaco-editor/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BookOpen,
@@ -16,7 +16,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
-import { projectKindCanRun } from '../lib/languageRegistry'
+import { editorTabSize, projectKindCanRun } from '../lib/languageRegistry'
+import { defineHafaEditorThemes, type HafaEditorTheme } from '../lib/monacoThemes'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
 import type { ErrorCoachContext } from '../lib/errorCoach'
 import { focusOutside, focusRunControl, isApplePlatform } from '../lib/focusNavigation'
@@ -30,6 +31,7 @@ type EditorWorkspaceProps = {
   canEditProject: boolean
   editorExpanded: boolean
   editorFontSize: number
+  editorTheme?: HafaEditorTheme
   entryFile: ProjectFile
   project: SavedProject
   runnerInstanceKey: string
@@ -56,6 +58,10 @@ type Monaco = Parameters<OnMount>[1]
 type CopyStatus = { state: 'idle' | 'copied' | 'failed'; projectId: string; path: string }
 
 const MODIFIER_KEY_CODES = new Set([4, 5, 6, 57]) // Shift, Ctrl, Alt, Meta
+/** One monospace stack for the editor, terminal, and guide code (see --font-mono in App.css). */
+export const CODE_FONT_FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace'
+
+const defineThemes: BeforeMount = (monaco) => defineHafaEditorThemes(monaco)
 
 function modelUri(projectId: string, path: string) {
   const encodedProjectId = encodeURIComponent(projectId)
@@ -69,6 +75,7 @@ export function EditorWorkspace({
   canEditProject,
   editorExpanded,
   editorFontSize,
+  editorTheme = 'hafa-light',
   entryFile,
   project,
   runnerInstanceKey,
@@ -252,7 +259,7 @@ export function EditorWorkspace({
           <button className="secondary" type="button" onClick={onOpenPractice} aria-label={`Open ${projectKindDefinition(project.kind).label} practice lab`}>
             <Dumbbell size={16} /> Practice
           </button>
-          <button type="button" onClick={onRunFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()} data-hafa-run-button>
+          <button className="primary" type="button" onClick={onRunFromMobileCode} disabled={project.kind !== 'web' && !entryFile.content.trim()} data-hafa-run-button>
             {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
             {project.kind === 'web' ? 'Open preview' : `Run ${projectKindDefinition(project.kind).shortLabel}`}
           </button>
@@ -264,7 +271,8 @@ export function EditorWorkspace({
           height="calc(var(--workspace-pane-height) - var(--editor-hint-height))"
           language={languageForFile(activeFile)}
           path={modelUri(project.id, activeFile.path)}
-          theme="vs-dark"
+          theme={editorTheme}
+          beforeMount={defineThemes}
           value={activeFile.content}
           loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
           onChange={(value) => onUpdateActiveFile(value ?? '')}
@@ -273,7 +281,10 @@ export function EditorWorkspace({
             readOnly: !canEditProject,
             minimap: { enabled: false },
             fontSize: editorFontSize,
-            tabSize: 2,
+            fontFamily: CODE_FONT_FAMILY,
+            lineHeight: 1.6,
+            tabSize: editorTabSize(activeFile.language),
+            detectIndentation: false,
             insertSpaces: true,
             wordWrap: 'on',
             automaticLayout: true,

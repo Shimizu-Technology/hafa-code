@@ -6,13 +6,18 @@ import { createProject } from '../lib/projectStorage'
 import { EditorWorkspace } from './EditorWorkspace'
 import { MobileWorkspaceNav } from './MobileWorkspaceNav'
 import { ProjectSidebar } from './ProjectSidebar'
-import { ProjectToolbar } from './ProjectToolbar'
+import { AppBar } from './AppBar'
+import { CheckpointMenu } from './CheckpointMenu'
+import { ProjectMenu } from './ProjectMenu'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
 
+const monacoHarness = vi.hoisted(() => ({ props: null as null | { theme?: string; options?: { tabSize?: number; fontSize?: number; fontFamily?: string } } }))
+
 vi.mock('@monaco-editor/react', () => ({
-  default: ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
-    <textarea aria-label="Code editor" value={value ?? ''} onChange={(event) => onChange?.(event.target.value)} />
-  ),
+  default: (props: { value?: string; onChange?: (value: string) => void; theme?: string; options?: { tabSize?: number } }) => {
+    monacoHarness.props = props
+    return <textarea aria-label="Code editor" value={props.value ?? ''} onChange={(event) => props.onChange?.(event.target.value)} />
+  },
 }))
 
 vi.mock('./RunnerPanel', () => ({ RunnerPanel: () => <section aria-label="Runner panel" /> }))
@@ -36,6 +41,7 @@ describe('workspace presentation components', () => {
         mobileProjectsOpen={false}
         projects={[project]}
         showArchived={false}
+        workspaceName="Personal projects"
         onAddProject={onAddProject}
         onCollapse={vi.fn()}
         onExpand={vi.fn()}
@@ -45,7 +51,7 @@ describe('workspace presentation components', () => {
     )
 
     await user.click(screen.getAllByRole('button', { name: /python/i })[0])
-    await user.click(screen.getAllByRole('button', { name: 'Warmup Ruby' })[0])
+    await user.click(screen.getAllByRole('button', { name: /^Warmup Ruby ·/ })[0])
 
     expect(onAddProject).toHaveBeenCalledWith('python')
     expect(onSelectProject).toHaveBeenCalledWith(project.id)
@@ -88,6 +94,35 @@ describe('workspace presentation components', () => {
     expect(screen.getByRole('region', { name: 'Runner panel' })).toBeDefined()
   })
 
+  it('indents Python with four spaces and other languages with two, on the warm Hafa theme', () => {
+    const python = createProject('python', 'Expenses')
+    const props = {
+      canEditProject: true,
+      editorExpanded: false,
+      editorFontSize: 14,
+      onCreateFile: vi.fn(),
+      onDeleteFile: vi.fn(),
+      onDuplicateFile: vi.fn(),
+      onEditorExpandedChange: vi.fn(),
+      onOpenGuide: vi.fn(),
+      onOpenPractice: vi.fn(),
+      onRenameFile: vi.fn(),
+      onRunFromMobileCode: vi.fn(),
+      onSelectFile: vi.fn(),
+      onSetEntryPath: vi.fn(),
+      onUpdateActiveFile: vi.fn(),
+    }
+    const { rerender } = render(<EditorWorkspace {...props} activeFile={python.files[0]} entryFile={python.files[0]} project={python} runnerInstanceKey={python.id} editorTheme="hafa-dark" />)
+    expect(monacoHarness.props?.options?.tabSize).toBe(4)
+    expect(monacoHarness.props?.theme).toBe('hafa-dark')
+    expect(monacoHarness.props?.options?.fontFamily).toContain('JetBrains Mono')
+
+    const ruby = createProject('ruby', 'Loops')
+    rerender(<EditorWorkspace {...props} activeFile={ruby.files[0]} entryFile={ruby.files[0]} project={ruby} runnerInstanceKey={ruby.id} />)
+    expect(monacoHarness.props?.options?.tabSize).toBe(2)
+    expect(monacoHarness.props?.theme).toBe('hafa-light')
+  })
+
   it('keeps project metadata and mobile destinations accessible', async () => {
     const user = userEvent.setup()
     const project = createProject('web', 'Portfolio')
@@ -96,36 +131,62 @@ describe('workspace presentation components', () => {
     const onCheckpointMenuChange = vi.fn()
 
     const { rerender } = render(
-      <ProjectToolbar
-        activeOrganizationId={null}
+      <AppBar
         canEditProject
-        checkpointMenuIsOpen
-        checkpointMenuRef={createRef<HTMLDetailsElement>()}
-        checkpoints={[]}
-        cloudSaveLabel="Autosaved locally"
-        currentProjectOwnerLabel=""
-        localBackupAvailable
-        project={project}
-        projectCount={1}
-        onArchive={vi.fn()}
-        onCheckpointMenuChange={onCheckpointMenuChange}
-        onDelete={vi.fn()}
-        onDuplicate={vi.fn()}
+        guideLabel="Web guide"
+        projectTitle={project.title}
+        saveLabel="Autosaved locally"
+        shareDisabled={false}
+        account={null}
+        history={(
+          <CheckpointMenu
+            canEditProject
+            checkpointMenuIsOpen
+            checkpointMenuRef={createRef<HTMLDetailsElement>()}
+            checkpoints={[]}
+            onCheckpointMenuChange={onCheckpointMenuChange}
+            onRestoreCheckpoint={vi.fn()}
+            onSaveCheckpoint={vi.fn()}
+          />
+        )}
+        settings={null}
+        menu={(
+          <ProjectMenu
+            activeOrganizationId={null}
+            canEditProject
+            exportLabel="Export project (.json)"
+            exportTitle="Export"
+            project={project}
+            projectCount={1}
+            onArchive={vi.fn()}
+            onDelete={vi.fn()}
+            onDownload={vi.fn()}
+            onDuplicate={vi.fn()}
+            onImport={vi.fn()}
+            onOpenWorkspaceBackup={vi.fn()}
+            onRestore={vi.fn()}
+            onVisibilityChange={vi.fn()}
+          />
+        )}
         onOpenGuide={vi.fn()}
         onOpenPractice={vi.fn()}
-        onOpenProjectActions={vi.fn()}
         onRename={onRename}
-        onRestore={vi.fn()}
-        onRestoreCheckpoint={vi.fn()}
-        onSaveCheckpoint={vi.fn()}
-        onVisibilityChange={vi.fn()}
+        onShare={vi.fn()}
       />,
     )
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Site' } })
     expect(onRename).toHaveBeenLastCalledWith('Site')
-    expect(screen.getByRole('meter', { name: /project source uses/i }).getAttribute('max')).toBe('2000000')
-    expect(screen.getByText(/of 2.00 MB/)).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'More project actions' }))
+    const menu = screen.getByRole('group', { name: 'Project actions' })
+    expect(within(menu).getByRole('meter', { name: /project source uses/i }).getAttribute('max')).toBe('2000000')
+    expect(within(menu).getByText(/of 2.00 MB/)).toBeDefined()
+    // The last active project cannot be archived; Delete lives in the menu, not the toolbar.
+    expect(within(menu).getByRole('button', { name: 'Archive' })).toHaveProperty('disabled', true)
+    expect(within(menu).getByRole('button', { name: 'Delete' })).toBeDefined()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('group', { name: 'Project actions' })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More project actions' }))
     const historySummary = screen.getByText('History').closest('summary')!
     historySummary.focus()
     fireEvent.keyDown(historySummary, { key: 'Escape' })

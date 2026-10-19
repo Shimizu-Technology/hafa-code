@@ -6,6 +6,7 @@ describe('AuthControls', () => {
   it('renders the local-only state without requiring a Clerk provider', () => {
     render(<AuthControls cloudEnabled={false} />)
 
-    expect(screen.getByText('Add a valid Clerk key for cloud save')).toBeTruthy()
+    expect(screen.getByText('Cloud save off')).toBeTruthy()
+    expect(screen.getByTitle('Add a valid Clerk key to turn on cloud save')).toBeTruthy()
   })
 })
