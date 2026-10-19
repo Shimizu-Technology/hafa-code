@@ -42,6 +42,7 @@ hafa-code/
 - [Classroom, orgs, sharing, accessibility, and runner plan](docs/CLASSROOM_ORGS_AND_SHARING_PLAN.md)
 - [FDMS classroom launch readiness and action plan](docs/FDMS_CLASSROOM_LAUNCH_PLAN.md)
 - [Classroom operations and incident runbook](docs/CLASSROOM_OPERATIONS_RUNBOOK.md)
+- [Lesson starter links (CSG Learn → Hafa Code)](docs/LEARN_STARTER_LINKS.md)
 
 ## Security Model
 
