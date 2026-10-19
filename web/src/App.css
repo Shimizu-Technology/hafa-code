@@ -64,6 +64,8 @@
   --surface-selected: #14110f;
   --surface-code: #17130f;
   --surface-code-raised: #211c17;
+  /* Learner web pages render on the browser's default white canvas in both themes. */
+  --surface-preview: #ffffff;
   --scrim: rgba(20, 17, 15, 0.48);
   --text-strong: #14110f;
   --text-body: #38291c;
@@ -371,6 +373,14 @@ input,
 select,
 textarea {
   font-size: var(--text-sm);
+}
+
+/* Zero-specificity field defaults so no form control falls back to the browser's gray in dark mode. */
+:where(select, textarea, input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])):where(:not(.monaco-editor *, .quick-input-widget *)) {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-field);
+  color: var(--text-strong);
 }
 
 @media (max-width: 640px), (pointer: coarse) {
@@ -1665,7 +1675,7 @@ textarea {
   height: calc(var(--workspace-pane-height) - 160px);
   min-height: 260px;
   border: 0;
-  background: #fff;
+  background: var(--surface-preview);
 }
 
 .preview-console {
@@ -4587,6 +4597,7 @@ textarea {
 }
 
 @media (max-width: 360px) {
+  .file-tab-list .entry-dot { display: none; }
   .wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .app-bar-project { padding-left: 0; border-left: 0; }
   .mobile-home-create > div,

@@ -90,6 +90,15 @@ describe('first visit from a Learn or class link', () => {
   beforeEach(() => localStorage.clear())
   afterEach(() => window.history.replaceState(null, '', '/'))
 
+  test('only a plain first visit gets the welcome, not a project, share, or language link', () => {
+    expect(visit('/').firstVisit).toBe(true)
+    localStorage.clear()
+    expect(visit('/#share=abc123').firstVisit).toBe(false)
+    localStorage.clear()
+    expect(visit('/?lang=python').firstVisit).toBe(false)
+    expect(visit('/').firstVisit).toBe(false)
+  })
+
   test('?lang=python gives a new visitor a Python project instead of Ruby and lands on the code', () => {
     const initial = visit('/?lang=python')
     expect(initial.library.projects.map((project) => project.kind)).toEqual(['python'])

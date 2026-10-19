@@ -211,6 +211,8 @@ test('the selective Monaco build keeps core editing commands', async ({ page }) 
   await page.keyboard.press('Escape')
 
   await editorSurface.click()
+  // Wait for the click to settle focus in the editor; otherwise the go-to-line box can open and lose focus.
+  await expect(editor).toBeFocused()
   expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.runAction('editor.action.gotoLine'))).toBe(true)
   await expect(page.getByRole('textbox', { name: /Type a line number to go to/ })).toBeVisible()
   await page.keyboard.press('Escape')

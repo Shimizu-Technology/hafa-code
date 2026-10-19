@@ -214,8 +214,9 @@ export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
   const sharedProject = params.get('project')
   const requestedKind = requestedStarterKind()
   const { library, isNew } = loadProjectLibraryWithStatus(requestedKind ?? undefined)
-  // Only a brand-new visitor without a project or language link sees the welcome header.
-  const withVisit = (workspace: Omit<InitialWorkspace, 'firstVisit'>): InitialWorkspace => ({ ...workspace, firstVisit: isNew && !workspace.openCode })
+  // Only a brand-new visitor without a project, share, or language link sees the welcome header.
+  const arrivedWithShare = params.has('share')
+  const withVisit = (workspace: Omit<InitialWorkspace, 'firstVisit'>): InitialWorkspace => ({ ...workspace, firstVisit: isNew && !workspace.openCode && !arrivedWithShare })
 
   if (sharedProject) {
     try {

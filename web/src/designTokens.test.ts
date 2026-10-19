@@ -6,10 +6,24 @@ import { describe, expect, it } from 'vitest'
 // Vitest runs from web/; read the stylesheet as text (CSS imports are stubbed in tests).
 const css = readFileSync(resolve(process.cwd(), 'src/App.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
+/** The body of a top-level rule for exactly this selector (not one nested in a media query). */
 function blockFor(selector: string) {
-  const start = css.indexOf(`${selector} {`)
-  if (start === -1) return ''
-  return css.slice(start, css.indexOf('\n}', start))
+  let depth = 0
+  for (let index = 0; index < css.length; index += 1) {
+    const atLineStart = index === 0 || css[index - 1] === '\n'
+    if (depth === 0 && atLineStart && css.startsWith(`${selector} {`, index)) {
+      const open = index + selector.length + 1
+      let inner = 0
+      for (let end = open; end < css.length; end += 1) {
+        if (css[end] === '{') inner += 1
+        if (css[end] === '}' && --inner === 0) return css.slice(open + 1, end)
+      }
+      return ''
+    }
+    if (css[index] === '{') depth += 1
+    if (css[index] === '}') depth -= 1
+  }
+  return ''
 }
 
 const ROLE_TOKENS = [
@@ -57,7 +71,7 @@ describe('design tokens', () => {
   })
 
   it('keeps raw colors inside token definitions', () => {
-    const offenders = css.split('\n').filter((line) => /#[0-9a-f]{3,8}\b/i.test(line) && !/^\s*--[\w-]+\s*:/.test(line) && !/background: #fff;/.test(line))
+    const offenders = css.split('\n').filter((line) => /#[0-9a-f]{3,8}\b/i.test(line) && !/^\s*--[\w-]+\s*:/.test(line))
     expect(offenders).toEqual([])
   })
 

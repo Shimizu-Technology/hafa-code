@@ -701,13 +701,6 @@ export default function App() {
   }, [invitationAccepting, isSignedIn, pendingInvitationToken, syncSession])
 
   useEffect(() => {
-    if (!notice) return
-
-    const timeout = window.setTimeout(() => setNotice(''), 4_500)
-    return () => window.clearTimeout(timeout)
-  }, [notice])
-
-  useEffect(() => {
     queueMicrotask(() => {
       setHasLoadedCloudProjects(false)
       setInstructorPanelOpen(false)
