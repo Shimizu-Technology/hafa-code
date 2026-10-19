@@ -47,7 +47,9 @@ export function LessonBar({ lesson, onCopyForLearn }: LessonBarProps) {
         <small className="lesson-hint" id="lesson-copy-hint">Paste it into the lesson’s submission box.</small>
         <button className="secondary lesson-copy" type="button" onClick={copy} aria-describedby="lesson-copy-hint">
           {copied ? <Check size={16} aria-hidden="true" /> : <ClipboardCopy size={16} aria-hidden="true" />}
-          <span>{copied ? 'Copied' : 'Copy code for Learn'}</span>
+          {copied
+            ? <span>Copied</span>
+            : <><span className="lesson-label-long">Copy code for Learn</span><span className="lesson-label-short">Copy for Learn</span></>}
         </button>
       </div>
     </section>

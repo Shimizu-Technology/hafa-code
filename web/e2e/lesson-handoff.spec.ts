@@ -49,7 +49,7 @@ test('starter link with a return: run, copy for Learn, and go back to the lesson
   await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success', { timeout: 90_000 })
   await expect(page.locator('.output-panel')).toContainText('Total: 35')
 
-  await bar.getByRole('button', { name: 'Copy code for Learn' }).click()
+  await bar.getByRole('button', { name: /Copy code for Learn/ }).click()
   await expect(page.getByText('Code copied. Paste it into the lesson’s submission box.')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(STARTER)
 
@@ -119,7 +119,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
     const bar = page.getByRole('region', { name: 'Lesson' })
     await expect(bar).toBeVisible()
     const back = bar.getByRole('link', { name: /lesson/i })
-    const copy = bar.getByRole('button', { name: /Copy code for Learn/ })
+    const copy = bar.getByRole('button', { name: /Copy (code )?for Learn/ })
     for (const control of [back, copy]) {
       await expect(control).toBeVisible()
       const box = await control.boundingBox()
@@ -141,7 +141,7 @@ test('keyboard only: reach Copy code for Learn and Back to your lesson', async (
   await openLesson(page)
   const bar = page.getByRole('region', { name: 'Lesson' })
   const back = bar.getByRole('link', { name: /Back to your lesson/ })
-  const copy = bar.getByRole('button', { name: 'Copy code for Learn' })
+  const copy = bar.getByRole('button', { name: /Copy code for Learn/ })
 
   await page.getByLabel('Project name').focus()
   let reachedBack = false

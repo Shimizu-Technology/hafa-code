@@ -904,7 +904,7 @@ describe('App language guide practice projects', () => {
       const primaries = [...document.querySelectorAll('.coding-stage button.primary, .app-bar button.primary')]
       expect(primaries.every((button) => button.hasAttribute('data-hafa-run-button'))).toBe(true)
 
-      await user.click(within(bar).getByRole('button', { name: 'Copy code for Learn' }))
+      await user.click(within(bar).getByRole('button', { name: /Copy code for Learn/ }))
       expect(writeText).toHaveBeenCalledWith(starterCode)
       expect(screen.getByText('Code copied. Paste it into the lesson’s submission box.')).toBeTruthy()
       expect(within(bar).getByRole('button', { name: 'Copied' })).toBeTruthy()
@@ -915,7 +915,7 @@ describe('App language guide practice projects', () => {
       Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true })
       window.history.replaceState(null, '', lessonLink())
       render(<App />)
-      await user.click(screen.getByRole('button', { name: 'Copy code for Learn' }))
+      await user.click(screen.getByRole('button', { name: /Copy code for Learn/ }))
       expect(screen.getByText(/Clipboard blocked. Select the code in the editor/)).toBeTruthy()
     })
 
