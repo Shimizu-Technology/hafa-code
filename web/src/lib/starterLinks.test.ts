@@ -190,6 +190,12 @@ describe('starter link builder', () => {
     expect(() => expenseLink({ files: [{ path: 'main.py', content: noisy(STARTER_LINK_MAX_LENGTH) }] })).toThrow(StarterLinkError)
   })
 
+  test('refuses a starter too large to open even when it would compress into a short link', () => {
+    const repetitive = 'a'.repeat(3_000_000)
+    expect(encodeProjectPayload(JSON.stringify({ content: repetitive })).length).toBeLessThan(STARTER_LINK_MAX_LENGTH)
+    expect(() => expenseLink({ files: [{ path: 'main.py', content: repetitive }] })).toThrow(/larger than Hafa Code opens from a link/)
+  })
+
   test('uses the uncompressed form when compression would not help', () => {
     expect(encodeProjectPayload('{"a":1}')).toBe(encodeBase64Url('{"a":1}'))
     expect(encodeProjectPayload(JSON.stringify({ code: 'print(1)\n'.repeat(50) })).startsWith('z.')).toBe(true)

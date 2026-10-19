@@ -238,7 +238,12 @@ export function buildStarterLink(input: StarterLinkInput): StarterLink {
     files: input.files.map((file) => ({ path: file.path, ...(file.language ? { language: file.language } : {}), content: file.content })),
   }
   const hash = new URLSearchParams()
-  hash.set('project', encodeProjectPayload(JSON.stringify(payload)))
+  const json = JSON.stringify(payload)
+  // Repetitive code can compress into a short link that the app would still refuse to inflate.
+  if (new TextEncoder().encode(json).byteLength > MAX_INFLATED_PAYLOAD_BYTES) {
+    throw new StarterLinkError(`This starter is larger than Hafa Code opens from a link (${(MAX_INFLATED_PAYLOAD_BYTES / 1_000_000).toFixed(1)} MB). Trim it or share it as a file.`)
+  }
+  hash.set('project', encodeProjectPayload(json))
   hash.set('starter', starterKey)
   if (returnUrl) {
     hash.set('return', returnUrl)
