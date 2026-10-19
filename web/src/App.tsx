@@ -2393,7 +2393,7 @@ export default function App() {
               onRestore={() => { void restoreProject() }}
             />
 
-            {lessonReturn && <LessonBar lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
+            {lessonReturn && <LessonBar key={project.id} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
 
             {mobileTab === 'history' && (
               <CheckpointPage
