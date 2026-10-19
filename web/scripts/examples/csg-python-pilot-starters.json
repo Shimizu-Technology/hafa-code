@@ -1,0 +1,50 @@
+{
+  "baseUrl": "https://code.shimizu-technology.com",
+  "starters": [
+    {
+      "lesson": "orientation",
+      "lessonTitle": "Orientation — your first run",
+      "key": "csg-python-pilot:orientation",
+      "title": "Orientation — first run",
+      "kind": "python",
+      "files": [
+        {
+          "path": "hello.py",
+          "content": "print(\"Hello from Guam\")\n"
+        }
+      ],
+      "returnUrl": "https://learn.codeschoolofguam.com/lessons/LESSON_ID",
+      "returnLabel": "Orientation — your first run"
+    },
+    {
+      "lesson": "lesson-2",
+      "lessonTitle": "Lesson 2 — values, variables, and input",
+      "key": "csg-python-pilot:lesson-2",
+      "title": "Lesson 2 — values and variables",
+      "kind": "python",
+      "files": [
+        {
+          "path": "receipt.py",
+          "content": "first = 12\nsecond = 8\nsubtotal = first + second\nfee = subtotal * 0.10\ntotal = subtotal + fee\nprint(f\"Total: ${total:.2f}\")\n"
+        }
+      ],
+      "returnUrl": "https://learn.codeschoolofguam.com/lessons/LESSON_ID",
+      "returnLabel": "Lesson 2 — values, variables, and input"
+    },
+    {
+      "lesson": "project",
+      "lessonTitle": "Independent expense-summary project",
+      "key": "csg-python-pilot:project",
+      "title": "Expense summary project",
+      "kind": "python",
+      "files": [
+        {
+          "path": "expense_summary.py",
+          "content": "\"\"\"Learner starter for the Python Fundamentals expense-summary project.\n\nCopy this into Hafa Code. Finish the TODO sections, run the sample, then test\nan empty expense list, a missing category, and a budget exactly equal to 118.\nThese amounts are whole dollars for a programming exercise.\n\"\"\"\n\nEXPENSES = [\n    {\"description\": \"Groceries\", \"category\": \"Food\", \"amount\": 42},\n    {\"description\": \"Bus pass\", \"category\": \"Transport\", \"amount\": 18},\n    {\"description\": \"Lunch\", \"category\": \"Food\", \"amount\": 13},\n    {\"description\": \"Notebook\", \"category\": \"Supplies\", \"amount\": 9},\n    {\"description\": \"Fuel\", \"category\": \"Transport\", \"amount\": 30},\n    {\"description\": \"Coffee\", \"category\": \"Food\", \"amount\": 6},\n]\nBUDGET = 120\n\n\ndef total_amount(expenses):\n    # TODO: add every expense amount and return the total.\n    pass\n\n\ndef category_totals(expenses):\n    # TODO: return a dictionary of totals, one entry per category.\n    pass\n\n\ndef total_for_category(expenses, category):\n    # TODO: return 0 when the requested category is absent.\n    pass\n\n\ndef largest_expense(expenses):\n    # TODO: return the largest expense, or None when the list is empty.\n    pass\n\n\ndef budget_status(total, budget):\n    # TODO: return an under, exactly-on, or over-budget message.\n    pass\n\n\ndef make_report(expenses, budget):\n    # TODO: use your functions to build a readable report.\n    # Include the overall total, each category total, the largest expense\n    # (or \"none\"), and the budget result.\n    pass\n\n\nif __name__ == \"__main__\":\n    print(make_report(EXPENSES, BUDGET))\n"
+        }
+      ],
+      "returnUrl": "https://learn.codeschoolofguam.com/lessons/LESSON_ID",
+      "returnLabel": "Independent expense-summary project"
+    }
+  ]
+}

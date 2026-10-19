@@ -67,6 +67,7 @@ import {
 import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
+import { LessonBar } from './components/LessonBar'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { AppBar } from './components/AppBar'
 import { CheckpointMenu, CheckpointPage } from './components/CheckpointMenu'
@@ -140,6 +141,7 @@ import {
   type MobileTab,
 } from './lib/workspace'
 import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
+import { LESSON_LINKS_STORAGE_KEY, lessonReturnForProject, loadLessonLinks, recordLessonLink, replaceLessonProjectId, saveLessonLinks, type LessonLinks } from './lib/lessonLinks'
 import { projectKindCanRun } from './lib/languageRegistry'
 import { e2eAuthEnabled } from './lib/e2eAuth'
 import {
@@ -164,6 +166,9 @@ export default function App() {
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
+  const [lessonLinks, setLessonLinks] = useState<LessonLinks>(() => loadLessonLinks())
+  // "Start over" belongs to the welcome-back notice only; any other notice hides it.
+  const [lessonReopen, setLessonReopen] = useState(initial.lessonReopen ?? null)
   const [welcomeVisible, setWelcomeVisible] = useState(initial.firstVisit)
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null)
   const [showArchived, setShowArchived] = useState(isArchived(initialProject))
@@ -236,6 +241,24 @@ export default function App() {
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const practiceCheckWatchdogRef = useRef<number | null>(null)
   const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
+  // A learner who arrived from a project or lesson link keeps that message (and its Start over) over the cloud-load summary.
+  const showCloudLoadNotice = useCallback((message: string) => {
+    setNotice((current) => (initial.notice && current === initial.notice ? current : message))
+  }, [initial.notice])
+  // Start from storage, not state: another tab may have opened a different lesson link since this one loaded.
+  const updateLessonLinks = useCallback((update: (current: LessonLinks) => LessonLinks) => {
+    const current = loadLessonLinks()
+    const next = update(current)
+    if (next !== current) saveLessonLinks(next)
+    setLessonLinks(next)
+  }, [])
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => {
+      if (event.key === null || event.key === LESSON_LINKS_STORAGE_KEY) setLessonLinks(loadLessonLinks())
+    }
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
+  }, [])
   const cloudEnabled = e2eAuthEnabled || hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
   const systemDark = useSystemDarkMode()
@@ -516,6 +539,8 @@ export default function App() {
     syncedProjectVersionsRef.current.set(savedProject.id, savedProject.updatedAt)
     if (savedProject.id !== projectId) {
       replacePracticeProjectId(projectId, savedProject.id)
+      updateLessonLinks((current) => replaceLessonProjectId(current, projectId, savedProject.id))
+      setLessonReopen((current) => current?.projectId === projectId ? { ...current, projectId: savedProject.id } : current)
       pendingPracticeCheckRef.current = remapPendingPracticeCheck(pendingPracticeCheckRef.current, projectId, savedProject.id)
       clearProjectPendingCloudSync(projectId)
       if (changedWhileSaving || projectNeedingAnotherSave) {
@@ -537,7 +562,7 @@ export default function App() {
       clearProjectPendingCloudSync(savedProject.id)
       updateCloudSaveStatus(savedProject.id, 'saved')
     }
-  }, [clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, user?.id])
+  }, [clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, scheduleCloudSave, updateCloudSaveStatus, updateLessonLinks, user?.id])
   useEffect(() => {
     syncCloudProjectRef.current = syncCloudProject
   }, [syncCloudProject])
@@ -789,7 +814,7 @@ export default function App() {
         setActivePath(nextProject.files[0].path)
         setShowArchived(isArchived(nextProject))
         if (!suppressLoadedNotice) {
-          setNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
+          showCloudLoadNotice(`Loaded ${res.data.length} ${activeOrganization ? `${activeOrganization.name} ` : ''}cloud project${res.data.length === 1 ? '' : 's'}.`)
         }
       } else {
         if (activeOrganizationId) {
@@ -807,12 +832,12 @@ export default function App() {
             setActivePath(orgProject.files[0].path)
           }
         } else {
-          setNotice('Signed in. Local projects will sync to your account as you edit.')
+          showCloudLoadNotice('Signed in. Local projects will sync to your account as you edit.')
         }
       }
       setHasLoadedCloudProjects(true)
     })
-  }, [activeOrganization, activeOrganizationId, canUseInstructorPanel, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn])
+  }, [activeOrganization, activeOrganizationId, canUseInstructorPanel, clearPendingPracticeCheck, hasLoadedCloudProjects, isSignedIn, showCloudLoadNotice])
 
   useEffect(() => {
     if (!isSignedIn || !hasLoadedCloudProjects || replacingCloudIdRef.current || !canEditProject) return
@@ -1728,6 +1753,49 @@ export default function App() {
     setNotice(didCopy ? 'Offline share link copied.' : 'Offline share link is ready to copy.')
   }
 
+  // The lesson link stays with this browser's copy of the project; it is never part of Share or cloud saves.
+  const lessonReturn = reviewProject ? null : lessonReturnForProject(lessonLinks, project.id)
+
+  const copyCodeForLearn = async () => {
+    const text = project.files.length === 1
+      ? project.files[0].content
+      : project.files.map((file) => `----- ${file.path} -----\n${file.content}`).join('\n\n')
+    const copied = await writeClipboardText(text)
+    setNotice(copied
+      ? 'Code copied. Paste it into the lesson’s submission box.'
+      : 'Clipboard blocked. Select the code in the editor, copy it, then paste it into the lesson.')
+    return copied
+  }
+
+  const startLessonOver = () => {
+    if (!lessonReopen) return
+    const now = new Date().toISOString()
+    const starter = lessonReopen.starter
+    const fresh: SavedProject = {
+      ...starter,
+      id: crypto.randomUUID(),
+      title: uniqueProjectTitle(starter.title, libraryRef.current.projects),
+      files: starter.files.map((file) => ({ ...file })),
+      createdAt: now,
+      updatedAt: now,
+    }
+    const reopenedProjectId = lessonReopen.projectId
+    clearPendingPracticeCheck()
+    setReviewProject(null)
+    setLibrary((current) => ({ activeProjectId: fresh.id, projects: [fresh, ...current.projects] }))
+    setActivePath(fresh.files[0].path)
+    setShowArchived(false)
+    updateLessonLinks((current) => {
+      const previous = Object.hasOwn(current.projects, reopenedProjectId) ? current.projects[reopenedProjectId] : undefined
+      return recordLessonLink(current, fresh.id, {
+        returnTarget: previous?.returnUrl ? { url: previous.returnUrl, label: previous.returnLabel } : null,
+        starterKey: previous?.starterKey ?? null,
+      })
+    })
+    setLessonReopen(null)
+    setNotice(`Started over with a fresh copy, “${fresh.title}”. Your earlier work is still in Projects.`)
+  }
+
   const skipToEditor = () => {
     changeMobileTab('code')
     window.setTimeout(() => {
@@ -2325,6 +2393,8 @@ export default function App() {
               onRestore={() => { void restoreProject() }}
             />
 
+            {lessonReturn && <LessonBar key={project.id} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
+
             {mobileTab === 'history' && (
               <CheckpointPage
                 canEditProject={canEditProject}
@@ -2407,7 +2477,14 @@ export default function App() {
       <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={changeMobileTab} />
 
       <div className="floating-dock">
-        {notice && <Toast key={notice} message={notice} onDismiss={() => setNotice('')} />}
+        {notice && (
+          <Toast
+            key={notice}
+            message={notice}
+            onDismiss={() => setNotice('')}
+            action={lessonReopen && notice === initial.notice ? { label: 'Start over', onAction: startLessonOver } : null}
+          />
+        )}
         {learningCoachContext && !learningSidecarOpen && (
           <button
             className="learning-coach-launcher"

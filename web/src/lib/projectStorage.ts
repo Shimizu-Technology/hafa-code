@@ -1,3 +1,4 @@
+import { COMPRESSED_PAYLOAD_PREFIX, decodeCompressedPayload, encodeBase64Url } from './starterLinks'
 import { defaultEntryPath, inferFileLanguage, isProjectFileLanguage, isProjectKind, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
 
 export const PROJECT_LIBRARY_STORAGE_KEY = 'hafa-code-projects-v2'
@@ -280,7 +281,7 @@ export function uniqueProjectTitle(title: string, projects: readonly Pick<SavedP
   }
 }
 
-function sameProjectContent(a: SavedProject, b: SavedProject) {
+export function sameProjectContent(a: SavedProject, b: SavedProject) {
   if (a.kind !== b.kind || a.entryPath !== b.entryPath || a.files.length !== b.files.length) return false
   return a.files.every((file, index) => file.path === b.files[index].path && file.content === b.files[index].content)
 }
@@ -407,11 +408,7 @@ export function parseImportedProject(raw: string): SavedProject {
 
 /** URL-safe base64 (RFC 4648 §5) so `+`, `/`, and `=` never need escaping in a link. */
 export function encodeProjectForShare(project: SavedProject) {
-  const json = JSON.stringify({ ...project, archivedAt: null })
-  const bytes = new TextEncoder().encode(json)
-  let binary = ''
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return encodeBase64Url(JSON.stringify({ ...project, archivedAt: null }))
 }
 
 /**
@@ -424,6 +421,7 @@ export function normalizeSharedProjectEncoding(encoded: string) {
 }
 
 export function decodeSharedProject(encoded: string): SavedProject {
+  if (encoded.trim().startsWith(COMPRESSED_PAYLOAD_PREFIX)) return parseImportedProject(decodeCompressedPayload(encoded.trim()))
   const binary = atob(normalizeSharedProjectEncoding(encoded))
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
   const json = new TextDecoder().decode(bytes)
