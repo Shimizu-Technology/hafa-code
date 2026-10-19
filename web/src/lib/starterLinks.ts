@@ -7,6 +7,7 @@
  * This module has no browser or bundler imports so `scripts/build-starter-link.ts`
  * can run it directly with Node's type stripping.
  */
+import { Inflate, deflateSync } from 'fflate'
 
 export const HAFA_CODE_ORIGIN = 'https://code.shimizu-technology.com'
 export const LEARN_PRODUCTION_ORIGIN = 'https://learn.codeschoolofguam.com'
@@ -18,6 +19,8 @@ const LOCAL_DEV_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/
 export const RETURN_URL_MAX_LENGTH = 2_048
 export const RETURN_LABEL_MAX_LENGTH = 80
 const STARTER_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/
+/** iOS can cut off longer links when another app (Messages, Mail, the Learn app) opens them in Safari. */
+export const STARTER_LINK_IOS_SAFE_LENGTH = 2_000
 /** Links longer than this can break in chat apps, email clients, and QR codes. */
 export const STARTER_LINK_RECOMMENDED_MAX_LENGTH = 8_000
 /** The builder refuses anything longer; share a file or a server snapshot instead. */
@@ -111,12 +114,60 @@ export function parseStarterKey(raw: unknown): string | null {
   return STARTER_KEY_PATTERN.test(value) ? value : null
 }
 
-/** UTF-8 text to URL-safe base64 (RFC 4648 §5) without padding. */
-export function encodeBase64Url(text: string) {
-  const bytes = new TextEncoder().encode(text)
+function bytesToBase64Url(bytes: Uint8Array) {
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** UTF-8 text to URL-safe base64 (RFC 4648 §5) without padding. */
+export function encodeBase64Url(text: string) {
+  return bytesToBase64Url(new TextEncoder().encode(text))
+}
+
+/** Marks a raw-DEFLATE payload. `.` never appears in base64 or base64url, so older links stay unambiguous. */
+export const COMPRESSED_PAYLOAD_PREFIX = 'z.'
+/** Inflated payloads larger than this are refused (the project source limit is 2 MB). */
+export const MAX_INFLATED_PAYLOAD_BYTES = 2_500_000
+const INFLATE_INPUT_SLICE = 512
+
+/**
+ * Encodes project JSON for a link, compressed when that is shorter. Compression keeps the
+ * pilot's expense starter under 2,000 characters, which iOS can pass intact between apps.
+ */
+export function encodeProjectPayload(json: string) {
+  const plain = encodeBase64Url(json)
+  const compressed = `${COMPRESSED_PAYLOAD_PREFIX}${bytesToBase64Url(deflateSync(new TextEncoder().encode(json), { level: 9 }))}`
+  return compressed.length < plain.length ? compressed : plain
+}
+
+/** Decodes a `z.` payload back to JSON text, refusing malformed data and decompression bombs. */
+export function decodeCompressedPayload(encoded: string) {
+  const body = encoded.slice(COMPRESSED_PAYLOAD_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/')
+  if (!/^[A-Za-z0-9+/]*$/.test(body)) throw new Error('Invalid compressed project link.')
+  const binary = atob(body.padEnd(body.length + ((4 - (body.length % 4)) % 4), '='))
+  const input = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let finished = false
+  const inflate = new Inflate((chunk, final) => {
+    total += chunk.length
+    if (total > MAX_INFLATED_PAYLOAD_BYTES) throw new Error('Project link is too large.')
+    chunks.push(chunk)
+    if (final) finished = true
+  })
+  // Small input slices bound how much one push can expand before the size check runs.
+  for (let offset = 0; offset < input.length; offset += INFLATE_INPUT_SLICE) {
+    inflate.push(input.subarray(offset, offset + INFLATE_INPUT_SLICE), offset + INFLATE_INPUT_SLICE >= input.length)
+  }
+  if (!finished) throw new Error('Incomplete compressed project link.')
+  const bytes = new Uint8Array(total)
+  let position = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, position)
+    position += chunk.length
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 }
 
 export interface StarterFile {
@@ -187,7 +238,7 @@ export function buildStarterLink(input: StarterLinkInput): StarterLink {
     files: input.files.map((file) => ({ path: file.path, ...(file.language ? { language: file.language } : {}), content: file.content })),
   }
   const hash = new URLSearchParams()
-  hash.set('project', encodeBase64Url(JSON.stringify(payload)))
+  hash.set('project', encodeProjectPayload(JSON.stringify(payload)))
   hash.set('starter', starterKey)
   if (returnUrl) {
     hash.set('return', returnUrl)
@@ -197,6 +248,9 @@ export function buildStarterLink(input: StarterLinkInput): StarterLink {
   const url = `${base.origin}/?lang=${kind}#${hash.toString()}`
   if (url.length > STARTER_LINK_MAX_LENGTH) {
     throw new StarterLinkError(`This starter link would be ${url.length.toLocaleString('en-US')} characters (limit ${STARTER_LINK_MAX_LENGTH.toLocaleString('en-US')}). Trim the starter or share it as a file.`)
+  }
+  if (url.length > STARTER_LINK_IOS_SAFE_LENGTH && url.length <= STARTER_LINK_RECOMMENDED_MAX_LENGTH) {
+    warnings.push(`This link is ${url.length.toLocaleString('en-US')} characters. On iPhone, links over ${STARTER_LINK_IOS_SAFE_LENGTH.toLocaleString('en-US')} can be cut off when opened from another app such as Messages; tapping it inside a Learn lesson in Safari works.`)
   }
   if (url.length > STARTER_LINK_RECOMMENDED_MAX_LENGTH) {
     warnings.push(`This link is ${url.length.toLocaleString('en-US')} characters. Links over ${STARTER_LINK_RECOMMENDED_MAX_LENGTH.toLocaleString('en-US')} can break in chat apps, email, and QR codes; keep it inside the Learn lesson.`)

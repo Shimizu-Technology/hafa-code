@@ -37,7 +37,7 @@ https://code.shimizu-technology.com/?lang=python#project=<payload>&starter=<key>
 | Part | Meaning |
 |---|---|
 | `?lang=python` | The language to fall back to if the project payload is damaged. Without a payload, it opens the learner's latest Python project or a new one. |
-| `project` | URL-safe base64 (RFC 4648 §5, no padding) of UTF-8 JSON: `{"title", "kind", "entryPath"?, "files": [{"path", "content", "language"?}]}`. Ids, timestamps, and visibility are filled in by the app. |
+| `project` | UTF-8 JSON `{"title", "kind", "entryPath"?, "files": [{"path", "content", "language"?}]}`, either as URL-safe base64 (RFC 4648 §5, no padding) or, when shorter, `z.` followed by URL-safe base64 of the raw-DEFLATE-compressed JSON. The builder picks the shorter form. Ids, timestamps, and visibility are filled in by the app. Compressed payloads that inflate past 2.5 MB are refused. |
 | `starter` | A stable key for this lesson's starter, such as `csg-python-pilot:project`. 1–80 letters, digits, `.`, `_`, `:`, or `-`, starting with a letter or digit. Keep it the same when you fix a typo in the starter. |
 | `return` | The lesson URL for "Back to your lesson". Must be on an allowed origin (below). |
 | `returnLabel` | The lesson title shown next to the button. Optional. |
@@ -83,14 +83,15 @@ The lesson URL, label, and starter key are kept in this browser's storage (`hafa
 
 | | Characters |
 |---|---|
-| Orientation starter (one line, with return) | about 380 |
-| Lesson 2 starter (6 lines, with return) | about 540 |
-| Expense-summary project starter (1.5 KB, with return) | about 2,600 |
-| Builder warning | over 8,000 |
+| Orientation starter (one line, with return) | about 370 |
+| Lesson 2 starter (6 lines, with return) | about 460 |
+| Expense-summary project starter (1.5 KB, with return; compressed) | about 1,200 |
+| Builder warning: may be cut off on iPhone when opened from another app | over 2,000 |
+| Builder warning: may break in chat apps, email, QR codes | over 8,000 |
 | Builder refuses | over 64,000 |
 | App refuses the `project` payload | over 3,000,000 |
 
-Base64 makes the code about a third longer, and the return URL is percent-encoded. Inside a Learn lesson, links of a few thousand characters are fine in current Chrome, Safari (including iPhone), Firefox, and Edge. Over 8,000 characters, links start to break when pasted into chat apps, email, or SMS, and they are too dense for QR codes. For anything that large, share a file (More → Import) or a Share snapshot instead.
+Base64 makes the payload about a third longer than its bytes, and the return URL is percent-encoded; compression usually more than makes up for that on real starter code. Tapping a link inside a Learn lesson in a browser keeps long links intact (a 5,000-character link arrived whole in iOS Safari). When iOS hands a link from another app to Safari (Messages, Mail, the CSG Learn app), the simulator cut it at 2,047 characters, so keep links under 2,000. Over 8,000 characters, links also break when pasted into chat apps, email, or SMS, and they are too dense for QR codes. For anything that large, share a file (More → Import) or a Share snapshot instead.
 
 ## Phones
 

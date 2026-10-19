@@ -1,4 +1,4 @@
-import { encodeBase64Url } from './starterLinks'
+import { COMPRESSED_PAYLOAD_PREFIX, decodeCompressedPayload, encodeBase64Url } from './starterLinks'
 import { defaultEntryPath, inferFileLanguage, isProjectFileLanguage, isProjectKind, starterProject, type ProjectCheckpoint, type ProjectKind, type ProjectSnapshot, type ProjectVisibility, type SavedProject } from './codeRunner'
 
 export const PROJECT_LIBRARY_STORAGE_KEY = 'hafa-code-projects-v2'
@@ -421,6 +421,7 @@ export function normalizeSharedProjectEncoding(encoded: string) {
 }
 
 export function decodeSharedProject(encoded: string): SavedProject {
+  if (encoded.trim().startsWith(COMPRESSED_PAYLOAD_PREFIX)) return parseImportedProject(decodeCompressedPayload(encoded.trim()))
   const binary = atob(normalizeSharedProjectEncoding(encoded))
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
   const json = new TextDecoder().decode(bytes)

@@ -1,3 +1,4 @@
+import { deflateSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import pilotManifest from '../../scripts/examples/csg-python-pilot-starters.json'
 import { PROJECT_KINDS } from './languageRegistry'
@@ -21,10 +22,14 @@ import {
 } from './projectStorage'
 import {
   STARTER_KINDS,
+  STARTER_LINK_IOS_SAFE_LENGTH,
   STARTER_LINK_MAX_LENGTH,
   STARTER_LINK_RECOMMENDED_MAX_LENGTH,
   StarterLinkError,
   buildStarterLink,
+  decodeCompressedPayload,
+  encodeBase64Url,
+  encodeProjectPayload,
   parseReturnUrl,
   parseStarterKey,
   sanitizeReturnLabel,
@@ -145,7 +150,7 @@ describe('starter link builder', () => {
     expect(link.warnings).toEqual([])
     expect(link.url.startsWith('https://code.shimizu-technology.com/?lang=python#project=')).toBe(true)
     const hash = new URLSearchParams(new URL(link.url).hash.slice(1))
-    expect(hash.get('project')).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(hash.get('project')).toMatch(/^z\.[A-Za-z0-9_-]+$/)
     expect(hash.get('starter')).toBe('csg-python-pilot:project')
     expect(hash.get('return')).toBe(LESSON_URL)
     expect(hash.get('returnLabel')).toBe('Independent expense-summary project')
@@ -155,20 +160,48 @@ describe('starter link builder', () => {
     expect(imported.files).toEqual([{ path: 'expense_summary.py', language: 'python', content: expenseStarter.files[0].content }])
   })
 
-  test('keeps realistic pilot starters well under the recommended length', () => {
+  test('keeps every pilot starter, with its return target, under the iOS-safe length', () => {
     for (const starter of pilotManifest.starters) {
       const link = buildStarterLink({ ...starter, starterKey: starter.key })
-      expect(link.length).toBeLessThan(STARTER_LINK_RECOMMENDED_MAX_LENGTH / 2)
+      expect(link.length).toBeLessThan(STARTER_LINK_IOS_SAFE_LENGTH)
+      expect(link.warnings).toEqual([])
     }
-    // The 1.5 KB expense starter with a return target is about 2.7 thousand characters.
-    expect(expenseLink().length).toBeLessThan(3_000)
+    // Compression takes the 1.5 KB expense starter from about 2,600 characters to about 1,200.
+    expect(expenseLink().length).toBeLessThan(1_400)
   })
 
-  test('warns above the recommended length and refuses links over the limit', () => {
-    const medium = expenseLink({ files: [{ path: 'main.py', content: '# padding\n'.repeat(700) }] })
+  test('warns above the iOS-safe and recommended lengths and refuses links over the limit', () => {
+    const noisy = (length: number) => {
+      // Seeded pseudo-random text so compression cannot shrink it much.
+      let seed = 42
+      return Array.from({ length }, () => {
+        seed ^= seed << 13
+        seed ^= seed >>> 17
+        seed ^= seed << 5
+        return String.fromCharCode(33 + ((seed >>> 0) % 94))
+      }).join('')
+    }
+    const ios = expenseLink({ files: [{ path: 'main.py', content: noisy(1_500) }] })
+    expect(ios.length).toBeGreaterThan(STARTER_LINK_IOS_SAFE_LENGTH)
+    expect(ios.warnings.join(' ')).toContain('opened from another app')
+    const medium = expenseLink({ files: [{ path: 'main.py', content: noisy(7_000) }] })
     expect(medium.length).toBeGreaterThan(STARTER_LINK_RECOMMENDED_MAX_LENGTH)
     expect(medium.warnings.join(' ')).toContain('can break in chat apps')
-    expect(() => expenseLink({ files: [{ path: 'main.py', content: 'x'.repeat(STARTER_LINK_MAX_LENGTH) }] })).toThrow(StarterLinkError)
+    expect(() => expenseLink({ files: [{ path: 'main.py', content: noisy(STARTER_LINK_MAX_LENGTH) }] })).toThrow(StarterLinkError)
+  })
+
+  test('uses the uncompressed form when compression would not help', () => {
+    expect(encodeProjectPayload('{"a":1}')).toBe(encodeBase64Url('{"a":1}'))
+    expect(encodeProjectPayload(JSON.stringify({ code: 'print(1)\n'.repeat(50) })).startsWith('z.')).toBe(true)
+  })
+
+  test('refuses damaged, cut-off, and oversized compressed payloads', () => {
+    const payload = new URLSearchParams(new URL(expenseLink().url).hash.slice(1)).get('project')!
+    expect(() => decodeSharedProject(payload.slice(0, 400))).toThrow()
+    expect(() => decodeSharedProject('z.!!!')).toThrow()
+    const bomb = `z.${Buffer.from(deflateSync(new Uint8Array(20_000_000), { level: 9 })).toString('base64url')}`
+    expect(bomb.length).toBeLessThan(40_000)
+    expect(() => decodeCompressedPayload(bomb)).toThrow('Project link is too large.')
   })
 
   test('refuses a return URL the app would ignore, an unknown language, and a bad key', () => {
