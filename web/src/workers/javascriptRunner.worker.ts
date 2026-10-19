@@ -2,6 +2,7 @@ import { newQuickJSWASMModule, newVariant, RELEASE_SYNC, shouldInterruptAfterDea
 import type { QuickJSHandle } from 'quickjs-emscripten'
 import quickJsWasmUrl from '@jitl/quickjs-wasmfile-release-sync/wasm?url'
 import type { ProjectFile } from '../lib/projectTypes'
+import { createRunOutput } from './runOutput'
 import { installRunner, postRunnerMessage, type RunRequest } from './runnerProtocol'
 
 const quickJsModulePromise = newQuickJSWASMModule(
@@ -191,14 +192,12 @@ async function runJavaScript({ id, code, timeoutMs, files, entryPath }: RunReque
     maxStackSizeBytes: 512 * 1024,
   })
   const vm = runtime.newContext()
-  const stdout: string[] = []
-  const stderr: string[] = []
+  const output = createRunOutput(id, postRunnerMessage)
 
   const writeConsole = (stream: 'stdout' | 'stderr', values: QuickJSHandle[]) => {
+    if (output.limited) return
     const line = values.map((value) => stringifyQuickJsValue(vm.dump(value))).join(' ')
-    const text = `${line}\n`
-    ;(stream === 'stderr' ? stderr : stdout).push(text)
-    postRunnerMessage({ id, type: 'output', stream, text })
+    output.write(stream, `${line}\n`)
   }
 
   try {
@@ -232,9 +231,7 @@ async function runJavaScript({ id, code, timeoutMs, files, entryPath }: RunReque
 
     const result = vm.evalCode(bundleJavaScriptProject(files, entryPath, code), entryPath)
     if (result.error) {
-      const text = `${stringifyQuickJsValue(vm.dump(result.error))}\n`
-      stderr.push(text)
-      postRunnerMessage({ id, type: 'output', stream: 'stderr', text })
+      if (!output.limited) output.write('stderr', `${stringifyQuickJsValue(vm.dump(result.error))}\n`)
       result.error.dispose()
     } else {
       result.value.dispose()
@@ -242,9 +239,10 @@ async function runJavaScript({ id, code, timeoutMs, files, entryPath }: RunReque
   } finally {
     vm.dispose()
     runtime.dispose()
+    output.flush()
   }
 
-  return { stdout: stdout.join(''), stderr: stderr.join(''), exitCode: stderr.length ? 1 : 0 }
+  return { stdout: output.stdout(), stderr: output.stderr(), exitCode: output.hasStderr() || output.limited ? 1 : 0 }
 }
 
 installRunner(runJavaScript)

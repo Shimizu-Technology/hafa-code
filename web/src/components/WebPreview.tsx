@@ -112,7 +112,7 @@ export function WebPreview({ files, entryPath, onErrorAdviceChange }: { files: P
           <h2><Globe size={18} /> Web page</h2>
           <p className="helper-text">{previewIsStale ? 'Preview has unsaved changes.' : 'Sandboxed iframe, no same-origin access.'}</p>
         </div>
-        <button className={previewIsStale ? '' : 'secondary'} type="button" onClick={refreshPreview}>
+        <button className={previewIsStale ? '' : 'secondary'} type="button" onClick={refreshPreview} data-hafa-run-button>
           <RefreshCw size={16} /> Refresh
         </button>
       </div>

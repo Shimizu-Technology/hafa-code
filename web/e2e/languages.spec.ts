@@ -13,7 +13,7 @@ test('TypeScript runs a typed multi-file project and explains compiler errors', 
   await openStudent(page)
   await page.locator('.sidebar-content').getByRole('button', { name: 'TS', exact: true }).click()
 
-  await expect(page.getByLabel('Project name')).toHaveValue('TypeScript Playground')
+  await expect(page.getByLabel('Project name')).toHaveValue(/^TypeScript Playground/)
   await expect(page.getByRole('button', { name: 'main.ts' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'greeting.ts' })).toBeVisible()
   await page.getByRole('button', { name: 'Run TypeScript' }).click()
@@ -36,6 +36,8 @@ test('TypeScript runs a typed multi-file project and explains compiler errors', 
 
   await expect(page.locator('.terminal')).toContainText('error TS2322')
   await expect(page.locator('.terminal')).toContainText('main.ts:4:7')
+  // Below 1600px the Coach waits behind "Fix this error" so the editor keeps its width.
+  await page.getByRole('button', { name: 'Fix this error' }).click()
   await expect(page.getByText('This value does not match the TypeScript type')).toBeVisible()
 })
 
@@ -56,7 +58,7 @@ test('Python survives a slow first runtime download and runs again from the warm
   test.setTimeout(120_000)
   await openStudent(page)
   await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
-  await expect(page.getByLabel('Project name')).toHaveValue('Python Playground')
+  await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
 
   let delayedRuntime = false
   await page.route('**/assets/pyodide/pyodide.asm.wasm', async (route) => {
@@ -78,6 +80,34 @@ test('Python survives a slow first runtime download and runs again from the warm
   await expect(page.locator('.terminal-footer')).toContainText('success')
 })
 
+test('Python stops an output flood and points errors at the learner file without squeezing the editor', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openStudent(page)
+  await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
+  await page.locator('.monaco-editor .view-lines').click()
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('i = 0\nwhile True:\n    print(i)\n    i += 1\n'))).toBe(true)
+  await page.getByRole('button', { name: 'Run Python' }).click()
+  await expect(page.locator('.terminal')).toContainText('Output limit reached', { timeout: 90_000 })
+  await expect(page.locator('.run-error-headline')).toContainText('Output limit reached — check your loop')
+  await expect(page.locator('.terminal-trimmed-note')).toBeVisible()
+  await page.getByLabel('Project name').click()
+
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('total = 5\nprint(totl)\n'))).toBe(true)
+  await page.getByRole('button', { name: 'Run again' }).click()
+  const headline = page.locator('.run-error-headline')
+  await expect(headline).toContainText("NameError: name 'totl' is not defined. Did you mean: 'total'?", { timeout: 60_000 })
+  await expect(headline).toContainText('main.py · line 2')
+  await expect(page.locator('.terminal')).toContainText('File "main.py", line 2')
+  await expect(page.locator('.terminal-line.stderr')).not.toContainText('_pyodide')
+  await expect(page.locator('.terminal-full-traceback summary')).toBeVisible()
+  await expect(page.locator('.learning-sidecar')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Fix this error' })).toBeVisible()
+  const editorBox = await page.locator('.editor-panel').boundingBox()
+  expect(editorBox?.width ?? 0).toBeGreaterThanOrEqual(480)
+})
+
 test('Python runtime download failure explains startup recovery and can retry', async ({ page }) => {
   test.setTimeout(60_000)
   await page.clock.install()
@@ -93,6 +123,7 @@ test('Python runtime download failure explains startup recovery and can retry', 
   // Pyodide can stay initializing after this fetch fails. Exercise the real
   // startup watchdog without spending 90 wall-clock seconds on the fault.
   await page.clock.fastForward(90_001)
+  await page.getByRole('button', { name: 'Fix this error' }).click({ timeout: 20_000 })
   await expect(page.getByText('The browser runtime could not start')).toBeVisible({ timeout: 20_000 })
   await expect(page.getByText('Check your connection, then try running once more.')).toBeVisible()
   await expect(page.getByText('The program kept running too long')).not.toBeVisible()
@@ -148,7 +179,7 @@ test('SQL runs seeded queries, preserves deliberate changes, resets, and explain
   await openStudent(page)
   await page.locator('.sidebar-content').getByRole('button', { name: 'SQL', exact: true }).click()
 
-  await expect(page.getByLabel('Project name')).toHaveValue('SQL Data Playground')
+  await expect(page.getByLabel('Project name')).toHaveValue(/^SQL Data Playground/)
   await expect(page.getByRole('button', { name: 'schema.sql' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'seed.sql' })).toBeVisible()
   await page.getByRole('button', { name: 'View schema' }).click()
@@ -180,6 +211,7 @@ test('SQL runs seeded queries, preserves deliberate changes, resets, and explain
   expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('SELECT * FROM missing_table;'))).toBe(true)
   await page.getByRole('button', { name: 'Run SQL' }).click()
   await expect(page.locator('.sql-message.error')).toContainText('no such table')
+  await page.getByRole('button', { name: 'Fix this error' }).click()
   await expect(page.getByText('SQLite cannot find that table')).toBeVisible()
 })
 

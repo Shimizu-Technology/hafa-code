@@ -230,9 +230,9 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
             <RotateCcw size={16} /> Reset database
           </button>
           {busy ? (
-            <button type="button" onClick={stop}><Square size={16} /> Stop</button>
+            <button type="button" onClick={stop} data-hafa-run-button><Square size={16} /> Stop</button>
           ) : (
-            <button type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()}><Play size={16} /> Run SQL</button>
+            <button type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()} data-hafa-run-button><Play size={16} /> Run SQL</button>
           )}
         </div>
       </div>

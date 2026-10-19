@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coachRunnerError } from './errorCoach'
+import { coachRunnerError, errorHeadline } from './errorCoach'
 import type { ProjectKind } from './projectTypes'
 
 function failure(stderr: string) {
@@ -49,5 +49,31 @@ describe('contextual error coach', () => {
   it('stays out of the way after successful or manually stopped runs', () => {
     expect(coachRunnerError('python', 'main.py', { status: 'success', stdout: 'ok', stderr: '', durationMs: 1 })).toBeNull()
     expect(coachRunnerError('python', 'main.py', { status: 'stopped', stdout: '', stderr: 'Execution stopped.', durationMs: 1 })).toBeNull()
+  })
+
+  it('points Python errors at the last frame inside the learner project, not Pyodide internals', () => {
+    const stderr = [
+      'Traceback (most recent call last):',
+      '  File "/lib/python314.zip/_pyodide/_base.py", line 597, in eval_code_async',
+      '  File "<frozen runpy>", line 287, in run_path',
+      '  File "/home/pyodide/project/main.py", line 2, in <module>',
+      '  File "/home/pyodide/project/helpers.py", line 5, in total',
+      '  File "/lib/python314.zip/json/decoder.py", line 345, in decode',
+      "json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+    ].join('\n')
+    expect(coachRunnerError('python', 'main.py', failure(stderr))?.location).toBe('helpers.py · line 5')
+    expect(coachRunnerError('python', 'main.py', failure('Traceback (most recent call last):\n  File "main.py", line 4, in <module>\nNameError: x'))?.location).toBe('main.py · line 4')
+  })
+
+  it('coaches an output flood as a loop problem', () => {
+    const advice = coachRunnerError('python', 'main.py', { status: 'error', outputLimited: true, stdout: '0\n1\n', stderr: 'Output limit reached — check your loop.', durationMs: 90 })
+    expect(advice).toMatchObject({ title: 'Your program printed too much', guideTopicId: 'python-loops', location: 'main.py' })
+  })
+
+  it('headlines the final Python cause, including suggestions, and the first line elsewhere', () => {
+    expect(errorHeadline('python', 'Traceback (most recent call last):\n  File "main.py", line 2, in <module>\n    print(totl)\nNameError: name \'totl\' is not defined. Did you mean: \'total\'?\n'))
+      .toBe("NameError: name 'totl' is not defined. Did you mean: 'total'?")
+    expect(errorHeadline('java', "Main.java:4: error: ';' expected\n  int x = 1\n1 error\n")).toBe("Main.java:4: error: ';' expected")
+    expect(errorHeadline('python', '  \n')).toBeNull()
   })
 })

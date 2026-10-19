@@ -129,31 +129,38 @@ export function normalizeProjectLibrary(candidate: ProjectLibrary | null): Proje
   return { activeProjectId, projects }
 }
 
-export function loadProjectLibrary(): ProjectLibrary {
+export const DEFAULT_STARTER_KIND: ProjectKind = 'ruby'
+
+export function loadProjectLibrary(starterKind: ProjectKind = DEFAULT_STARTER_KIND): ProjectLibrary {
+  return loadProjectLibraryWithStatus(starterKind).library
+}
+
+/** `isNew` means this browser had no saved projects, so the library holds only a fresh starter. */
+export function loadProjectLibraryWithStatus(starterKind: ProjectKind = DEFAULT_STARTER_KIND): { library: ProjectLibrary; isNew: boolean } {
   const currentRead = safeStorageValue(PROJECT_LIBRARY_STORAGE_KEY)
-  if (!currentRead.ok) return starterProjectLibrary()
+  if (!currentRead.ok) return { library: starterProjectLibrary(starterKind), isNew: true }
 
   const current = normalizeProjectLibrary(safeParse<ProjectLibrary>(currentRead.value))
-  if (current) return current
+  if (current) return { library: current, isNew: false }
 
   const legacyRead = safeStorageValue(LEGACY_STORAGE_KEY)
-  if (!legacyRead.ok) return starterProjectLibrary()
+  if (!legacyRead.ok) return { library: starterProjectLibrary(starterKind), isNew: true }
 
   const legacyProject = safeParse<SavedProject>(legacyRead.value)
   const normalizedLegacyProject = normalizeProject(legacyProject)
   if (normalizedLegacyProject) {
     const migrated = { activeProjectId: normalizedLegacyProject.id, projects: [normalizedLegacyProject] }
     if (saveProjectLibrary(migrated)) removeStorageValue(LEGACY_STORAGE_KEY)
-    return migrated
+    return { library: migrated, isNew: false }
   }
 
-  const library = starterProjectLibrary()
+  const library = starterProjectLibrary(starterKind)
   saveProjectLibrary(library)
-  return library
+  return { library, isNew: true }
 }
 
-function starterProjectLibrary(): ProjectLibrary {
-  const firstProject = starterProject('ruby')
+function starterProjectLibrary(kind: ProjectKind = DEFAULT_STARTER_KIND): ProjectLibrary {
+  const firstProject = starterProject(kind)
   return { activeProjectId: firstProject.id, projects: [firstProject] }
 }
 
@@ -247,12 +254,61 @@ export function snapshotToProject(project: SavedProject, snapshot: ProjectSnapsh
   }
 }
 
+export const PROJECT_TITLE_MAX_LENGTH = 120
+
 export function createProject(kind: ProjectKind, title?: string): SavedProject {
   const project = starterProject(kind)
   return {
     ...project,
     title: title?.trim() || project.title,
   }
+}
+
+/** Trims a title and falls back to the language's starter name when it is empty. */
+export function normalizeProjectTitle(title: string, kind: ProjectKind) {
+  const trimmed = Array.from(title.trim()).slice(0, PROJECT_TITLE_MAX_LENGTH).join('')
+  return trimmed || starterProject(kind).title
+}
+
+/** Returns `title`, or `title (2)`, `title (3)`… when another project already uses it. */
+export function uniqueProjectTitle(title: string, projects: readonly Pick<SavedProject, 'title'>[]) {
+  const taken = new Set(projects.map((project) => project.title.trim().toLowerCase()))
+  if (!taken.has(title.trim().toLowerCase())) return title
+  for (let number = 2; ; number += 1) {
+    const candidate = titleWithSuffix(title, ` (${number})`)
+    if (!taken.has(candidate.trim().toLowerCase())) return candidate
+  }
+}
+
+function sameProjectContent(a: SavedProject, b: SavedProject) {
+  if (a.kind !== b.kind || a.entryPath !== b.entryPath || a.files.length !== b.files.length) return false
+  return a.files.every((file, index) => file.path === b.files[index].path && file.content === b.files[index].content)
+}
+
+/**
+ * Adds an imported project to the library. Opening the same link again reuses the
+ * untouched copy instead of creating a silent duplicate; a changed copy is kept and
+ * the new import gets a numbered name.
+ */
+export function addImportedProject(library: ProjectLibrary, imported: SavedProject): { library: ProjectLibrary; project: SavedProject; reused: boolean } {
+  const existing = library.projects.find((candidate) => !candidate.archivedAt
+    && !candidate.organizationId
+    && (candidate.title === imported.title || candidate.title.startsWith(`${imported.title} (`))
+    && sameProjectContent(candidate, imported))
+  if (existing) {
+    return { library: { ...library, activeProjectId: existing.id }, project: existing, reused: true }
+  }
+
+  const project = { ...imported, title: uniqueProjectTitle(imported.title, library.projects) }
+  return { library: { activeProjectId: project.id, projects: [project, ...library.projects] }, project, reused: false }
+}
+
+export function importNotice(result: { project: SavedProject; reused: boolean }, imported: SavedProject, source: 'link' | 'file' = 'link') {
+  if (result.reused) return `“${result.project.title}” is already in your projects, so Hafa Code opened that copy.`
+  if (result.project.title !== imported.title) {
+    return `You already have a project named “${imported.title}”, so this ${source === 'link' ? 'link' : 'file'} was added as “${result.project.title}”. Your other projects are unchanged.`
+  }
+  return source === 'link' ? 'Shared project imported locally.' : 'Project imported.'
 }
 
 type DuplicateProjectDestination = Pick<SavedProject, 'organizationId' | 'organization'>
@@ -290,16 +346,45 @@ export function createConflictCopy(project: SavedProject): SavedProject {
   }
 }
 
-export function exportProject(project: SavedProject) {
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' })
+function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${project.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'hafa-code-project'}.json`
+  link.download = fileName
   document.body.append(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+function projectSlug(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+/** A one-file project downloads as its source file (for example `.py`); larger projects use the JSON format Import accepts. */
+export function projectExportFormat(project: Pick<SavedProject, 'files' | 'title'>) {
+  if (project.files.length !== 1) return { kind: 'json' as const, fileName: `${projectSlug(project.title) || 'hafa-code-project'}.json` }
+  const file = project.files[0]
+  const baseName = file.path.split('/').pop() ?? file.path
+  const extension = baseName.includes('.') ? baseName.slice(baseName.lastIndexOf('.')) : ''
+  const slug = projectSlug(project.title)
+  return { kind: 'source' as const, fileName: slug ? `${slug}${extension}` : baseName }
+}
+
+export function projectExportLabel(format: ReturnType<typeof projectExportFormat>) {
+  if (format.kind === 'json') return 'Export project (.json)'
+  const extensionIndex = format.fileName.lastIndexOf('.')
+  return `Download code (${extensionIndex > 0 ? format.fileName.slice(extensionIndex) : 'file'})`
+}
+
+export function exportProject(project: SavedProject) {
+  const format = projectExportFormat(project)
+  if (format.kind === 'source') {
+    downloadBlob(new Blob([project.files[0].content], { type: 'text/plain;charset=utf-8' }), format.fileName)
+    return format
+  }
+  downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), format.fileName)
+  return format
 }
 
 export function parseImportedProject(raw: string): SavedProject {
@@ -320,16 +405,26 @@ export function parseImportedProject(raw: string): SavedProject {
   return normalized
 }
 
+/** URL-safe base64 (RFC 4648 §5) so `+`, `/`, and `=` never need escaping in a link. */
 export function encodeProjectForShare(project: SavedProject) {
   const json = JSON.stringify({ ...project, archivedAt: null })
   const bytes = new TextEncoder().encode(json)
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
-  return btoa(binary)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/**
+ * Accepts URL-safe links and older standard-base64 links, including ones where a
+ * hash parser turned `+` into a space.
+ */
+export function normalizeSharedProjectEncoding(encoded: string) {
+  const standard = encoded.trim().replace(/ /g, '+').replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '')
+  return standard.padEnd(standard.length + ((4 - (standard.length % 4)) % 4), '=')
 }
 
 export function decodeSharedProject(encoded: string): SavedProject {
-  const binary = atob(encoded)
+  const binary = atob(normalizeSharedProjectEncoding(encoded))
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
   const json = new TextDecoder().decode(bytes)
   return parseImportedProject(json)

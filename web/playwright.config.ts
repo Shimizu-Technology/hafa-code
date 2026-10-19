@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const webUrl = 'http://127.0.0.1:5190'
-const apiUrl = 'http://127.0.0.1:3014'
+// Override when another session already owns the defaults, e.g. E2E_WEB_PORT=4522 E2E_API_PORT=4523.
+const webPort = process.env.E2E_WEB_PORT || '5190'
+const apiPort = process.env.E2E_API_PORT || '3014'
+const webUrl = `http://127.0.0.1:${webPort}`
+const apiUrl = `http://127.0.0.1:${apiPort}`
 const databaseUrl = process.env.E2E_DATABASE_URL || 'postgresql:///hafa_code_e2e'
 const userHome = process.env.HOME
 const toolchainPath = [
@@ -32,7 +35,7 @@ export default defineConfig({
   webServer: [
     {
       name: 'Rails E2E API',
-      command: 'bundle exec rails db:prepare e2e:reset && bundle exec rails server --binding 127.0.0.1 --port 3014',
+      command: `bundle exec rails db:prepare e2e:reset && bundle exec rails server --binding 127.0.0.1 --port ${apiPort}`,
       cwd: '../api',
       env: {
         ...process.env,
@@ -48,7 +51,7 @@ export default defineConfig({
     },
     {
       name: 'Vite E2E web',
-      command: 'npm run dev -- --mode e2e --host 127.0.0.1 --port 5190 --strictPort',
+      command: `npm run dev -- --mode e2e --host 127.0.0.1 --port ${webPort} --strictPort`,
       env: {
         ...process.env,
         VITE_API_URL: apiUrl,

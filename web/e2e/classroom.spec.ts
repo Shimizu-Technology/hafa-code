@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const API_URL = 'http://127.0.0.1:3014'
+const API_URL = `http://127.0.0.1:${process.env.E2E_API_PORT || '3014'}`
 const CLASSROOM_ID = '92001'
 const PRIVATE_PROJECT_ID = '93001'
 const personaIds = {

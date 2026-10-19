@@ -1,9 +1,16 @@
-import type { RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { Archive, Copy, RotateCcw, Trash2, X } from 'lucide-react'
 import type { ProjectCheckpoint, SavedProject } from '../lib/codeRunner'
 import { isArchived, isCloudProjectId, type ConfirmAction, type FileDialogState } from '../lib/workspace'
 
 export type ShareDialogState = {
+  stage: 'confirm'
+  creating: boolean
+} | {
+  stage: 'failed'
+  error?: string | null
+} | {
+  stage: 'ready'
   url: string
   mode: 'server' | 'offline'
   copied: boolean
@@ -48,6 +55,8 @@ type WorkspaceDialogsProps = {
   onCloseShareDialog: () => void
   onConfirmProjectAction: () => void
   onConfirmProjectCopy: () => void
+  onConfirmShare: () => void
+  onCreateOfflineShare: () => void
   onCopyShareLink: () => void
   onCreateOrganization: () => void
   onDuplicateProject: () => void
@@ -92,6 +101,8 @@ export function WorkspaceDialogs({
   onCloseShareDialog,
   onConfirmProjectAction,
   onConfirmProjectCopy,
+  onConfirmShare,
+  onCreateOfflineShare,
   onCopyShareLink,
   onCreateOrganization,
   onDuplicateProject,
@@ -102,6 +113,17 @@ export function WorkspaceDialogs({
   onRestoreProject,
   onSubmitFileDialog,
 }: WorkspaceDialogsProps) {
+  const shareStage = shareDialog?.stage
+  const previousShareStageRef = useRef(shareStage)
+  useEffect(() => {
+    const previousStage = previousShareStageRef.current
+    previousShareStageRef.current = shareStage
+    // Opening is handled by useModalFocus. Later steps replace the focused button, so keep focus inside the dialog.
+    const dialog = shareDialogRef.current
+    if (!previousStage || !shareStage || previousStage === shareStage || !dialog || dialog.contains(document.activeElement)) return
+    ;(dialog.querySelector<HTMLElement>('[data-share-primary]') ?? dialog).focus()
+  }, [shareDialogRef, shareStage])
+
   return (
     <>
       {fileDialog && (
@@ -137,21 +159,66 @@ export function WorkspaceDialogs({
 
       {shareDialog && (
         <div className="modal-backdrop" role="presentation" onClick={onCloseShareDialog}>
-          <section ref={shareDialogRef} tabIndex={-1} className="modal-sheet share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">Copy project link</h2></div>
-              <button className="ghost icon-button" aria-label="Close share dialog" onClick={onCloseShareDialog}><X size={18} /></button>
-            </div>
-            <p className="helper-text">{shareDialog.mode === 'server' ? 'This link imports a server snapshot of the project.' : 'The server share could not be created, so this offline link carries a copy in the URL.'}</p>
-            {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
-            <label className="file-path-field" htmlFor="share-url">
-              <span>Share URL</span>
-              <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
-            </label>
-            <div className="confirm-actions">
-              <button className="secondary" type="button" onClick={onCloseShareDialog}>Done</button>
-              <button type="button" onClick={onCopyShareLink}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
-            </div>
+          <section
+            ref={shareDialogRef}
+            tabIndex={-1}
+            className="modal-sheet share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
+            aria-describedby={shareDialog.stage === 'confirm' ? 'share-dialog-description' : undefined}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {shareDialog.stage === 'confirm' ? (
+              <>
+                <div className="modal-header">
+                  <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">Share a copy of this project?</h2></div>
+                  <button className="ghost icon-button" aria-label="Close share dialog" onClick={onCloseShareDialog}><X size={18} /></button>
+                </div>
+                <div id="share-dialog-description" className="share-confirm-copy">
+                  <p>Hafa Code will save a snapshot of <strong title={project.title}>{project.title}</strong> on its server and give you a link.</p>
+                  <ul>
+                    <li>Anyone with the link can open and copy this snapshot for 30 days.</li>
+                    <li>The link is unlisted. It is not searchable or shown anywhere else.</li>
+                    <li>Edits you make after sharing are not included. Share again to send a newer version.</li>
+                  </ul>
+                  <p className="helper-text">To hand in work for a class, copying your code or downloading it is usually enough.</p>
+                </div>
+                <div className="confirm-actions">
+                  <button className="secondary" type="button" onClick={onCloseShareDialog}>Cancel</button>
+                  <button
+                    type="button"
+                    data-share-primary
+                    onClick={() => { if (!shareDialog.creating) onConfirmShare() }}
+                    aria-disabled={shareDialog.creating || undefined}
+                  >
+                    {shareDialog.creating ? 'Creating link…' : 'Create share link'}
+                  </button>
+                </div>
+              </>
+            ) : shareDialog.stage === 'failed' ? (
+              <>
+                <div className="modal-header">
+                  <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">The share link could not be created</h2></div>
+                  <button className="ghost icon-button" aria-label="Close share dialog" onClick={onCloseShareDialog}><X size={18} /></button>
+                </div>
+                <div className="share-confirm-copy">
+                  {shareDialog.error && <p className="form-error">Server share failed: {shareDialog.error}</p>}
+                  <p>You can try again, or make an offline link instead. An offline link is different:</p>
+                  <ul>
+                    <li>The whole project is stored inside the link itself.</li>
+                    <li>It does not expire. Anyone who has the link can open a copy for as long as they keep it.</li>
+                    <li>Long projects make very long links that some apps cut off.</li>
+                  </ul>
+                </div>
+                <div className="confirm-actions">
+                  <button className="secondary" type="button" onClick={onCreateOfflineShare}>Create offline link</button>
+                  <button type="button" data-share-primary onClick={onConfirmShare}>Try again</button>
+                </div>
+              </>
+            ) : (
+              <ShareLinkReady shareDialog={shareDialog} onClose={onCloseShareDialog} onCopy={onCopyShareLink} />
+            )}
           </section>
         </div>
       )}
@@ -254,6 +321,28 @@ export function WorkspaceDialogs({
           </section>
         </div>
       )}
+    </>
+  )
+}
+
+type ReadyShareDialog = Extract<NonNullable<ShareDialogState>, { stage: 'ready' }>
+
+function ShareLinkReady({ shareDialog, onClose, onCopy }: { shareDialog: ReadyShareDialog; onClose: () => void; onCopy: () => void }) {
+  return (
+    <>
+      <div className="modal-header">
+        <div><p className="eyebrow">Snapshot share</p><h2 id="share-dialog-title">Copy project link</h2></div>
+        <button className="ghost icon-button" aria-label="Close share dialog" onClick={onClose}><X size={18} /></button>
+      </div>
+      <p className="helper-text">{shareDialog.mode === 'server' ? 'Anyone with this link can open a copy of this snapshot for 30 days.' : 'This offline link carries a copy of the project in the URL and does not expire.'}</p>
+      <label className="file-path-field" htmlFor="share-url">
+        <span>Share URL</span>
+        <input id="share-url" readOnly value={shareDialog.url} onFocus={(event) => event.currentTarget.select()} />
+      </label>
+      <div className="confirm-actions">
+        <button className="secondary" type="button" onClick={onClose}>Done</button>
+        <button type="button" data-share-primary onClick={onCopy}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
+      </div>
     </>
   )
 }

@@ -29,11 +29,16 @@ export interface AbortRequest {
   type: 'abort'
 }
 
-export type RunnerRequest = RunRequest | StdinRequest | AbortRequest
+export interface WarmupRequest {
+  id: string
+  type: 'warmup'
+}
+
+export type RunnerRequest = RunRequest | StdinRequest | AbortRequest | WarmupRequest
 
 export interface RunnerResponse {
   id: string
-  type: 'started' | 'output' | 'input_request' | 'result'
+  type: 'started' | 'output' | 'output_limit' | 'input_request' | 'result' | 'warm'
   stream?: 'stdout' | 'stderr'
   text?: string
   stdout?: string
@@ -41,6 +46,8 @@ export interface RunnerResponse {
   durationMs?: number
   exitCode?: number
   errorKind?: 'validation'
+  /** Unfiltered traceback when the visible error hides runtime-internal frames. */
+  fullTraceback?: string
 }
 
 export interface RunnerResult {
@@ -48,6 +55,7 @@ export interface RunnerResult {
   stderr: string
   exitCode: number
   errorKind?: 'validation'
+  fullTraceback?: string
 }
 
 export type RunHandler = (request: RunRequest) => Promise<RunnerResult>
@@ -61,6 +69,7 @@ export function installRunner(
   controls: {
     onStdin?: (request: StdinRequest) => void
     onAbort?: (request: AbortRequest) => void
+    onWarmup?: (request: WarmupRequest) => Promise<void>
   } = {},
 ) {
   self.onmessage = (event: MessageEvent<RunnerRequest>) => {
@@ -75,9 +84,17 @@ export function installRunner(
       return
     }
 
+    if (request.type === 'warmup') {
+      // Warmup is best effort; a failed download is retried by the next real run.
+      ;(controls.onWarmup ? controls.onWarmup(request) : Promise.resolve())
+        .then(() => postRunnerMessage({ id: request.id, type: 'warm' }))
+        .catch(() => {})
+      return
+    }
+
     const startedAt = performance.now()
     run(request)
-      .then(({ stdout, stderr, exitCode, errorKind }) => {
+      .then(({ stdout, stderr, exitCode, errorKind, fullTraceback }) => {
         postRunnerMessage({
           id: request.id,
           type: 'result',
@@ -85,6 +102,7 @@ export function installRunner(
           stderr,
           exitCode,
           ...(errorKind ? { errorKind } : {}),
+          ...(fullTraceback ? { fullTraceback } : {}),
           durationMs: Math.round(performance.now() - startedAt),
         })
       })

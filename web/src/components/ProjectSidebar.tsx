@@ -70,6 +70,7 @@ export function ProjectSidebar({
               key={candidate.id}
               className={`project-card ${candidate.id === currentProjectId ? 'active' : ''}`}
               onClick={() => onSelectProject(candidate.id)}
+              title={candidate.title || 'Untitled Project'}
             >
               <span>{candidate.title || 'Untitled Project'}</span>
               <small>{kindLabels[candidate.kind]}{ownerLabel ? ` · ${ownerLabel}` : ''}</small>
