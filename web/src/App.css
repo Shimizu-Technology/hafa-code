@@ -877,6 +877,132 @@ textarea {
   right: var(--space-2);
 }
 
+/* ---- Lesson handoff: back to CSG Learn and copy for submission ---- */
+
+.lesson-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  font-size: var(--text-sm);
+}
+
+.lesson-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+  color: var(--text-strong);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  touch-action: manipulation;
+  transition:
+    background-color var(--duration-ui) ease,
+    border-color var(--duration-ui) ease,
+    transform var(--duration-press) var(--ease-out);
+}
+
+.lesson-back:active { transform: scale(0.97); }
+.lesson-label-short { display: none; }
+
+.lesson-context {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.school-badge {
+  flex: 0 0 auto;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: var(--leading-body);
+  white-space: nowrap;
+}
+
+.lesson-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-submit {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.lesson-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.lesson-copy { min-width: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  .lesson-back:hover { background: var(--surface-sunken); }
+}
+
+@media (pointer: coarse) {
+  .lesson-back { min-height: var(--control-lg); }
+}
+
+@media (max-width: 1279px) {
+  .lesson-hint { display: none; }
+}
+
+@media (max-width: 640px), (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
+  .lesson-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-1) var(--space-2);
+    margin: 0 0 var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .lesson-context { grid-column: 1 / -1; order: -1; padding: 0 var(--space-1); font-size: var(--text-xs); }
+  .lesson-submit { display: contents; }
+  .lesson-back,
+  .lesson-copy { width: 100%; min-height: var(--control-lg); padding: 0 var(--space-2); }
+}
+
+@media (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
+  /* Sideways phone: one row so the code keeps its height. */
+  .lesson-bar { grid-template-columns: minmax(0, 1fr) auto auto; padding: var(--space-1) var(--space-2); }
+  .lesson-context { grid-column: auto; }
+  .lesson-back,
+  .lesson-copy { min-height: var(--control-md); }
+}
+
+@media (max-width: 380px) {
+  .lesson-label-long { display: none; }
+  .lesson-label-short { display: inline; }
+}
+
 /* ---- Notices above the code ---- */
 
 .project-status { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -1942,6 +2068,7 @@ textarea {
 
 .toast-icon { flex: 0 0 auto; margin-top: 2px; color: var(--status-tone); }
 .toast-message { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.toast-action { flex: 0 0 auto; margin: -4px 0; }
 .toast-dismiss { width: var(--control-sm); min-height: var(--control-sm); margin: -4px 0; color: var(--text-muted); }
 
 [data-color-mode="colorblind"] .toast[data-tone="danger"] .toast-message,

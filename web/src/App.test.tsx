@@ -14,6 +14,8 @@ import type { RunnerOutcome } from './lib/runnerOutcome'
 import { api } from './lib/api'
 import type { useAuthContext } from './contexts/AuthContext'
 import { createWorkspaceBackup, serializeWorkspaceBackup } from './lib/workspaceBackup'
+import { buildStarterLink } from './lib/starterLinks'
+import { resetLessonLinksCache } from './lib/lessonLinks'
 
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
@@ -868,6 +870,105 @@ describe('App language guide practice projects', () => {
       expect(screen.getByText(/Downloaded ruby-playground.rb/)).toBeTruthy()
     })
   
+  describe('lesson handoff', () => {
+    const LESSON_URL = 'https://learn.codeschoolofguam.com/lessons/42'
+    const starterCode = 'def total(items):\n    pass\n'
+    const lessonLink = () => {
+      const url = new URL(buildStarterLink({
+        title: 'Expense summary project',
+        kind: 'python',
+        files: [{ path: 'expense_summary.py', content: starterCode }],
+        starterKey: 'csg-python-pilot:project',
+        returnUrl: LESSON_URL,
+        returnLabel: 'Independent expense-summary project',
+      }).url)
+      return `${url.pathname}${url.search}${url.hash}`
+    }
+
+    beforeEach(() => resetLessonLinksCache())
+    afterEach(() => window.history.replaceState(null, '', '/'))
+
+    it('shows Back to your lesson, the school badge, and Copy code for Learn, with Run still the only primary', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      window.history.replaceState(null, '', lessonLink())
+      render(<App />)
+
+      const bar = screen.getByRole('region', { name: 'Lesson' })
+      const back = within(bar).getByRole('link', { name: /Back to your lesson/ })
+      expect(back.getAttribute('href')).toBe(LESSON_URL)
+      expect(back.getAttribute('target')).toBeNull()
+      expect(within(bar).getByText('Code School of Guam')).toBeTruthy()
+      expect(within(bar).getByText('Independent expense-summary project')).toBeTruthy()
+      const primaries = [...document.querySelectorAll('.coding-stage button.primary, .app-bar button.primary')]
+      expect(primaries.every((button) => button.hasAttribute('data-hafa-run-button'))).toBe(true)
+
+      await user.click(within(bar).getByRole('button', { name: 'Copy code for Learn' }))
+      expect(writeText).toHaveBeenCalledWith(starterCode)
+      expect(screen.getByText('Code copied. Paste it into the lesson’s submission box.')).toBeTruthy()
+      expect(within(bar).getByRole('button', { name: 'Copied' })).toBeTruthy()
+    })
+
+    it('explains how to copy by hand when the clipboard is blocked', async () => {
+      const user = userEvent.setup()
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true })
+      window.history.replaceState(null, '', lessonLink())
+      render(<App />)
+      await user.click(screen.getByRole('button', { name: 'Copy code for Learn' }))
+      expect(screen.getByText(/Clipboard blocked. Select the code in the editor/)).toBeTruthy()
+    })
+
+    it('keeps the lesson bar after a reload and only on the project that came from the lesson', async () => {
+      const user = userEvent.setup()
+      window.history.replaceState(null, '', lessonLink())
+      const first = render(<App />)
+      expect(screen.getByRole('region', { name: 'Lesson' })).toBeTruthy()
+      first.unmount()
+
+      window.history.replaceState(null, '', '/')
+      render(<App />)
+      expect(screen.getByRole('region', { name: 'Lesson' })).toBeTruthy()
+      await user.click(screen.getAllByRole('button', { name: 'Python' })[0])
+      expect(screen.queryByRole('region', { name: 'Lesson' })).toBeNull()
+    })
+
+    it('leaves the lesson target out of offline Share links', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(api, 'createShare').mockResolvedValue({ data: null, error: 'Service unavailable' })
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true })
+      window.history.replaceState(null, '', lessonLink())
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Share' })[0])
+      await user.click(screen.getByRole('button', { name: 'Create share link' }))
+      await user.click(await screen.findByRole('button', { name: 'Create offline link' }))
+      const shareUrl = (await screen.findByLabelText('Share URL') as HTMLInputElement).value
+      expect(shareUrl).not.toMatch(/return|starter|codeschoolofguam/)
+    })
+
+    it('reopens edited work from the lesson link and offers a non-destructive Start over', async () => {
+      const user = userEvent.setup()
+      window.history.replaceState(null, '', lessonLink())
+      const first = render(<App />)
+      fireEvent.change(screen.getByLabelText('Code editor'), { target: { value: 'print("my work")\n' } })
+      await waitFor(() => expect(storedLibrary().projects[0].files[0].content).toBe('print("my work")\n'))
+      first.unmount()
+
+      window.history.replaceState(null, '', lessonLink())
+      render(<App />)
+      expect(screen.getByLabelText('Code editor')).toHaveProperty('value', 'print("my work")\n')
+      const toast = screen.getByText('Welcome back. Your saved work on “Expense summary project” is open.').closest('.toast') as HTMLElement
+      await user.click(within(toast).getByRole('button', { name: 'Start over' }))
+
+      await waitFor(() => expect(storedLibrary().projects).toHaveLength(2))
+      expect(screen.getByLabelText('Code editor')).toHaveProperty('value', starterCode)
+      expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Expense summary project (2)')
+      expect(storedLibrary().projects.find((project) => project.title === 'Expense summary project')?.files[0].content).toBe('print("my work")\n')
+      expect(screen.getByText(/Your earlier work is still in Projects/)).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'Lesson' })).toBeTruthy()
+    })
+  })
+
   describe('learner-first hierarchy', () => {
     it('welcomes a first visit, then collapses to the app bar once a Python project exists', async () => {
       const user = userEvent.setup()

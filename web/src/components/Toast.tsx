@@ -7,27 +7,30 @@ const ICONS = { success: CircleCheck, info: Info, warning: TriangleAlert, danger
 type ToastProps = {
   message: string
   onDismiss: () => void
+  /** An optional follow-up, such as "Start over". A toast with an action waits for the learner. */
+  action?: { label: string; onAction: () => void } | null
 }
 
 /**
  * One toast at a time, toned by meaning. Info and success leave after a few seconds
  * unless the pointer or keyboard focus is on them; warnings and failures wait for Dismiss.
  */
-export function Toast({ message, onDismiss }: ToastProps) {
+export function Toast({ message, onDismiss, action }: ToastProps) {
   const tone = noticeTone(message)
   const Icon = ICONS[tone]
   const [held, setHeld] = useState(false)
   const onDismissRef = useRef(onDismiss)
+  const hasAction = Boolean(action)
 
   useEffect(() => {
     onDismissRef.current = onDismiss
   }, [onDismiss])
 
   useEffect(() => {
-    if (!noticeAutoDismisses(tone) || held) return
+    if (!noticeAutoDismisses(tone) || held || hasAction) return
     const timer = window.setTimeout(() => onDismissRef.current(), NOTICE_AUTO_DISMISS_MS)
     return () => window.clearTimeout(timer)
-  }, [message, tone, held])
+  }, [message, tone, held, hasAction])
 
   return (
     <div
@@ -41,6 +44,9 @@ export function Toast({ message, onDismiss }: ToastProps) {
     >
       <Icon size={18} aria-hidden="true" className="toast-icon" />
       <span className="toast-message">{message}</span>
+      {action && (
+        <button className="secondary sm toast-action" type="button" onClick={action.onAction}>{action.label}</button>
+      )}
       <button className="ghost icon-button toast-dismiss" type="button" aria-label="Dismiss" title="Dismiss" onClick={onDismiss}>
         <X size={16} aria-hidden="true" />
       </button>
