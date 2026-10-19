@@ -15,10 +15,13 @@ import {
   decodeSharedProject,
   importNotice,
   loadProjectLibraryWithStatus,
+  sameProjectContent,
   uniqueProjectTitle,
   type ProjectLibrary,
 } from './projectStorage'
 import { pendingCloudProjectIds } from './cloudSyncStorage'
+import { allowDevReturnOrigins, loadLessonLinks, projectIdForStarter, recordLessonLink, saveLessonLinks } from './lessonLinks'
+import { PROJECT_LINK_MAX_LENGTH, parseReturnUrl, parseStarterKey, sanitizeReturnLabel, type LessonReturn } from './starterLinks'
 
 export type FileDialogMode = 'create' | 'rename' | 'duplicate'
 
@@ -175,6 +178,30 @@ export interface InitialWorkspace {
   openCode: boolean
   /** True for a visitor with no saved projects who did not follow a project or language link. */
   firstVisit: boolean
+  /** Set when a lesson link reopened a copy the learner had already changed, so they can start over. */
+  lessonReopen?: { projectId: string; starter: SavedProject } | null
+}
+
+export interface LessonLaunch {
+  returnTarget: LessonReturn | null
+  starterKey: string | null
+}
+
+function launchParam(location: Pick<Location, 'search' | 'hash'>, name: string) {
+  return new URLSearchParams(location.hash.replace(/^#/, '')).get(name)
+    ?? new URLSearchParams(location.search).get(name)
+}
+
+/**
+ * Reads `return`, `returnLabel`, and `starter` from a lesson link (hash or query).
+ * A return URL outside the CSG Learn allowlist is dropped silently.
+ */
+export function readLessonLaunch(location: Pick<Location, 'search' | 'hash'> = window.location, allowDevOrigins = allowDevReturnOrigins): LessonLaunch {
+  const url = parseReturnUrl(launchParam(location, 'return'), { allowDevOrigins })
+  return {
+    returnTarget: url ? { url, label: sanitizeReturnLabel(launchParam(location, 'returnLabel')) } : null,
+    starterKey: parseStarterKey(launchParam(location, 'starter')),
+  }
 }
 
 /** Reads `?lang=python` or `#lang=python` from a Learn or class link. */
@@ -188,8 +215,10 @@ export function requestedStarterKind(location: Pick<Location, 'search' | 'hash'>
 function cleanLaunchParams() {
   const query = new URLSearchParams(window.location.search)
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  query.delete('lang')
-  hash.delete('lang')
+  for (const name of ['lang', 'return', 'returnLabel', 'starter']) {
+    query.delete(name)
+    hash.delete(name)
+  }
   hash.delete('project')
   const search = query.toString()
   const nextHash = hash.toString()
@@ -209,33 +238,65 @@ function openRequestedKind(library: ProjectLibrary, kind: ProjectKind): { librar
   return { library: { activeProjectId: project.id, projects: [project, ...library.projects] }, notice: `${project.title} created.` }
 }
 
+export const PROJECT_LINK_TOO_LARGE_NOTICE = 'This project link is too large to open. Ask your instructor for the starter file, then use More → Import.'
+export const PROJECT_LINK_BROKEN_NOTICE = 'Could not import the shared project link. It may have been cut off when it was copied; go back and open the full link again.'
+
 export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   const sharedProject = params.get('project')
   const requestedKind = requestedStarterKind()
+  const launch = readLessonLaunch()
   const { library, isNew } = loadProjectLibraryWithStatus(requestedKind ?? undefined)
   // Only a brand-new visitor without a project, share, or language link sees the welcome header.
   const arrivedWithShare = params.has('share')
   const withVisit = (workspace: Omit<InitialWorkspace, 'firstVisit'>): InitialWorkspace => ({ ...workspace, firstVisit: isNew && !workspace.openCode && !arrivedWithShare })
+  const rememberLesson = (projectId: string) => {
+    if (launch.returnTarget || launch.starterKey) saveLessonLinks(recordLessonLink(loadLessonLinks(), projectId, launch))
+  }
 
   if (sharedProject) {
-    try {
-      const imported = decodeSharedProject(sharedProject)
-      cleanLaunchParams()
+    let imported: SavedProject | null = null
+    let failure = PROJECT_LINK_BROKEN_NOTICE
+    if (sharedProject.length > PROJECT_LINK_MAX_LENGTH) {
+      failure = PROJECT_LINK_TOO_LARGE_NOTICE
+    } else {
+      try {
+        imported = decodeSharedProject(sharedProject)
+      } catch {
+        imported = null
+      }
+    }
+    cleanLaunchParams()
+
+    if (imported) {
+      // The same lesson link brings back the learner's own copy, edited or not, instead of overwriting it or adding another.
+      const mappedId = launch.starterKey ? projectIdForStarter(loadLessonLinks(), launch.starterKey) : null
+      const existing = mappedId && !isNew ? library.projects.find((candidate) => candidate.id === mappedId) : undefined
+      if (existing) {
+        rememberLesson(existing.id)
+        const edited = !sameProjectContent(existing, imported)
+        return withVisit({
+          library: { ...library, activeProjectId: existing.id },
+          notice: edited ? `Welcome back. Your saved work on “${existing.title}” is open.` : `Opened “${existing.title}” from your lesson.`,
+          openCode: true,
+          lessonReopen: edited ? { projectId: existing.id, starter: imported } : null,
+        })
+      }
+
       // A first-time visitor arriving with a project only needs that project, not an extra starter.
       if (isNew) {
+        rememberLesson(imported.id)
         return withVisit({ library: { activeProjectId: imported.id, projects: [imported] }, notice: 'Shared project imported locally.', openCode: true })
       }
       const result = addImportedProject(library, imported)
+      rememberLesson(result.project.id)
       return withVisit({ library: result.library, notice: importNotice(result, imported, 'link'), openCode: true })
-    } catch {
-      // Clear the broken link so a reload does not repeat the error, then honor ?lang= if present.
-      cleanLaunchParams()
-      const notice = 'Could not import the shared project link.'
-      if (!requestedKind) return withVisit({ library, notice, openCode: false })
-      if (isNew) return withVisit({ library, notice, openCode: true })
-      return withVisit({ library: openRequestedKind(library, requestedKind).library, notice, openCode: true })
     }
+
+    // Clear the broken link so a reload does not repeat the error, then honor ?lang= if present.
+    if (!requestedKind) return withVisit({ library, notice: failure, openCode: false })
+    if (isNew) return withVisit({ library, notice: failure, openCode: true })
+    return withVisit({ library: openRequestedKind(library, requestedKind).library, notice: failure, openCode: true })
   }
 
   if (requestedKind) {
@@ -244,6 +305,7 @@ export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
     return withVisit({ ...openRequestedKind(library, requestedKind), openCode: true })
   }
 
+  if (launch.returnTarget || launch.starterKey) cleanLaunchParams()
   return withVisit({ library, notice: '', openCode: false })
 }
 

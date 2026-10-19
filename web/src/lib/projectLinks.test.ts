@@ -13,7 +13,7 @@ import {
   uniqueProjectTitle,
   type ProjectLibrary,
 } from './projectStorage'
-import { loadInitialLibraryWithSharedProject, requestedStarterKind } from './workspace'
+import { PROJECT_LINK_BROKEN_NOTICE, loadInitialLibraryWithSharedProject, requestedStarterKind } from './workspace'
 
 function pythonProject(title: string, content: string) {
   return { ...createProject('python', title), files: [{ path: 'main.py', language: 'python' as const, content }] }
@@ -137,7 +137,7 @@ describe('first visit from a Learn or class link', () => {
 
   test('a broken project link is cleared from the URL and ?lang=python still applies', () => {
     const initial = visit('/?lang=python#project=not-a-project')
-    expect(initial.notice).toBe('Could not import the shared project link.')
+    expect(initial.notice).toBe(PROJECT_LINK_BROKEN_NOTICE)
     expect(initial.library.projects.map((project) => project.kind)).toEqual(['python'])
     expect(initial.openCode).toBe(true)
     expect(window.location.search + window.location.hash).toBe('')
