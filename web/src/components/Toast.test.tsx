@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Toast } from './Toast'
 
@@ -8,8 +9,9 @@ describe('Toast', () => {
     vi.useRealTimers()
   })
 
-  it('lets success leave on its own but keeps a failure until dismissed', () => {
-    vi.useFakeTimers()
+  it('lets success leave on its own but keeps a failure until dismissed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const onDismiss = vi.fn()
     const { rerender } = render(<Toast message="Python Playground created." onDismiss={onDismiss} />)
     act(() => { vi.advanceTimersByTime(4_100) })
@@ -20,23 +22,35 @@ describe('Toast', () => {
     expect(screen.getByRole('alert').getAttribute('data-tone')).toBe('danger')
     act(() => { vi.advanceTimersByTime(30_000) })
     expect(onDismiss).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(onDismiss).toHaveBeenCalledOnce()
   })
 
-  it('waits while the pointer or keyboard focus is on it', () => {
-    vi.useFakeTimers()
+  it('waits while the pointer or keyboard focus is on it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const onDismiss = vi.fn()
-    render(<Toast message="Share snapshot link is ready to copy." onDismiss={onDismiss} />)
+    render(
+      <>
+        <button type="button">Before</button>
+        <Toast message="Share snapshot link is ready to copy." onDismiss={onDismiss} />
+        <button type="button">After</button>
+      </>,
+    )
     const toast = screen.getByRole('status')
-    fireEvent.pointerEnter(toast)
+    await user.hover(toast)
     act(() => { vi.advanceTimersByTime(10_000) })
     expect(onDismiss).not.toHaveBeenCalled()
-    fireEvent.pointerLeave(toast)
-    fireEvent.focus(screen.getByRole('button', { name: 'Dismiss' }))
+    await user.unhover(toast)
+
+    await user.click(screen.getByRole('button', { name: 'Before' }))
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBe(document.activeElement)
     act(() => { vi.advanceTimersByTime(10_000) })
     expect(onDismiss).not.toHaveBeenCalled()
-    fireEvent.blur(screen.getByRole('button', { name: 'Dismiss' }))
+
+    // Tabbing out of the toast lets the timer run again.
+    await user.tab()
     act(() => { vi.advanceTimersByTime(4_100) })
     expect(onDismiss).toHaveBeenCalledOnce()
   })
