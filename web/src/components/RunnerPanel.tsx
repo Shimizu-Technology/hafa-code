@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, CornerDownLeft, Loader2, Play, Square, Terminal, TriangleAlert, Zap } from 'lucide-react'
+import { Check, CircleAlert, CircleCheck, Copy, CornerDownLeft, Loader2, Play, Square, Terminal, TriangleAlert } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerOutcome, RunnerStatus } from '../lib/runnerOutcome'
 import { coachRunnerError, errorHeadline, type ErrorCoachContext } from '../lib/errorCoach'
@@ -13,6 +13,7 @@ import {
   takeIdleRunnerWorker,
 } from '../lib/runnerWorkerPool'
 import { writeClipboardText } from '../lib/workspace'
+import { claimFirstSuccess, runMilestone, type RunMilestone } from '../lib/runMilestones'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 import { OUTPUT_LIMIT_CHARS, OUTPUT_LIMIT_LINES, OUTPUT_LIMIT_MESSAGE } from '../workers/runOutput'
 
@@ -33,6 +34,8 @@ type TerminalChunk = Omit<TerminalLine, 'id'>
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
 const PREWARM_DELAY_MS = 600
+/** How long the one-time first-success outline stays before it fades. */
+export const FIRST_SUCCESS_MOMENT_MS = 1_600
 
 function formatSeconds(ms: number) {
   const seconds = ms / 1000
@@ -75,6 +78,12 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
   const [firstRuntimeLoad, setFirstRuntimeLoad] = useState(false)
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
   const [hasTranscript, setHasTranscript] = useState(false)
+  const [milestone, setMilestone] = useState<RunMilestone>(null)
+  const [celebrating, setCelebrating] = useState(false)
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
+  const lastFinishedStatusRef = useRef<RunnerStatus | null>(null)
+  const hadSuccessRef = useRef(false)
+  const celebrateTimerRef = useRef<number | null>(null)
   const workerRef = useRef<Worker | null>(null)
   const timeoutRef = useRef<number | null>(null)
   const runIdRef = useRef<string | null>(null)
@@ -146,6 +155,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     const cancelledActiveRun = runIdRef.current !== null
     cancelFrameRef.current?.()
     if (copyResetRef.current) window.clearTimeout(copyResetRef.current)
+    if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current)
     if (!cancelledActiveRun && workerRef.current && runner?.prewarm) {
       // An idle, already-started runtime stays warm for the next project of this language.
       detachWorkerListenersRef.current()
@@ -213,6 +223,8 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     setAwaitingInput(false)
     setRunPhase('loading')
     setLoadingSeconds(0)
+    setRunStartedAt(startedAt)
+    setMilestone(null)
     setFirstRuntimeLoad(Boolean(runner.firstLoadLabel) && !runtimeWasReady(runner.language))
     setTerminalInput('')
     setTerminal(emptyTerminalBuffer([
@@ -227,8 +239,20 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     const finish = (outcome: RunnerOutcome, fullTraceback?: string) => {
       flushTerminal()
       setRunState(fullTraceback ? { ...outcome, fullTraceback } : outcome)
+      // A project can change id when it first syncs to the cloud; one runner celebrates at most once.
+      const firstSuccess = outcome.status === 'success' && !hadSuccessRef.current && claimFirstSuccess(project.id)
+      if (outcome.status === 'success') hadSuccessRef.current = true
+      const earned = runMilestone(lastFinishedStatusRef.current, outcome.status, firstSuccess)
+      lastFinishedStatusRef.current = outcome.status
+      setMilestone(earned)
+      if (firstSuccess) {
+        setCelebrating(true)
+        if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current)
+        celebrateTimerRef.current = window.setTimeout(() => setCelebrating(false), FIRST_SUCCESS_MOMENT_MS)
+      }
       onRunCompleteRef.current?.(outcome)
       startedAtRef.current = null
+      setRunStartedAt(null)
     }
 
     timeoutRef.current = window.setTimeout(() => {
@@ -433,8 +457,11 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       durationMs: startedAtRef.current === null ? runState.durationMs : Math.round(performance.now() - startedAtRef.current),
     }
     setRunState(outcome)
+    lastFinishedStatusRef.current = outcome.status
+    setMilestone(null)
     onRunCompleteRef.current?.(outcome)
     startedAtRef.current = null
+    setRunStartedAt(null)
   }
 
   const copyOutput = async () => {
@@ -448,15 +475,28 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     ? 'Waiting for input'
     : runState.status === 'running'
       ? runPhase === 'loading' ? 'Loading runtime' : 'Running'
-      : runState.status === 'idle' ? 'Ready' : runState.status
+      : runState.status === 'idle'
+        ? 'Ready'
+        : runState.status === 'success'
+          ? milestone === 'fixed' ? 'Fixed. It runs now.' : `Ran in ${runState.durationMs ?? 0} ms`
+          : runState.status === 'error'
+            ? 'Error'
+            : runState.status === 'timeout'
+              ? runState.failurePhase === 'startup' ? 'Runtime did not load' : 'Stopped at the time limit'
+              : 'Stopped'
+  const statusTone = runState.status === 'running' || awaitingInput
+    ? 'running'
+    : runState.status === 'success'
+      ? 'success'
+      : runState.status === 'error' || runState.status === 'timeout'
+        ? 'danger'
+        : 'neutral'
 
   const footerDetail = awaitingInput
     ? 'press Enter to continue'
     : runState.status === 'running' && runPhase === 'loading'
-      ? `${loadingSeconds}s · startup limit ${formatSeconds(startupTimeoutMs)}`
-      : runState.durationMs === null
-        ? `${formatSeconds(executionTimeoutMs)} run limit`
-        : `${runState.durationMs}ms`
+      ? `startup limit ${formatSeconds(startupTimeoutMs)}`
+      : `${formatSeconds(executionTimeoutMs)} run limit`
 
   const loadingTitle = firstRuntimeLoad && runner?.firstLoadLabel
     ? runner.firstLoadLabel
@@ -481,20 +521,33 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
   const lastStderrIndex = terminal.lines.reduce((found, line, index) => line.kind === 'stderr' ? index : found, -1)
 
   return (
-    <section className="panel output-panel surface-grid">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Output</p>
-          <h2><Terminal size={18} /> Browser runner</h2>
-          <p className="helper-text">Runs privately in your browser. The first run loads the runtime; repeat runs stay warm.</p>
+    <section
+      className={`panel output-panel${celebrating ? ' first-success' : ''}`}
+      data-run-status={awaitingInput ? 'input' : runState.status}
+    >
+      <div className="panel-header runner-header">
+        <div className="runner-title">
+          <h2><Terminal size={18} aria-hidden="true" /> Output</h2>
+          <p className="run-status" data-tone={statusTone} aria-live="polite">
+            {statusTone === 'running'
+              ? <Loader2 className="spin" size={14} aria-hidden="true" />
+              : statusTone === 'success'
+                ? <CircleCheck size={14} aria-hidden="true" />
+                : statusTone === 'danger'
+                  ? <CircleAlert size={14} aria-hidden="true" />
+                  : null}
+            <span className="run-status-label">{runStatusLabel}</span>
+            {runState.status === 'running' && !awaitingInput && runStartedAt !== null && <ElapsedTime startedAt={runStartedAt} />}
+            {milestone === 'fixed' && runState.durationMs !== null && <span className="run-status-detail">{runState.durationMs} ms</span>}
+          </p>
         </div>
         {runState.status === 'running' ? (
           <button className="secondary" onClick={stopRun} data-hafa-run-button>
-            <Square size={16} /> Stop
+            <Square size={16} aria-hidden="true" /> Stop
           </button>
         ) : (
-          <button onClick={run} disabled={!entryFile.content.trim()} data-hafa-run-button>
-            <Play size={16} /> {runState.status === 'idle' ? `Run ${runner?.runLabel}` : 'Run again'}
+          <button className="primary" onClick={run} disabled={!entryFile.content.trim()} data-hafa-run-button>
+            <Play size={16} aria-hidden="true" /> {runState.status === 'idle' ? `Run ${runner?.runLabel}` : 'Run again'}
           </button>
         )}
       </div>
@@ -519,13 +572,20 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
               <strong>{runPhase === 'loading' ? loadingTitle : `Running ${entryFile.path}…`}</strong>
               {runPhase === 'loading' && loadingSeconds > 0 && <span className="runner-progress-elapsed">{loadingSeconds}s</span>}
               {runPhase === 'loading' && <span>{runner?.startupNote ?? 'First load may take a few seconds. Later runs are faster.'}</span>}
+              {runPhase === 'loading' && firstRuntimeLoad && (
+                <ol className="runner-steps" aria-label="Startup steps">
+                  <li data-state="current">Download {runner?.runLabel} · first time only</li>
+                  <li data-state="todo">Start {runner?.runLabel}</li>
+                  <li data-state="todo">Run {entryFile.path}</li>
+                </ol>
+              )}
             </div>
           </div>
         )}
         {runState.status !== 'running' && outputIsEmpty && terminal.lines.length === 0 && (
           <div className="empty-output">
-            <Zap size={28} />
-            <p>Press Run to start a browser terminal session.</p>
+            <p><strong>Press Run</strong> to see what your program prints.</p>
+            <p>It runs privately in your browser. The first run loads the runtime; repeat runs stay warm.</p>
           </div>
         )}
         {terminal.hiddenLineCount > 0 && (
@@ -567,7 +627,6 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
         )}
       </div>
       <div className="terminal-footer">
-        <span>{runStatusLabel}</span>
         <span className="terminal-footer-detail">{footerDetail}</span>
         <button
           className="ghost runner-copy-button"
@@ -582,6 +641,16 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       </div>
     </section>
   )
+}
+
+/** Ticks only itself while a run is active, so the terminal does not re-render every 100 ms. */
+function ElapsedTime({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => performance.now())
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(performance.now()), 100)
+    return () => window.clearInterval(interval)
+  }, [])
+  return <span className="run-status-detail">{(Math.max(0, now - startedAt) / 1000).toFixed(1)}s</span>
 }
 
 /** Keeps the traceback readable but quiet, with the final cause line emphasized. */

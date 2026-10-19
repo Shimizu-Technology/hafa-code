@@ -53,7 +53,7 @@ export function WorkspaceTransferDialog({
           <p className="transfer-callout">Coming from the old Netlify address? Download a backup there first, then restore it here.</p>
         )}
         <div className="workspace-transfer-actions">
-          <button type="button" onClick={onDownloadBackup}><Download size={17} /> Download complete backup</button>
+          <button className="primary" type="button" onClick={onDownloadBackup}><Download size={17} /> Download complete backup</button>
           <button className="secondary" type="button" onClick={() => restoreInputRef.current?.click()}><Import size={17} /> Restore a backup</button>
         </div>
         <input

@@ -199,7 +199,8 @@ describe('RunnerPanel', () => {
     })
 
     expect(screen.getByText('Diagnostic')).toBeTruthy()
-    expect(screen.getByText('success')).toBeTruthy()
+    expect(screen.getByText('Ran in 40 ms')).toBeTruthy()
+    expect(document.querySelector('.output-panel')?.getAttribute('data-run-status')).toBe('success')
   })
 
   it('terminates a running Java worker when the user presses Stop', async () => {
@@ -529,6 +530,67 @@ describe('RunnerPanel', () => {
       const run = worker.messages.find((message) => message.type === 'run')!
       act(() => worker.respond({ id: run.id, type: 'started' }))
       expect(localStorage.getItem('hafa-code-runtime-ready:python')).toBe('1')
+    })
+  })
+
+  describe('run states', () => {
+    function runOnce(result: { stdout?: string; stderr?: string; exitCode?: number; durationMs?: number }) {
+      act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+      const worker = FakeWorker.instances.at(-1)!
+      const run = worker.messages.filter((message) => message.type === 'run').at(-1)!
+      act(() => worker.respond({ id: run.id, type: 'started' }))
+      act(() => worker.respond({ id: run.id, type: 'result', stdout: '', stderr: '', exitCode: 0, durationMs: 12, ...result } as RunnerResponse))
+    }
+
+    const panel = () => document.querySelector('.output-panel')!
+    const status = () => document.querySelector('.run-status')!
+
+    it('goes idle → running with elapsed time → success with timing and a one-time first-success outline', () => {
+      vi.useFakeTimers()
+      render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+      expect(panel().getAttribute('data-run-status')).toBe('idle')
+      expect(status().textContent).toBe('Ready')
+      expect(screen.getByRole('button', { name: /Run Python/ }).className).toContain('primary')
+
+      act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))
+      expect(panel().getAttribute('data-run-status')).toBe('running')
+      expect(status().getAttribute('data-tone')).toBe('running')
+      act(() => vi.advanceTimersByTime(1_250))
+      expect(status().textContent).toMatch(/Loading runtime\s*1\.\ds/)
+
+      const worker = FakeWorker.instances.at(-1)!
+      const run = worker.messages.find((message) => message.type === 'run')!
+      act(() => worker.respond({ id: run.id, type: 'started' }))
+      expect(status().textContent).toMatch(/^Running/)
+      act(() => worker.respond({ id: run.id, type: 'result', stdout: 'Hafa adai\n', stderr: '', exitCode: 0, durationMs: 140 }))
+
+      expect(panel().getAttribute('data-run-status')).toBe('success')
+      expect(status().getAttribute('data-tone')).toBe('success')
+      expect(status().textContent).toBe('Ran in 140 ms')
+      expect(panel().classList.contains('first-success')).toBe(true)
+      act(() => vi.advanceTimersByTime(1_700))
+      expect(panel().classList.contains('first-success')).toBe(false)
+
+      // The moment plays once per project, even after a remount.
+      runOnce({ durationMs: 20 })
+      expect(panel().classList.contains('first-success')).toBe(false)
+      expect(status().textContent).toBe('Ran in 20 ms')
+    })
+
+    it('says "Fixed. It runs now." when a run succeeds right after an error', () => {
+      localStorage.setItem('hafa-code-first-success-v1', JSON.stringify([project.id]))
+      render(<RunnerPanel project={project} entryFile={project.files[0]} />)
+      runOnce({ stderr: 'NameError: name \'totl\' is not defined\n', exitCode: 1 })
+      expect(panel().getAttribute('data-run-status')).toBe('error')
+      expect(status().getAttribute('data-tone')).toBe('danger')
+      expect(status().textContent).toBe('Error')
+
+      runOnce({ stdout: '5\n', durationMs: 9 })
+      expect(status().textContent).toBe('Fixed. It runs now.9 ms')
+      expect(panel().classList.contains('first-success')).toBe(false)
+
+      runOnce({ stdout: '5\n', durationMs: 8 })
+      expect(status().textContent).toBe('Ran in 8 ms')
     })
   })
 })

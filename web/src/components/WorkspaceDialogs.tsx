@@ -151,7 +151,7 @@ export function WorkspaceDialogs({
             <p className="helper-text">Use a simple filename like `helper.rb`, `about.html`, or `styles.css`. Add folders later with paths like `assets/logo.svg`.</p>
             <div className="confirm-actions">
               <button className="secondary" onClick={onCloseFileDialog}>Cancel</button>
-              <button onClick={onSubmitFileDialog}>{fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}</button>
+              <button className="primary" onClick={onSubmitFileDialog}>{fileDialog.mode === 'create' ? 'Create file' : fileDialog.mode === 'rename' ? 'Rename file' : 'Duplicate file'}</button>
             </div>
           </section>
         </div>
@@ -187,6 +187,7 @@ export function WorkspaceDialogs({
                 <div className="confirm-actions">
                   <button className="secondary" type="button" onClick={onCloseShareDialog}>Cancel</button>
                   <button
+                    className="primary"
                     type="button"
                     data-share-primary
                     onClick={() => { if (!shareDialog.creating) onConfirmShare() }}
@@ -213,7 +214,7 @@ export function WorkspaceDialogs({
                 </div>
                 <div className="confirm-actions">
                   <button className="secondary" type="button" onClick={onCreateOfflineShare}>Create offline link</button>
-                  <button type="button" data-share-primary onClick={onConfirmShare}>Try again</button>
+                  <button className="primary" type="button" data-share-primary onClick={onConfirmShare}>Try again</button>
                 </div>
               </>
             ) : (
@@ -237,7 +238,7 @@ export function WorkspaceDialogs({
             <p className="helper-text">Platform admins and mentors create organization workspaces, then invite instructors and students.</p>
             <div className="confirm-actions">
               <button className="secondary" type="button" onClick={onCloseOrganizationDialog}>Cancel</button>
-              <button type="button" onClick={onCreateOrganization}>Create workspace</button>
+              <button className="primary" type="button" onClick={onCreateOrganization}>Create workspace</button>
             </div>
           </section>
         </div>
@@ -257,7 +258,7 @@ export function WorkspaceDialogs({
                 <button className="secondary" onClick={onArchiveProject} disabled={!canEditProject || activeProjectCount <= 1}><Archive size={16} /> Archive</button>
               )}
               <button className="secondary" onClick={onDuplicateProject}><Copy size={16} /> Duplicate</button>
-              <button className="danger" onClick={onRequestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
+              <button className="danger-quiet" onClick={onRequestDeleteProject} disabled={!canEditProject}><Trash2 size={16} /> Delete</button>
             </div>
           </section>
         </div>
@@ -288,7 +289,7 @@ export function WorkspaceDialogs({
             </fieldset>
             <div className="confirm-actions">
               <button className="secondary" type="button" onClick={onCloseProjectCopy} disabled={copySubmitting}>Cancel</button>
-              <button type="button" onClick={onConfirmProjectCopy} disabled={copySubmitting}><Copy size={16} /> {copySubmitting ? 'Duplicating…' : 'Duplicate here'}</button>
+              <button className="primary" type="button" onClick={onConfirmProjectCopy} disabled={copySubmitting}><Copy size={16} /> {copySubmitting ? 'Duplicating…' : 'Duplicate here'}</button>
             </div>
           </section>
         </div>
@@ -313,7 +314,7 @@ export function WorkspaceDialogs({
             </p>
             <div className="confirm-actions">
               <button className="secondary" onClick={onCloseConfirm}>Cancel</button>
-              <button className={confirmAction === 'delete' ? 'danger' : ''} onClick={onConfirmProjectAction}>
+              <button className="primary" onClick={onConfirmProjectAction}>
                 {confirmAction === 'delete' ? <Trash2 size={16} /> : confirmAction === 'checkpoint' ? <RotateCcw size={16} /> : <Archive size={16} />}
                 {confirmAction === 'delete' ? 'Delete project' : confirmAction === 'checkpoint' ? 'Restore checkpoint' : 'Archive project'}
               </button>
@@ -341,7 +342,7 @@ function ShareLinkReady({ shareDialog, onClose, onCopy }: { shareDialog: ReadySh
       </label>
       <div className="confirm-actions">
         <button className="secondary" type="button" onClick={onClose}>Done</button>
-        <button type="button" data-share-primary onClick={onCopy}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
+        <button className="primary" type="button" data-share-primary onClick={onCopy}><Copy size={16} /> {shareDialog.copied ? 'Copied' : 'Copy link'}</button>
       </div>
     </>
   )

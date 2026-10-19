@@ -218,21 +218,20 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   const seedFile = project.files.find((file) => file.path === 'seed.sql')
 
   return (
-    <section className="panel output-panel sql-output-panel surface-grid">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Results</p>
-          <h2><Database size={18} /> SQLite workspace</h2>
-          <p className="helper-text">Runs privately in a project-scoped browser database. Schema and seed edits rebuild it automatically.</p>
+    <section className="panel output-panel sql-output-panel" data-run-status={status}>
+      <div className="panel-header runner-header">
+        <div className="runner-title">
+          <h2><Database size={18} aria-hidden="true" /> Results</h2>
+          <p className="helper-text">A private SQLite database for this project. Editing schema.sql or seed.sql rebuilds it.</p>
         </div>
         <div className="sql-runner-actions">
           <button className="secondary" type="button" onClick={() => start('reset')} disabled={busy}>
             <RotateCcw size={16} /> Reset database
           </button>
           {busy ? (
-            <button type="button" onClick={stop} data-hafa-run-button><Square size={16} /> Stop</button>
+            <button className="secondary" type="button" onClick={stop} data-hafa-run-button><Square size={16} aria-hidden="true" /> Stop</button>
           ) : (
-            <button type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()} data-hafa-run-button><Play size={16} /> Run SQL</button>
+            <button className="primary" type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()} data-hafa-run-button><Play size={16} aria-hidden="true" /> Run SQL</button>
           )}
         </div>
       </div>
@@ -277,13 +276,13 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
           <div className="sql-message success"><strong>Statement complete.</strong><span>{result.changeCount} row{result.changeCount === 1 ? '' : 's'} changed across {result.statementCount} statement{result.statementCount === 1 ? '' : 's'}.</span></div>
         )}
         {!busy && !error && !result && !resetNotice && (
-          <div className="empty-output"><Database size={28} /><p>Run {entryFile.path} to query the project database. Use the setup links above whenever you need to check its shape or starter data.</p></div>
+          <div className="empty-output"><p>Run {entryFile.path} to query the project database. Use the setup links above whenever you need to check its shape or starter data.</p></div>
         )}
       </div>
 
       <div className="terminal-footer">
-        <span>{busy ? status === 'loading' ? 'Loading runtime' : 'Running' : status === 'idle' ? 'Ready' : status}</span>
-        <span>{durationMs === null ? `${RUNNER_TIMEOUT_MS}ms query limit` : `${durationMs}ms`}</span>
+        <span>{busy ? status === 'loading' ? 'Loading runtime' : 'Running' : status === 'idle' ? 'Ready' : status === 'success' ? 'Query finished' : status === 'error' ? 'Error' : status}</span>
+        <span className="terminal-footer-detail">{durationMs === null ? `${RUNNER_TIMEOUT_MS / 1000}s query limit` : `Ran in ${durationMs} ms`}</span>
       </div>
     </section>
   )
