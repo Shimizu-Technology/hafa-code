@@ -173,6 +173,8 @@ export interface InitialWorkspace {
   notice: string
   /** True when the visitor arrived for a specific project or language and should land on the code. */
   openCode: boolean
+  /** True for a visitor with no saved projects who did not follow a project or language link. */
+  firstVisit: boolean
 }
 
 /** Reads `?lang=python` or `#lang=python` from a Learn or class link. */
@@ -212,6 +214,8 @@ export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
   const sharedProject = params.get('project')
   const requestedKind = requestedStarterKind()
   const { library, isNew } = loadProjectLibraryWithStatus(requestedKind ?? undefined)
+  // Only a brand-new visitor without a project or language link sees the welcome header.
+  const withVisit = (workspace: Omit<InitialWorkspace, 'firstVisit'>): InitialWorkspace => ({ ...workspace, firstVisit: isNew && !workspace.openCode })
 
   if (sharedProject) {
     try {
@@ -219,27 +223,27 @@ export function loadInitialLibraryWithSharedProject(): InitialWorkspace {
       cleanLaunchParams()
       // A first-time visitor arriving with a project only needs that project, not an extra starter.
       if (isNew) {
-        return { library: { activeProjectId: imported.id, projects: [imported] }, notice: 'Shared project imported locally.', openCode: true }
+        return withVisit({ library: { activeProjectId: imported.id, projects: [imported] }, notice: 'Shared project imported locally.', openCode: true })
       }
       const result = addImportedProject(library, imported)
-      return { library: result.library, notice: importNotice(result, imported, 'link'), openCode: true }
+      return withVisit({ library: result.library, notice: importNotice(result, imported, 'link'), openCode: true })
     } catch {
       // Clear the broken link so a reload does not repeat the error, then honor ?lang= if present.
       cleanLaunchParams()
       const notice = 'Could not import the shared project link.'
-      if (!requestedKind) return { library, notice, openCode: false }
-      if (isNew) return { library, notice, openCode: true }
-      return { library: openRequestedKind(library, requestedKind).library, notice, openCode: true }
+      if (!requestedKind) return withVisit({ library, notice, openCode: false })
+      if (isNew) return withVisit({ library, notice, openCode: true })
+      return withVisit({ library: openRequestedKind(library, requestedKind).library, notice, openCode: true })
     }
   }
 
   if (requestedKind) {
     cleanLaunchParams()
-    if (isNew) return { library, notice: '', openCode: true }
-    return { ...openRequestedKind(library, requestedKind), openCode: true }
+    if (isNew) return withVisit({ library, notice: '', openCode: true })
+    return withVisit({ ...openRequestedKind(library, requestedKind), openCode: true })
   }
 
-  return { library, notice: '', openCode: false }
+  return withVisit({ library, notice: '', openCode: false })
 }
 
 export function isCloudProjectId(id: string) {

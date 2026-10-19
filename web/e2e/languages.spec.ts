@@ -18,7 +18,7 @@ test('TypeScript runs a typed multi-file project and explains compiler errors', 
   await expect(page.getByRole('button', { name: 'greeting.ts' })).toBeVisible()
   await page.getByRole('button', { name: 'Run TypeScript' }).click()
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Lina! Lessons: 3', { timeout: 15_000 })
-  await expect(page.locator('.terminal-footer')).toContainText('success')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
 
   const editor = page.getByRole('textbox', { name: 'Editor content' })
   await page.locator('.monaco-editor .view-lines').click()
@@ -50,7 +50,7 @@ test('TypeScript stays usable without horizontal overflow on a phone viewport', 
   await page.getByRole('button', { name: 'Run TypeScript' }).click()
 
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Lina! Lessons: 3', { timeout: 15_000 })
-  await expect(page.locator('.terminal-footer')).toContainText('success')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
@@ -72,12 +72,12 @@ test('Python survives a slow first runtime download and runs again from the warm
   await expect(page.getByText(/first Python run downloads a larger browser runtime/i)).toBeVisible()
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Python!', { timeout: 90_000 })
   expect(delayedRuntime).toBe(true)
-  await expect(page.locator('.terminal-footer')).toContainText('success')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
 
   expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__?.setValue('print("Warm Python run")'))).toBe(true)
   await page.getByRole('button', { name: 'Run again' }).click()
   await expect(page.locator('.terminal')).toContainText('Warm Python run', { timeout: 15_000 })
-  await expect(page.locator('.terminal-footer')).toContainText('success')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
 })
 
 test('Python stops an output flood and points errors at the learner file without squeezing the editor', async ({ page }) => {
@@ -146,7 +146,7 @@ test('Python runtime download failure explains startup recovery and can retry', 
   await page.unroute('**/assets/pyodide/pyodide.asm.wasm')
   await page.getByRole('button', { name: 'Run again' }).click()
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Python!', { timeout: 30_000 })
-  await expect(page.locator('.terminal-footer')).toContainText('success')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
 })
 
 test('TypeScript and SQL expose complete guides and three-tier practice catalogs', async ({ page }) => {

@@ -65,6 +65,16 @@ vi.mock('./components/RunnerPanel', async () => {
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
 
+async function openProjectMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'More project actions' }))
+  return screen.getByRole('group', { name: 'Project actions' })
+}
+
+async function openSettings(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Workspace and display settings' }))
+  return screen.getByRole('group', { name: 'Workspace and display settings' })
+}
+
 function storedLibrary() {
   return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as ProjectLibrary
 }
@@ -162,7 +172,7 @@ describe('App language guide practice projects', () => {
       theme: 'light',
       colorMode: 'default',
     }))
-    await user.click(screen.getAllByRole('button', { name: 'Workspace backup' })[0])
+    await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Workspace backup' }))
     fireEvent.change(document.querySelector('.workspace-transfer-sheet input[type="file"]')!, {
       target: { files: [{ text: async () => backup }] },
     })
@@ -191,7 +201,7 @@ describe('App language guide practice projects', () => {
 
     await screen.findByRole('alert')
     await waitFor(() => expect(
-      [...document.querySelectorAll('.title-field small')]
+      [...document.querySelectorAll('.save-status')]
         .some((element) => element.textContent?.includes('Checking cloud save · local backup unavailable')),
     ).toBe(true))
   })
@@ -448,7 +458,7 @@ describe('App language guide practice projects', () => {
     await user.click(screen.getByRole('button', { name: 'Check my work' }))
     expect(screen.getByRole('button', { name: 'Checking…' })).toBeTruthy()
 
-    await user.click(screen.getAllByRole('button', { name: 'Ruby Playground Ruby' })[0])
+    await user.click(screen.getAllByRole('button', { name: /^Ruby Playground Ruby/ })[0])
     act(() => runnerHarness.onRunComplete?.({
       status: 'success',
       stdout: 'Hafa adai, Lina!\nLessons: 4\n',
@@ -569,7 +579,7 @@ describe('App language guide practice projects', () => {
     render(<App />)
     expect(storedLibrary().projects).toHaveLength(1)
 
-    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+    await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Duplicate' }))
 
     const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
     expect(within(dialog).getByRole('radio', { name: /Personal projects/ })).toHaveProperty('checked', true)
@@ -617,19 +627,22 @@ describe('App language guide practice projects', () => {
       code: null,
       conflictProject: null,
     })
+    // The unsynced local starter also saves to the cloud; keep that quiet so it cannot replace the copy notice.
+    vi.spyOn(api, 'createProject').mockImplementation(async (localProject) => ({ data: { ...localProject, id: '99' }, error: null, status: 201, code: null, conflictProject: null }) as never)
     const duplicateCloudProject = vi.spyOn(api, 'duplicateProject')
       .mockResolvedValueOnce({ data: null, error: 'Classroom service unavailable' })
       .mockResolvedValueOnce({ data: cloudCopy, error: null })
 
     render(<App />)
-    await user.click((await screen.findAllByRole('button', { name: 'Cloud starter Ruby' }))[0])
+    await user.click((await screen.findAllByRole('button', { name: /^Cloud starter Ruby/ }))[0])
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Cloud starter')
-    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+    await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Duplicate' }))
     const dialog = screen.getByRole('dialog', { name: 'Where should the copy live?' })
     await user.click(within(dialog).getByRole('radio', { name: /Robotics/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Duplicate here' }))
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Classroom service unavailable/i))
+    // A failed copy is an error toast, announced as an alert.
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Classroom service unavailable/i))
     expect(duplicateCloudProject).toHaveBeenLastCalledWith('42', '20')
     expect(within(dialog).getByRole('button', { name: 'Duplicate here' })).toHaveProperty('disabled', false)
     expect(updateProject).toHaveBeenCalledWith(expect.objectContaining({ id: '42' }))
@@ -663,8 +676,8 @@ describe('App language guide practice projects', () => {
     render(<App />)
     await waitFor(() => expect(create).toHaveBeenCalled(), { timeout: 2_000 })
     const autosavingProject = create.mock.calls[0][0]
-    await user.click(screen.getAllByRole('button', { name: 'Cloud starter Ruby' })[0])
-    await user.click(screen.getAllByRole('button', { name: 'Duplicate' })[0])
+    await user.click(screen.getAllByRole('button', { name: /^Cloud starter Ruby/ })[0])
+    await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Duplicate' }))
     await user.click(within(screen.getByRole('dialog', { name: 'Where should the copy live?' })).getByRole('button', { name: 'Duplicate here' }))
     await waitFor(() => expect(duplicate).toHaveBeenCalled())
     await act(async () => {
@@ -732,7 +745,7 @@ describe('App language guide practice projects', () => {
     vi.spyOn(api, 'getCheckpoints').mockResolvedValue({ data: [], error: null })
 
     render(<App />)
-    await user.selectOptions(screen.getByLabelText('Switch workspace'), '20')
+    await user.selectOptions(within(await openSettings(user)).getByLabelText('Switch workspace'), '20')
     await waitFor(() => expect(getProjects).toHaveBeenCalledWith('20', { ownedOnly: true }))
     await user.click(screen.getByRole('button', { name: 'Classroom' }))
     expect(await screen.findByText('Student loops')).toBeTruthy()
@@ -743,8 +756,7 @@ describe('App language guide practice projects', () => {
     expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Student loops')
     expect(screen.getByLabelText('Project name')).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('Code editor')).toHaveProperty('value', 'puts "student secret"')
-    await user.click(screen.getByRole('button', { name: 'Actions' }))
-    const actions = screen.getByRole('dialog', { name: 'Actions' })
+    const actions = await openProjectMenu(user)
     expect(within(actions).getByRole('button', { name: 'Archive' })).toHaveProperty('disabled', true)
     expect(within(actions).getByRole('button', { name: 'Delete' })).toHaveProperty('disabled', true)
     expect(within(actions).getByRole('button', { name: 'Duplicate' })).toHaveProperty('disabled', false)
@@ -851,9 +863,54 @@ describe('App language guide practice projects', () => {
       Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
       const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
       render(<App />)
-      await user.click(screen.getAllByRole('button', { name: 'Download code (.rb)' })[0])
+      await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Download code (.rb)' }))
       expect(click).toHaveBeenCalled()
       expect(screen.getByText(/Downloaded ruby-playground.rb/)).toBeTruthy()
     })
+  
+  describe('learner-first hierarchy', () => {
+    it('welcomes a first visit, then collapses to the app bar once a Python project exists', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      expect(screen.getByRole('heading', { level: 1, name: 'Hafa Code' })).toBeTruthy()
+      const welcome = document.querySelector<HTMLElement>('.welcome-hero')!
+      expect(welcome.getAttribute('aria-labelledby')).toBe('welcome-title')
+      await user.click(within(welcome).getByRole('button', { name: 'New Python project' }))
+      expect(document.querySelector('.welcome-hero')).toBeNull()
+      expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Python Playground')
+      expect(document.querySelector('.app-bar')).toBeTruthy()
+    })
+
+    it('shows only the compact app bar to a returning learner', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeProjectId: 'p1', projects: [{ ...createProject('python', 'Expenses'), id: 'p1' }] }))
+      render(<App />)
+      expect(document.querySelector('.welcome-hero')).toBeNull()
+      expect(screen.getByLabelText('Project name')).toHaveProperty('value', 'Expenses')
+      // Share is a secondary action; Archive and Delete wait in the More menu.
+      expect(screen.getByRole('button', { name: 'Share' }).className).not.toContain('primary')
+      expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    })
+
+    it('keeps Run as the only primary action in the workspace', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeProjectId: 'p1', projects: [{ ...createProject('python', 'Expenses'), id: 'p1' }] }))
+      render(<App />)
+      const primaries = [...document.querySelectorAll('.coding-stage button.primary, .app-bar button.primary')]
+      expect(primaries.length).toBeGreaterThan(0)
+      expect(primaries.every((button) => button.hasAttribute('data-hafa-run-button'))).toBe(true)
+    })
+
+    it('tones toasts by meaning and lets info leave on its own', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await user.click(screen.getAllByRole('button', { name: 'Python' })[0])
+      const toast = document.querySelector('.floating-dock .toast')!
+      expect(toast.getAttribute('data-tone')).toBe('success')
+      expect(toast.getAttribute('role')).toBe('status')
+      act(() => { vi.advanceTimersByTime(4_100) })
+      expect(document.querySelector('.floating-dock .toast')).toBeNull()
+    })
   })
+})
 })

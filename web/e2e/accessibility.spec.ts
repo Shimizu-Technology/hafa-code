@@ -9,12 +9,29 @@ async function openPersona(page: Page, persona: 'student' | 'teacher') {
   expect((await session).status()).toBe(200)
 }
 
+async function openSettings(page: Page) {
+  const panel = page.getByRole('group', { name: 'Workspace and display settings' })
+  if (!await panel.isVisible()) await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  return panel
+}
+
+async function closeSettings(page: Page) {
+  if (await page.getByRole('group', { name: 'Workspace and display settings' }).isVisible()) await page.keyboard.press('Escape')
+}
+
+/** Theme and color-safe live in the app bar settings popover. */
+async function setDisplay(page: Page, theme: 'Light' | 'Dark', toggleColorSafe = true) {
+  const settings = await openSettings(page)
+  await settings.getByRole('button', { name: theme, exact: true }).click()
+  if (toggleColorSafe) await settings.getByRole('button', { name: 'Color-safe', exact: true }).click()
+}
+
 async function switchToClassroom(page: Page) {
-  const workspace = page.getByLabel('Switch workspace')
-  if (!await workspace.isVisible()) {
-    await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Projects' }).click()
-  }
-  await workspace.selectOption(CLASSROOM_ID)
+  const settings = await openSettings(page)
+  await settings.getByLabel('Switch workspace').selectOption(CLASSROOM_ID)
+  await closeSettings(page)
+  const navigation = page.getByRole('navigation', { name: 'Workspace sections' })
+  if (await navigation.isVisible()) await navigation.getByRole('button', { name: 'Projects' }).click()
   await expect(page.getByRole('heading', { name: 'FDMS Web Development', exact: true })).toBeVisible()
 }
 
@@ -38,47 +55,51 @@ function usefulViolations(violations: Awaited<ReturnType<AxeBuilder['analyze']>>
 }
 
 async function expectNoWcagViolations(page: Page) {
+  // Measure settled colors, not a sheet or dialog that is still fading in.
+  await page.waitForTimeout(300)
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()
   expect(usefulViolations(results.violations)).toEqual([])
 }
 
-async function expectColorSafePalette(page: Page) {
-  await expect(page.locator('.desktop-hero-actions').getByRole('button', { name: 'Share' }))
-    .toHaveCSS('background-color', 'rgb(0, 114, 178)')
+async function expectColorSafePalette(page: Page, theme: 'Light' | 'Dark') {
+  // Run is the one primary action; color-safe turns it blue in both themes.
+  await expect(page.locator('[data-hafa-run-button]:visible').first())
+    .toHaveCSS('background-color', theme === 'Dark' ? 'rgb(86, 180, 233)' : 'rgb(0, 114, 178)')
 }
 
 test('personal and classroom workspaces pass automated WCAG checks', async ({ page }) => {
   await openPersona(page, 'student')
   await expectNoWcagViolations(page)
 
-  await page.getByRole('button', { name: 'Dark', exact: true }).click()
-  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await setDisplay(page, 'Dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
-  await expectColorSafePalette(page)
   await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveCSS('text-decoration-line', /underline/)
   await expectNoWcagViolations(page)
+  await closeSettings(page)
+  await expectColorSafePalette(page, 'Dark')
+  await expectNoWcagViolations(page)
 
-  await page.getByRole('button', { name: 'Light', exact: true }).click()
-  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await setDisplay(page, 'Light')
+  await closeSettings(page)
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
   await switchToClassroom(page)
   await expectNoWcagViolations(page)
 
-  await page.getByRole('button', { name: 'Dark', exact: true }).click()
-  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await setDisplay(page, 'Dark')
+  await closeSettings(page)
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'dark')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
-  await expectColorSafePalette(page)
+  await expectColorSafePalette(page, 'Dark')
   await expectNoWcagViolations(page)
 
   await openPersona(page, 'teacher')
   await switchToClassroom(page)
-  await page.getByRole('button', { name: 'Light', exact: true }).click()
-  await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+  await setDisplay(page, 'Light')
+  await closeSettings(page)
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
   await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
   await page.getByRole('button', { name: 'Classroom' }).click()
@@ -93,7 +114,7 @@ test('personal and classroom workspaces pass automated WCAG checks', async ({ pa
 test('project, file, history, sharing, and classroom controls work from the keyboard', async ({ page }) => {
   await openPersona(page, 'student')
 
-  const shareButton = page.locator('.desktop-hero-actions').getByRole('button', { name: 'Share' })
+  const shareButton = page.locator('.app-bar').getByRole('button', { name: 'Share' })
   await shareButton.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog', { name: 'Share a copy of this project?' })).toBeVisible()
@@ -212,13 +233,16 @@ test('zoom-equivalent and mobile layouts keep content and primary targets usable
   await openPersona(page, 'student')
   await switchToClassroom(page)
   await expectNoHorizontalOverflow(page)
-  await page.getByRole('button', { name: 'Code', exact: true }).click()
+  // A sideways phone keeps the app bar on Projects, so check project size there before opening the code.
+  await page.getByRole('button', { name: 'More project actions' }).click()
   await expect(page.getByLabel(/Project source uses/)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Code', exact: true }).click()
   await expectNoHorizontalOverflow(page)
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expectNoHorizontalOverflow(page)
-  const primaryTargets = page.locator('.mobile-bottom-nav button:visible, .mobile-code-runbar button:visible, .mobile-project-actions-button:visible')
+  const primaryTargets = page.locator('.mobile-bottom-nav button:visible, .mobile-code-runbar button:visible, .app-bar button:visible')
   const targetCount = await primaryTargets.count()
   expect(targetCount).toBeGreaterThan(0)
   for (let index = 0; index < targetCount; index += 1) {
@@ -229,13 +253,10 @@ test('zoom-equivalent and mobile layouts keep content and primary targets usable
   }
 
   await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'History' }).click()
-  const mobileHistory = page.locator('.checkpoint-menu')
-  const mobileHistorySummary = mobileHistory.locator('summary')
-  await expect(mobileHistory).toHaveAttribute('open', '')
-  await mobileHistorySummary.focus()
-  await page.keyboard.press('Escape')
-  await expect(mobileHistory).not.toHaveAttribute('open', '')
-  await expect(mobileHistorySummary).toBeFocused()
+  const mobileHistory = page.getByRole('region', { name: 'History' })
+  await expect(mobileHistory).toBeVisible()
+  await expect(mobileHistory.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expect(page.locator('.editor-panel')).toBeHidden()
 })
 
 test('light and dark themes keep every mobile workspace destination readable', async ({ page }) => {
@@ -246,14 +267,17 @@ test('light and dark themes keep every mobile workspace destination readable', a
 
   for (const theme of ['Light', 'Dark'] as const) {
     await navigation.getByRole('button', { name: 'Projects' }).click()
-    await page.getByRole('button', { name: theme, exact: true }).click()
+    await setDisplay(page, theme, false)
+    await closeSettings(page)
     await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', theme.toLowerCase())
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.toLowerCase())
-    await expect(navigation.getByRole('button', { name: 'Home' })).toHaveCSS('color', 'rgb(245, 239, 231)')
+    await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute('content', theme === 'Dark' ? '#12100e' : '#f7f0e5')
+    await expect(navigation.getByRole('button', { name: 'Home' })).toHaveCSS('color', 'rgb(243, 234, 220)')
 
+    // Selection is a neutral lift inside the track, not a dark fill.
     const selectedProjectView = page.locator('.project-view-toggle button.active:visible')
-    await expect(selectedProjectView).toHaveCSS('background-color', theme === 'Dark' ? 'rgb(245, 239, 231)' : 'rgb(20, 17, 15)')
-    await expect(selectedProjectView).toHaveCSS('color', theme === 'Dark' ? 'rgb(20, 17, 15)' : 'rgb(255, 250, 241)')
+    await expect(selectedProjectView).toHaveCSS('background-color', theme === 'Dark' ? 'rgb(26, 22, 18)' : 'rgb(255, 250, 241)')
+    await expect(selectedProjectView).toHaveCSS('color', theme === 'Dark' ? 'rgb(245, 239, 231)' : 'rgb(20, 17, 15)')
 
     for (const destination of ['Home', 'Projects', 'Code', 'Output', 'History'] as const) {
       await navigation.getByRole('button', { name: destination }).click()
@@ -270,10 +294,12 @@ test('light and dark themes keep every mobile workspace destination readable', a
     await page.getByRole('button', { name: 'Close learning sidecar' }).click()
 
     await navigation.getByRole('button', { name: 'Projects' }).click()
-    await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+    await (await openSettings(page)).getByRole('button', { name: 'Color-safe', exact: true }).click()
     await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'colorblind')
+    await closeSettings(page)
     await expectNoWcagViolations(page)
-    await page.getByRole('button', { name: 'Color-safe', exact: true }).click()
+    await (await openSettings(page)).getByRole('button', { name: 'Color-safe', exact: true }).click()
     await expect(page.locator('main.app-shell')).toHaveAttribute('data-color-mode', 'default')
+    await closeSettings(page)
   }
 })

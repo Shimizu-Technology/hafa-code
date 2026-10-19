@@ -2,24 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
   BookOpen,
+  Bug,
   Cloud,
+  Code2,
   Copy,
   DatabaseBackup,
   Download,
   Dumbbell,
-  Files,
   Globe,
-  Import,
-  Layers3,
   Loader2,
   Play,
   Plus,
-  Rocket,
   Search,
   Send,
   ShieldCheck,
   Trash2,
-  TriangleAlert,
   UserPlus,
 } from 'lucide-react'
 import './App.css'
@@ -71,7 +68,14 @@ import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { ProjectSidebar } from './components/ProjectSidebar'
-import { ProjectToolbar } from './components/ProjectToolbar'
+import { AppBar } from './components/AppBar'
+import { CheckpointMenu, CheckpointPage } from './components/CheckpointMenu'
+import { ProjectMenu } from './components/ProjectMenu'
+import { ProjectStatusBanner } from './components/ProjectStatusBanner'
+import { Toast } from './components/Toast'
+import { WelcomeHero } from './components/WelcomeHero'
+import { WorkspaceSettings } from './components/WorkspaceSettings'
+import { editorThemeFor } from './lib/monacoThemes'
 import { WorkspaceDialogs, type ProjectCopyDestination, type ShareDialogState } from './components/WorkspaceDialogs'
 import { WorkspaceTransferDialog } from './components/WorkspaceTransferDialog'
 import type { LanguageGuideTopic } from './lib/languageGuides'
@@ -151,6 +155,8 @@ import {
 type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | 'conflict'
 
 const CLOUD_SAVE_RETRY_DELAYS = [1_500, 3_000, 6_000]
+/** Matches --surface-page so the browser chrome blends with the app. */
+const THEME_COLORS = { light: '#f7f0e5', dark: '#12100e' } as const
 
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
@@ -158,6 +164,7 @@ export default function App() {
   const initialProject = initial.library.projects.find((candidate) => candidate.id === initial.library.activeProjectId) ?? initial.library.projects[0]
   const [activePath, setActivePath] = useState(initialProject.files[0].path)
   const [notice, setNotice] = useState(initial.notice)
+  const [welcomeVisible, setWelcomeVisible] = useState(initial.firstVisit)
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null)
   const [showArchived, setShowArchived] = useState(isArchived(initialProject))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -386,6 +393,9 @@ export default function App() {
     ? (systemDark ? 'dark' : 'light')
     : themePreference
   const legacySite = isLegacySiteHost()
+  const workspaceDescription = activeOrganization
+    ? `${activeOrganization.role} workspace${activeOrganization.school_year ? ` · ${activeOrganization.school_year}` : ''}${workspaceArchived ? ' · archived and read-only' : ''}. Teacher-only projects are visible to instructors.`
+    : 'Your own projects, separate from any classroom or organization.'
 
   const updateCloudSaveStatus = useCallback((projectId: string, status: CloudSaveStatus) => {
     setCloudSaveStatuses((current) => current[projectId] === status ? current : { ...current, [projectId]: status })
@@ -556,19 +566,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    // A learner who followed a project or language link lands on the code and Run, not the welcome header.
-    if (!initial.openCode || typeof window.matchMedia !== 'function' || window.matchMedia('(max-width: 640px)').matches) return
-    let cancelled = false
-    const scrollToCode = () => {
-      if (!cancelled) document.querySelector('.main-workspace .workspace')?.scrollIntoView({ block: 'start' })
-    }
-    scrollToCode()
-    // Web fonts change the header height, so settle the position once they load.
-    void document.fonts?.ready.then(() => window.requestAnimationFrame(scrollToCode))
-    return () => { cancelled = true }
-  }, [initial.openCode])
-
-  useEffect(() => {
     libraryRef.current = library
     if (skipRestorePersistenceRef.current.library) {
       skipRestorePersistenceRef.current.library = false
@@ -598,6 +595,10 @@ export default function App() {
     const root = document.documentElement
     const previousTheme = root.getAttribute('data-theme')
     root.setAttribute('data-theme', resolvedTheme)
+    // The browser and status bar follow the page background, including when the learner overrides the system theme.
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', THEME_COLORS[resolvedTheme])
+    })
 
     return () => {
       if (previousTheme === null) root.removeAttribute('data-theme')
@@ -892,6 +893,7 @@ export default function App() {
     setLibrary((current) => ({ activeProjectId: next.id, projects: [next, ...current.projects] }))
     setActivePath(next.files[0].path)
     setShowArchived(false)
+    setWelcomeVisible(false)
     changeMobileTab('code')
     setNotice(`${next.title} created.`)
   }
@@ -1827,60 +1829,78 @@ export default function App() {
       data-color-mode={colorModePreference}
     >
       <button className="skip-link" type="button" onClick={skipToEditor}>Skip to code editor</button>
-      <header className="hero panel hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Open-source coding playground</p>
-          <h1>Hafa Code</h1>
-          <p className="lede">A tiny Replit alternative for CSG and FD students: Ruby, JavaScript, TypeScript, Python, Java, SQL, and HTML/CSS/JS in the browser.</p>
-          <div className="trust-row" aria-label="Platform guardrails">
-            <span><ShieldCheck size={15} /> Browser-sandboxed</span>
-            <span><Rocket size={15} /> No setup</span>
-            <span><BookOpen size={15} /> Beginner-first</span>
-          </div>
-        </div>
-        <div className="hero-card" aria-hidden="true">
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="hero-card-inner">
-            <Layers3 size={26} />
-            <strong>{activeContextProjects.length}</strong>
-            <span>{isSignedIn ? 'active cloud projects' : 'active local projects'}</span>
-          </div>
-        </div>
-        <div className="hero-actions desktop-hero-actions">
-          <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-          <button className="secondary" onClick={downloadCurrentProject} title={exportFormat.kind === 'source' ? `Download ${exportFormat.fileName}` : 'Export every file as a .json project you can import later'}><Download size={16} /> {exportLabel}</button>
-          <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
-          <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
-          <button
-            onClick={requestShareLink}
-            disabled={Boolean(project.organizationId)}
-            title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
-          >
-            <Copy size={16} /> Share
-          </button>
-          <input ref={importInputRef} hidden type="file" accept="application/json,.json" onChange={(event) => handleImportFile(event.target.files?.[0])} />
-        </div>
-        <details className="mobile-actions-menu">
-          <summary>
-            <span>Sync and share</span>
-            <strong>{isSignedIn ? 'Cloud on' : 'Local only'}</strong>
-          </summary>
-          <div className="mobile-actions-content">
-            <AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />
-            <button className="secondary" onClick={downloadCurrentProject} title={exportFormat.kind === 'source' ? `Download ${exportFormat.fileName}` : 'Export every file as a .json project you can import later'}><Download size={16} /> {exportLabel}</button>
-            <button className="secondary" onClick={() => importInputRef.current?.click()}><Import size={16} /> Import project</button>
-            <button className="secondary" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Workspace backup</button>
-            <button
-              onClick={requestShareLink}
-              disabled={Boolean(project.organizationId)}
-              title={project.organizationId ? 'External snapshot sharing is disabled for classroom projects' : undefined}
-            >
-              <Copy size={16} /> Share
-            </button>
-          </div>
-        </details>
-      </header>
+      <AppBar
+        canEditProject={canEditProject}
+        guideLabel={`${projectKindDefinition(project.kind).shortLabel} guide`}
+        projectTitle={project.title}
+        saveLabel={workspaceSaveLabel}
+        shareDisabled={Boolean(project.organizationId)}
+        shareDisabledReason="External snapshot sharing is disabled for classroom projects"
+        account={<AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />}
+        history={(
+          <CheckpointMenu
+            canEditProject={canEditProject}
+            checkpointMenuIsOpen={checkpointMenuIsOpen && mobileTab !== 'history'}
+            checkpointMenuRef={checkpointMenuRef}
+            checkpoints={checkpoints}
+            onCheckpointMenuChange={setCheckpointMenuOpen}
+            onRestoreCheckpoint={(checkpoint) => {
+              setCheckpointMenuOpen(false)
+              requestRestoreCheckpoint(checkpoint)
+            }}
+            onSaveCheckpoint={saveCheckpoint}
+          />
+        )}
+        settings={(
+          <WorkspaceSettings
+            activeWorkspaceId={activeOrganizationId}
+            canCreateOrganization={Boolean(isSignedIn && canCreateOrganization)}
+            colorMode={colorModePreference}
+            theme={themePreference}
+            workspaceDescription={workspaceDescription}
+            workspaceIsSettling={workspaceIsSettling}
+            workspaces={[
+              { id: 'personal', label: 'Personal projects' },
+              ...organizations.map((organization) => ({
+                id: String(organization.id),
+                label: `${organization.name}${organization.archived_at ? ' (Archived)' : ''}`,
+              })),
+            ]}
+            onColorModeChange={setColorModePreference}
+            onCreateOrganization={() => setOrgCreateOpen(true)}
+            onThemeChange={setThemePreference}
+            onWorkspaceChange={setActiveOrganizationId}
+          />
+        )}
+        menu={(
+          <ProjectMenu
+            activeOrganizationId={activeOrganizationId}
+            canEditProject={canEditProject}
+            exportLabel={exportLabel}
+            exportTitle={exportFormat.kind === 'source' ? `Download ${exportFormat.fileName}` : 'Export every file as a .json project you can import later'}
+            project={project}
+            projectCount={activeContextProjects.length}
+            phoneExtras={<AuthControls cloudEnabled={cloudEnabled} sessionLoading={authLoading} />}
+            onArchive={requestArchiveProject}
+            onDelete={requestDeleteProject}
+            onDownload={downloadCurrentProject}
+            onDuplicate={requestProjectCopy}
+            onImport={() => importInputRef.current?.click()}
+            onOpenWorkspaceBackup={() => setWorkspaceTransferOpen(true)}
+            onRestore={() => { void restoreProject() }}
+            onVisibilityChange={updateProjectVisibility}
+          />
+        )}
+        classroom={activeOrganization && canUseInstructorPanel
+          ? { open: instructorPanelOpen, onToggle: () => setInstructorPanelOpen((current) => !current) }
+          : null}
+        onOpenGuide={() => openLanguageGuide()}
+        onOpenPractice={openPracticeLab}
+        onRename={renameProject}
+        onRenameDone={finishRenamingProject}
+        onShare={requestShareLink}
+      />
+      <input ref={importInputRef} hidden type="file" accept="application/json,.json" onChange={(event) => handleImportFile(event.target.files?.[0])} />
 
       {legacySite && (
         <section className="domain-move-banner" aria-label="Håfa Code has moved">
@@ -1889,21 +1909,27 @@ export default function App() {
             <span>Save a workspace backup before moving so browser-only projects and Practice Lab progress come with you.</span>
           </div>
           <div className="domain-move-actions">
-            <button type="button" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} /> Back up first</button>
+            <button className="primary" type="button" onClick={() => setWorkspaceTransferOpen(true)}><DatabaseBackup size={16} aria-hidden="true" /> Back up first</button>
             <a href={PUBLIC_SITE_URL}>Open the new site</a>
           </div>
         </section>
       )}
 
-      {notice && (
-        <div className="notice" role="status">
-          <span>{notice}</span>
-          <button className="ghost" onClick={() => setNotice('')}>Dismiss</button>
-        </div>
+      {welcomeVisible && !isSignedIn && !inviteRequiresAuth && (
+        <WelcomeHero
+          starterLabel={projectKindDefinition(project.kind).shortLabel}
+          canRunStarter={projectKindCanRun(project.kind) && project.kind !== 'python'}
+          onDismiss={() => setWelcomeVisible(false)}
+          onNewPythonProject={() => addProject('python')}
+          onRunStarter={() => {
+            setWelcomeVisible(false)
+            window.setTimeout(() => window.dispatchEvent(new Event('hafa-code-run-active-project')), 0)
+          }}
+        />
       )}
 
       {pendingInvitationToken && pendingInvitation && (
-        <section className={`invite-accept-panel panel surface-grid${inviteRequiresAuth ? ' invite-accept-panel-focused' : ''}`} aria-label="Organization invitation">
+        <section className={`invite-accept-panel panel${inviteRequiresAuth ? ' invite-accept-panel-focused' : ''}`} aria-label="Organization invitation">
           <div>
             <p className="eyebrow">Invitation</p>
             <h2>{pendingInvitation.organization?.name || 'Organization'} invited you as {pendingInvitation.role === 'instructor' ? 'an instructor' : 'a student'}</h2>
@@ -1916,10 +1942,10 @@ export default function App() {
           {!isSignedIn && (
             <div className="invite-auth-actions">
               <SignInButton mode="modal">
-                <button className="secondary" type="button"><Cloud size={16} /> Sign in</button>
+                <button className="secondary" type="button"><Cloud size={16} aria-hidden="true" /> Sign in</button>
               </SignInButton>
               <SignUpButton mode="modal">
-                <button type="button"><UserPlus size={16} /> Create account</button>
+                <button className="primary" type="button"><UserPlus size={16} aria-hidden="true" /> Create account</button>
               </SignUpButton>
             </div>
           )}
@@ -1929,71 +1955,8 @@ export default function App() {
 
       {!inviteRequiresAuth && (
       <>
-      <section className="context-bar panel surface-grid" aria-label="Project context">
-        <div className="context-copy">
-          <p className="eyebrow">Workspace</p>
-          <h2>{activeOrganization ? activeOrganization.name : 'Personal projects'}</h2>
-          <p className="helper-text">
-            {activeOrganization
-              ? `${activeOrganization.role} workspace${activeOrganization.school_year ? ` · ${activeOrganization.school_year}` : ''}${workspaceArchived ? ' · archived and read-only' : ''}. Teacher-only projects are visible to instructors.`
-              : 'Your own projects, separate from any classroom or organization.'}
-          </p>
-        </div>
-        <div className="context-actions">
-          <div className="workspace-toolbar" aria-label="Workspace actions">
-            <label className="workspace-select-label" htmlFor="workspace-select">
-              <span>Switch workspace</span>
-              <select
-                id="workspace-select"
-                className="workspace-select"
-                disabled={workspaceIsSettling}
-                value={activeOrganizationId ?? 'personal'}
-                onChange={(event) => setActiveOrganizationId(event.target.value === 'personal' ? null : event.target.value)}
-              >
-                <option value="personal">Personal projects</option>
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}{organization.archived_at ? ' (Archived)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isSignedIn && canCreateOrganization ? (
-              <button className="secondary context-chip" type="button" onClick={() => setOrgCreateOpen(true)}>
-                <Plus size={14} /> Org
-              </button>
-            ) : (
-              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
-            )}
-            {activeOrganization && canUseInstructorPanel ? (
-              <button
-                className={instructorPanelOpen ? 'active context-chip' : 'secondary context-chip'}
-                type="button"
-                onClick={() => setInstructorPanelOpen((current) => !current)}
-              >
-                <ShieldCheck size={14} /> Classroom
-              </button>
-            ) : (
-              <span className="toolbar-slot placeholder-chip" aria-hidden="true" />
-            )}
-          </div>
-        </div>
-        <div className="preference-actions" aria-label="Display preferences">
-          <button className={themePreference === 'system' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('system')}>System</button>
-          <button className={themePreference === 'light' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('light')}>Light</button>
-          <button className={themePreference === 'dark' ? 'active' : 'secondary'} type="button" onClick={() => setThemePreference('dark')}>Dark</button>
-          <button
-            className={colorModePreference === 'colorblind' ? 'active' : 'secondary'}
-            type="button"
-            onClick={() => setColorModePreference((current) => current === 'colorblind' ? 'default' : 'colorblind')}
-          >
-            Color-safe
-          </button>
-        </div>
-      </section>
-
       {instructorPanelOpen && activeOrganization && (
-        <section className="instructor-panel panel surface-grid">
+        <section className="instructor-panel panel">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Classroom</p>
@@ -2132,7 +2095,7 @@ export default function App() {
                 <button className="secondary" type="button" onClick={exportOrganization}>
                   <Download size={15} /> Export classroom
                 </button>
-                <button className={workspaceArchived ? 'secondary' : 'danger'} type="button" onClick={toggleOrganizationArchive}>
+                <button className={workspaceArchived ? 'secondary' : 'danger-quiet'} type="button" onClick={toggleOrganizationArchive}>
                   {workspaceArchived ? 'Restore classroom' : 'Archive classroom'}
                 </button>
               </div>
@@ -2219,7 +2182,7 @@ export default function App() {
                       <button className="secondary compact" type="button" disabled={workspaceArchived} onClick={() => resendInvitation(invitation)}>
                         <Send size={14} /> Resend
                       </button>
-                      <button className="danger compact" type="button" disabled={workspaceArchived} onClick={() => revokeInvitation(invitation)}>
+                      <button className="danger-quiet compact" type="button" disabled={workspaceArchived} onClick={() => revokeInvitation(invitation)}>
                         <Trash2 size={14} /> Revoke
                       </button>
                     </div>
@@ -2275,7 +2238,7 @@ export default function App() {
                         <option value="instructor">Instructor</option>
                         <option value="owner">Owner</option>
                       </select>
-                      <button className="danger compact" type="button" disabled={workspaceArchived} onClick={() => removeOrgMember(member)}>
+                      <button className="danger-quiet compact" type="button" disabled={workspaceArchived} onClick={() => removeOrgMember(member)}>
                         <Trash2 size={14} /> Remove
                       </button>
                     </div>
@@ -2296,36 +2259,44 @@ export default function App() {
       </>
       )}
 
-      <section className="mobile-home-panel panel surface-grid">
+      <section className="mobile-home-panel panel" aria-labelledby="mobile-home-title">
         <div>
-          <p className="eyebrow">Welcome</p>
-          <h2>Start building in the browser</h2>
+          <p className="eyebrow">Hafa adai</p>
+          <h2 id="mobile-home-title">{welcomeVisible ? 'Write code, press Run, see what happens.' : `Pick up ${project.title || 'your project'}`}</h2>
           <p className="helper-text">
-            Pick up {project.title || 'your project'}, create something new, or jump straight into the runner.
+            {welcomeVisible
+              ? 'Everything runs in your browser. No setup or account needed.'
+              : 'Continue where you left off, start something new, or practice.'}
           </p>
         </div>
-        <div className="mobile-home-stats" aria-label="Project summary">
+        <div className="mobile-home-actions">
+          {welcomeVisible ? (
+            <button className="primary" type="button" onClick={() => addProject('python')}><Plus size={16} aria-hidden="true" /> New Python project</button>
+          ) : (
+            <button className="primary" type="button" onClick={() => changeMobileTab('code')}><Code2 size={16} aria-hidden="true" /> Continue coding</button>
+          )}
+          <button type="button" onClick={runFromMobileCode}>
+            {project.kind === 'web' ? <Globe size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+            {project.kind === 'web' ? 'Open preview' : 'Run project'}
+          </button>
+          <button type="button" onClick={() => openLanguageGuide()}><BookOpen size={16} aria-hidden="true" /> {projectKindDefinition(project.kind).shortLabel} guide</button>
+          <button type="button" onClick={openPracticeLab}><Dumbbell size={16} aria-hidden="true" /> Practice lab</button>
+        </div>
+        <div className="mobile-home-create" aria-label="Create new project">
+          <p className="menu-heading">New project</p>
+          <div>
+            {PROJECT_KINDS.map((kind) => (
+              <button key={kind} className="compact" onClick={() => addProject(kind)}>
+                <Plus size={14} aria-hidden="true" /> {projectKindDefinition(kind).shortLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mobile-home-stats" aria-label="Project summary">
           <span><strong>{activeContextProjects.length}</strong> active</span>
           <span><strong>{archivedContextProjects.length}</strong> archived</span>
           <span><strong>{checkpoints.length}</strong> checkpoints</span>
-        </div>
-        <div className="mobile-home-create" aria-label="Create new project">
-          {PROJECT_KINDS.map((kind) => (
-            <button key={kind} className="secondary compact" onClick={() => addProject(kind)}>
-              <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
-            </button>
-          ))}
-        </div>
-        <div className="mobile-home-actions">
-          <button type="button" onClick={() => changeMobileTab('code')}><BookOpen size={16} /> Continue coding</button>
-          <button className="secondary" type="button" onClick={openPracticeLab}><Dumbbell size={16} /> Practice lab</button>
-          <button className="secondary" type="button" onClick={() => openLanguageGuide()}><BookOpen size={16} /> {projectKindDefinition(project.kind).shortLabel} guide</button>
-          <button className="secondary" type="button" onClick={runFromMobileCode}>
-            {project.kind === 'web' ? <Globe size={16} /> : <Play size={16} />}
-            {project.kind === 'web' ? 'Open preview' : 'Run project'}
-          </button>
-          <button className="secondary" type="button" onClick={() => changeMobileTab('projects')}><Files size={16} /> Projects</button>
-        </div>
+        </p>
       </section>
 
       <div className={`coding-stage${learningSidecarOpen ? ' learning-open' : ''}`}>
@@ -2342,6 +2313,8 @@ export default function App() {
             showArchived={showArchived}
             userId={user?.id}
             userName={user?.full_name}
+            workspaceName={activeOrganization ? activeOrganization.name : 'Personal projects'}
+            workspaceNote={activeOrganization ? workspaceDescription : undefined}
             onAddProject={addProject}
             onCollapse={() => setSidebarCollapsed(true)}
             onExpand={() => setSidebarCollapsed(false)}
@@ -2350,34 +2323,23 @@ export default function App() {
           />
 
           <section className="main-workspace">
-            <ProjectToolbar
-              activeOrganizationId={activeOrganizationId}
+            <ProjectStatusBanner
               canEditProject={canEditProject}
-              checkpointMenuIsOpen={checkpointMenuIsOpen}
-              checkpointMenuRef={checkpointMenuRef}
-              checkpoints={checkpoints}
-              cloudSaveLabel={workspaceSaveLabel}
-              currentProjectOwnerLabel={currentProjectOwnerLabel}
               localBackupAvailable={localBackupAvailable}
+              ownerLabel={activeOrganizationId ? currentProjectOwnerLabel : ''}
               project={project}
-              projectCount={activeContextProjects.length}
-              onArchive={requestArchiveProject}
-              onCheckpointMenuChange={setCheckpointMenuOpen}
-              onDelete={requestDeleteProject}
-              onDuplicate={requestProjectCopy}
-              onOpenGuide={() => openLanguageGuide()}
-              onOpenPractice={openPracticeLab}
-              onOpenProjectActions={() => setProjectActionsOpen(true)}
-              onRename={renameProject}
-              onRenameDone={finishRenamingProject}
-              onRestore={restoreProject}
-              onRestoreCheckpoint={(checkpoint) => {
-                setCheckpointMenuOpen(false)
-                requestRestoreCheckpoint(checkpoint)
-              }}
-              onSaveCheckpoint={saveCheckpoint}
-              onVisibilityChange={updateProjectVisibility}
+              readOnlyReview={Boolean(reviewProject)}
+              onRestore={() => { void restoreProject() }}
             />
+
+            {mobileTab === 'history' && (
+              <CheckpointPage
+                canEditProject={canEditProject}
+                checkpoints={checkpoints}
+                onRestoreCheckpoint={requestRestoreCheckpoint}
+                onSaveCheckpoint={saveCheckpoint}
+              />
+            )}
 
             {canAccessProjectFeedback && (
               <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
@@ -2404,6 +2366,7 @@ export default function App() {
               canEditProject={canEditProject}
               editorExpanded={editorExpanded}
               editorFontSize={editorFontSize}
+              editorTheme={editorThemeFor(resolvedTheme)}
               entryFile={entryFile}
               project={project}
               runnerInstanceKey={runnerInstanceKeys.get(project.id) ?? project.id}
@@ -2450,18 +2413,21 @@ export default function App() {
 
       <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={changeMobileTab} />
 
-      {learningCoachContext && !learningSidecarOpen && (
-        <button
-          className="learning-coach-launcher"
-          type="button"
-          onClick={() => {
-            setLearningTab('coach')
-            setLearningSidecarOpen(true)
-          }}
-        >
-          <TriangleAlert size={17} /> Fix this error
-        </button>
-      )}
+      <div className="floating-dock">
+        {notice && <Toast key={notice} message={notice} onDismiss={() => setNotice('')} />}
+        {learningCoachContext && !learningSidecarOpen && (
+          <button
+            className="learning-coach-launcher"
+            type="button"
+            onClick={() => {
+              setLearningTab('coach')
+              setLearningSidecarOpen(true)
+            }}
+          >
+            <Bug size={17} aria-hidden="true" /> Fix this error
+          </button>
+        )}
+      </div>
 
       {workspaceTransferOpen && (
         <WorkspaceTransferDialog
