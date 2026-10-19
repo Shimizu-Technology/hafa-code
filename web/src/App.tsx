@@ -141,7 +141,7 @@ import {
   type MobileTab,
 } from './lib/workspace'
 import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
-import { lessonReturnForProject, loadLessonLinks, recordLessonLink, replaceLessonProjectId, saveLessonLinks, type LessonLinks } from './lib/lessonLinks'
+import { LESSON_LINKS_STORAGE_KEY, lessonReturnForProject, loadLessonLinks, recordLessonLink, replaceLessonProjectId, saveLessonLinks, type LessonLinks } from './lib/lessonLinks'
 import { projectKindCanRun } from './lib/languageRegistry'
 import { e2eAuthEnabled } from './lib/e2eAuth'
 import {
@@ -245,12 +245,19 @@ export default function App() {
   const showCloudLoadNotice = useCallback((message: string) => {
     setNotice((current) => (initial.notice && current === initial.notice ? current : message))
   }, [initial.notice])
+  // Start from storage, not state: another tab may have opened a different lesson link since this one loaded.
   const updateLessonLinks = useCallback((update: (current: LessonLinks) => LessonLinks) => {
-    setLessonLinks((current) => {
-      const next = update(current)
-      if (next !== current) saveLessonLinks(next)
-      return next
-    })
+    const current = loadLessonLinks()
+    const next = update(current)
+    if (next !== current) saveLessonLinks(next)
+    setLessonLinks(next)
+  }, [])
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => {
+      if (event.key === null || event.key === LESSON_LINKS_STORAGE_KEY) setLessonLinks(loadLessonLinks())
+    }
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
   }, [])
   const cloudEnabled = e2eAuthEnabled || hasClerkPublishableKey(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
   const editorFontSize = useResponsiveEditorFontSize()
@@ -1772,16 +1779,19 @@ export default function App() {
       createdAt: now,
       updatedAt: now,
     }
-    const previous = lessonLinks.projects[lessonReopen.projectId]
+    const reopenedProjectId = lessonReopen.projectId
     clearPendingPracticeCheck()
     setReviewProject(null)
     setLibrary((current) => ({ activeProjectId: fresh.id, projects: [fresh, ...current.projects] }))
     setActivePath(fresh.files[0].path)
     setShowArchived(false)
-    updateLessonLinks((current) => recordLessonLink(current, fresh.id, {
-      returnTarget: previous?.returnUrl ? { url: previous.returnUrl, label: previous.returnLabel } : null,
-      starterKey: previous?.starterKey ?? null,
-    }))
+    updateLessonLinks((current) => {
+      const previous = Object.hasOwn(current.projects, reopenedProjectId) ? current.projects[reopenedProjectId] : undefined
+      return recordLessonLink(current, fresh.id, {
+        returnTarget: previous?.returnUrl ? { url: previous.returnUrl, label: previous.returnLabel } : null,
+        starterKey: previous?.starterKey ?? null,
+      })
+    })
     setLessonReopen(null)
     setNotice(`Started over with a fresh copy, “${fresh.title}”. Your earlier work is still in Projects.`)
   }

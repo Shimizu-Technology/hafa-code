@@ -957,8 +957,14 @@ describe('App language guide practice projects', () => {
       window.history.replaceState(null, '', lessonLink())
       render(<App />)
       expect(screen.getByLabelText('Code editor')).toHaveProperty('value', 'print("my work")\n')
+      // Another tab opens a different lesson link meanwhile; Start over must not drop its record.
+      const stored = JSON.parse(localStorage.getItem('hafa-code-lesson-links-v1')!)
+      stored.projects['other-tab-project'] = { returnUrl: 'https://learn.codeschoolofguam.com/lessons/7', returnLabel: 'Lesson 7', starterKey: 'csg:lesson-7', updatedAt: new Date().toISOString() }
+      stored.starters['csg:lesson-7'] = 'other-tab-project'
+      localStorage.setItem('hafa-code-lesson-links-v1', JSON.stringify(stored))
       const toast = screen.getByText('Welcome back. Your saved work on “Expense summary project” is open.').closest('.toast') as HTMLElement
       await user.click(within(toast).getByRole('button', { name: 'Start over' }))
+      expect(JSON.parse(localStorage.getItem('hafa-code-lesson-links-v1')!).starters).toMatchObject({ 'csg:lesson-7': 'other-tab-project' })
 
       await waitFor(() => expect(storedLibrary().projects).toHaveLength(2))
       expect(screen.getByLabelText('Code editor')).toHaveProperty('value', starterCode)

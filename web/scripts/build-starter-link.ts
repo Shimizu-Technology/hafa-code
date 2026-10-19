@@ -2,14 +2,16 @@
 /**
  * Builds Hafa Code lesson starter links for CSG Learn content.
  *
+ * Paths are relative to the directory you run the command from.
+ *
  * One starter:
  *   npm --prefix web run starter-link -- --title "Expense summary" --lang python \
- *     --file expense_summary.py=../path/to/expense_summary_starter.py \
+ *     --file expense_summary.py=path/to/expense_summary_starter.py \
  *     --key csg-python-pilot:project \
  *     --return https://learn.codeschoolofguam.com/lessons/123 --label "Independent expense-summary project"
  *
  * Many starters (JSON in, JSON out):
- *   npm --prefix web run starter-link -- --manifest scripts/examples/csg-python-pilot-starters.json
+ *   npm --prefix web run starter-link -- --manifest web/scripts/examples/csg-python-pilot-starters.json
  *
  * See docs/LEARN_STARTER_LINKS.md for the link format and limits.
  */
@@ -85,8 +87,11 @@ if (values.help) {
   process.exit(0)
 }
 
+// npm runs scripts from web/; INIT_CWD is where the author actually ran the command.
+const callerDir = process.env.INIT_CWD ?? process.cwd()
+
 if (values.manifest) {
-  const manifestPath = resolve(values.manifest)
+  const manifestPath = resolve(callerDir, values.manifest)
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
   if (!Array.isArray(manifest.starters)) fail('The manifest needs a "starters" array.')
   const results = manifest.starters.map((starter) => {
@@ -109,7 +114,7 @@ if (values.manifest) {
   if (!values.title || !values.lang || !values.key || !values.file?.length) fail('Pass --title, --lang, --key, and at least one --file path[=source], or --manifest. Use --help for details.')
   const files = values.file.map((spec) => {
     const [path, source] = spec.includes('=') ? [spec.slice(0, spec.indexOf('=')), spec.slice(spec.indexOf('=') + 1)] : [spec.split('/').pop() ?? spec, spec]
-    return { path, content: readFileSync(resolve(source), 'utf8') }
+    return { path, content: readFileSync(resolve(callerDir, source), 'utf8') }
   })
   const link = build({
     title: values.title,
