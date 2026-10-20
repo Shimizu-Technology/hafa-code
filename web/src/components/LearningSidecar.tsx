@@ -33,6 +33,8 @@ export interface LearningSidecarProps {
   onTryExample: (topic: LanguageGuideTopic, kind: ProjectKind) => void
   /** Already on screen (it replaced the loading skeleton), so skip the entrance animation. */
   entered?: boolean
+  /** The button that opened the sidecar, when the loading skeleton held focus before this panel. */
+  returnFocusTo?: HTMLElement | null
 }
 
 /** Keeps reference, practice, and error help next to the learner's code. */
@@ -52,9 +54,10 @@ export function LearningSidecar({
   onStartChallenge,
   onTryExample,
   entered = false,
+  returnFocusTo,
 }: LearningSidecarProps) {
   const overlay = useOverlaySidecar()
-  const dialogRef = useModalFocus<HTMLElement>(open && overlay, onClose)
+  const dialogRef = useModalFocus<HTMLElement>(open && overlay, onClose, returnFocusTo)
   const guide = languageGuideFor(guideKind)
   const visibleKind = activeTab === 'guide' ? guideKind : activeTab === 'coach' && coachContext ? coachContext.kind : kind
   const visibleGuide = languageGuideFor(visibleKind)

@@ -47,4 +47,27 @@ describe('useModalFocus', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.activeElement).toBe(trigger)
   })
+
+  it('returns focus to a named opener when focus was elsewhere at open time', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    const opener = document.createElement('button')
+    opener.textContent = 'Opener'
+    document.body.append(opener)
+
+    function Harness({ open }: { open: boolean }) {
+      const dialogRef = useModalFocus<HTMLElement>(open, () => {}, opener)
+      return open ? <section ref={dialogRef} role="dialog" aria-label="Named"><button>Inside</button></section> : null
+    }
+
+    const { rerender } = render(<Harness open={false} />)
+    rerender(<Harness open />)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Inside' }))
+    rerender(<Harness open={false} />)
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
+    vi.mocked(window.requestAnimationFrame).mockRestore()
+  })
 })

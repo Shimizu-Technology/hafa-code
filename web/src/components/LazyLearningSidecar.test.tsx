@@ -12,7 +12,7 @@ async function sidecarFactory() {
   await chunk.gate
   if (chunk.fail) throw new Error('chunk failed')
   return {
-    LearningSidecar: ({ open, entered }: LearningSidecarProps) => (open ? <aside aria-label="Loaded sidecar" data-entered={String(Boolean(entered))} /> : null),
+    LearningSidecar: ({ open, entered, returnFocusTo }: LearningSidecarProps) => (open ? <aside aria-label="Loaded sidecar" data-entered={String(Boolean(entered))} data-return-focus={returnFocusTo?.textContent ?? ''} /> : null),
   }
 }
 vi.mock('./LearningSidecar', sidecarFactory)
@@ -56,26 +56,41 @@ describe('LazyLearningSidecar', () => {
     vi.doMock('./LearningSidecar', sidecarFactory)
   })
 
-  it('downloads nothing while closed, shows a skeleton on first open, then the content without a second entrance', async () => {
+  it('downloads nothing while closed, shows a skeleton dialog on first open, then the content without a second entrance', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
     const { LazyLearningSidecar } = await import('./LazyLearningSidecar')
+    const opener = document.createElement('button')
+    opener.textContent = 'Python guide'
+    document.body.append(opener)
+    opener.focus()
     const closed = props({ open: false })
     const { rerender } = render(<LazyLearningSidecar {...closed} />)
-    expect(document.body.textContent).toBe('')
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     const opened = props()
     rerender(<LazyLearningSidecar {...opened} />)
     expect(screen.getByRole('status').textContent).toContain('Loading the Python guide')
-    expect(screen.getByRole('complementary', { name: 'Python learning' }).getAttribute('aria-busy')).toBe('true')
+    const dialog = screen.getByRole('dialog', { name: 'Python learning' })
+    expect(dialog.getAttribute('aria-busy')).toBe('true')
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close learning sidecar' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(opened.onClose).toHaveBeenCalledTimes(1)
-    expect(document.querySelector('.learning-sidecar-backdrop')).toBeTruthy()
 
     await act(async () => chunk.release())
-    expect(screen.getByLabelText('Loaded sidecar').dataset.entered).toBe('true')
+    const loaded = screen.getByLabelText('Loaded sidecar')
+    expect(loaded.dataset.entered).toBe('true')
+    // The skeleton held focus, so the loaded panel is told which control opened it.
+    expect(loaded.dataset.returnFocus).toBe('Python guide')
 
     rerender(<LazyLearningSidecar {...props({ open: false })} />)
     rerender(<LazyLearningSidecar {...props()} />)
     expect(screen.getByLabelText('Loaded sidecar').dataset.entered).toBe('false')
+    opener.remove()
+    vi.mocked(window.requestAnimationFrame).mockRestore()
   })
 
   it('offers Try again when the chunk cannot load', async () => {
@@ -98,8 +113,8 @@ describe('LazyLearningSidecar', () => {
     const { LazyLearningSidecar } = await import('./LazyLearningSidecar')
     const docked = props()
     render(<LazyLearningSidecar {...docked} />)
-    expect(screen.getByRole('status')).toBeTruthy()
-    expect(document.querySelector('.learning-sidecar-backdrop')).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'Python learning' })).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(docked.onClose).not.toHaveBeenCalled()
   })

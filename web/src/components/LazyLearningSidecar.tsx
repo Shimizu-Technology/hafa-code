@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BookOpen, Bug, Dumbbell, GraduationCap, Loader2, RotateCcw, X } from 'lucide-react'
+import { useModalFocus } from '../hooks/useModalFocus'
 import { useOverlaySidecar } from '../hooks/useOverlaySidecar'
 import { projectKindDefinition } from '../lib/codeRunner'
 import { createLazyModule } from '../lib/lazyModule'
@@ -14,14 +15,18 @@ const learningSidecarModule = createLazyModule(() => import('./LearningSidecar')
 
 export function LazyLearningSidecar(props: LearningSidecarProps) {
   const { module, state, retry } = learningSidecarModule.useModule(props.open)
-  const [skeletonShown, setSkeletonShown] = useState(false)
   // Adjusted during render (not in an effect) so the first render with content already knows.
-  if (!module && props.open && !skeletonShown) setSkeletonShown(true)
-  if (!props.open && skeletonShown) setSkeletonShown(false)
+  // `opener` is the control that had focus when the skeleton appeared; the skeleton then holds
+  // focus, so the loaded panel needs to be told where to return it on close.
+  const [skeleton, setSkeleton] = useState<{ opener: HTMLElement | null } | null>(null)
+  if (!module && props.open && !skeleton) {
+    setSkeleton({ opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+  }
+  if (!props.open && skeleton) setSkeleton(null)
   // When the content replaces the skeleton, the panel is already on screen: skip its entrance.
-  if (module) return <module.LearningSidecar {...props} entered={skeletonShown} />
+  if (module) return <module.LearningSidecar {...props} entered={Boolean(skeleton)} returnFocusTo={skeleton?.opener} />
   if (!props.open) return null
-  return <LearningSidecarSkeleton failed={state === 'failed'} kind={props.kind} activeTab={props.activeTab} onClose={props.onClose} onRetry={retry} />
+  return <LearningSidecarSkeleton failed={state === 'failed'} kind={props.kind} activeTab={props.activeTab} opener={skeleton?.opener ?? null} onClose={props.onClose} onRetry={retry} />
 }
 
 const SKELETON_TABS = [
@@ -31,32 +36,22 @@ const SKELETON_TABS = [
 ] as const
 
 /**
- * Same frame as the real sidecar, so nothing moves when the content arrives. It leaves
- * focus on the button that opened it: the real sidecar then takes focus and returns it
- * to that button on close. As a drawer, Escape still closes it.
+ * Same frame and dialog behavior as the real sidecar, so nothing moves when the content
+ * arrives: as a drawer it takes focus, traps Tab, and closes on Escape. Focus returns to
+ * the opener whether the skeleton or the loaded panel is closed.
  */
 function LearningSidecarSkeleton({
   activeTab,
   failed,
   kind,
+  opener,
   onClose,
   onRetry,
-}: Pick<LearningSidecarProps, 'activeTab' | 'kind' | 'onClose'> & { failed: boolean; onRetry: () => void }) {
+}: Pick<LearningSidecarProps, 'activeTab' | 'kind' | 'onClose'> & { failed: boolean; opener: HTMLElement | null; onRetry: () => void }) {
   const overlay = useOverlaySidecar()
+  const dialogRef = useModalFocus<HTMLElement>(overlay, onClose, opener)
   const label = projectKindDefinition(kind).shortLabel
   const loadingLabel = activeTab === 'practice' ? 'Loading the practice lab…' : activeTab === 'coach' ? 'Loading the error coach…' : `Loading the ${label} guide…`
-
-  useEffect(() => {
-    // Matches the loaded sidecar: Escape closes the drawer, not the docked column.
-    if (!overlay) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      onClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, overlay])
 
   useEffect(() => {
     if (!overlay) return
@@ -67,9 +62,13 @@ function LearningSidecarSkeleton({
 
   const sidecar = (
     <aside
+      ref={dialogRef}
       className="learning-sidecar learning-sidecar-loading panel"
+      role={overlay ? 'dialog' : 'complementary'}
+      aria-modal={overlay || undefined}
       aria-labelledby="learning-sidecar-title"
       aria-busy={!failed}
+      tabIndex={overlay ? -1 : undefined}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="learning-sidecar-header">
@@ -79,7 +78,7 @@ function LearningSidecarSkeleton({
           <h2 id="learning-sidecar-title">{label} learning</h2>
           <p>Guides, practice challenges, and error help for your project.</p>
         </div>
-        <button className="ghost icon-button" type="button" onClick={onClose} aria-label="Close learning sidecar">
+        <button className="ghost icon-button" type="button" onClick={onClose} aria-label="Close learning sidecar" data-modal-initial-focus>
           <X size={19} />
         </button>
       </header>
