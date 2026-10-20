@@ -11,7 +11,12 @@ async function openPython(page: Page) {
 test('the editor starts high and Run is the only visible primary action', async ({ page }) => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport)
-    await openPython(page)
+    // Anonymous on purpose: once a signed-in project finishes its first cloud save, the
+    // Teacher feedback panel appears above the editor. Whether that happened before the
+    // measurement was a race (it lost more often once the editor began loading lazily).
+    await page.goto('/?lang=python')
+    await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
+    await page.locator('.monaco-editor').first().waitFor()
     const editor = await page.locator('.editor-panel .monaco-editor').boundingBox()
     expect(editor!.y, `editor top at ${viewport.width}`).toBeLessThanOrEqual(200)
     const primaries = page.locator('button.primary:visible')
