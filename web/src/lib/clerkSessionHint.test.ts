@@ -42,6 +42,7 @@ describe('Clerk session hints', () => {
   it('loads at once for Clerk redirects, invitations, and a sign-in in progress', () => {
     expect(clerkStartupFor({ ...base, search: '?__clerk_status=verified' })).toBe('immediate')
     expect(clerkStartupFor({ ...base, hash: '#__clerk_db_jwt=abc' })).toBe('immediate')
+    expect(clerkStartupFor({ ...base, hash: '#/sso-callback?redirect_url=%2F' })).toBe('immediate')
     expect(clerkStartupFor({ ...base, hash: '#invite=token123' })).toBe('immediate')
 
     rememberSignInIntent(localStorage, NOW - 1_000)

@@ -72,8 +72,9 @@ export function clerkStartupFor({
   storage?: Storage
   now?: number
 }): ClerkStartup {
-  // Clerk adds __clerk_* parameters when it hands a session back (OAuth, email links, handshake).
-  if (/[?&#]__clerk_/.test(`${search}${hash}`)) return 'immediate'
+  // Clerk adds __clerk_* parameters or an sso-callback route when it hands a session back
+  // (OAuth, email links, handshake).
+  if (/[?&#]__clerk_|sso-callback/.test(`${search}${hash}`)) return 'immediate'
   if (new URLSearchParams(hash.replace(/^#/, '')).has('invite')) return 'immediate'
   if (signInIntentIsFresh(storage, now)) return 'immediate'
   if (clerkSessionCookiePresent(cookie) || readStorage(storage, SIGNED_IN_HINT_STORAGE_KEY) === '1') return 'after-editor'
