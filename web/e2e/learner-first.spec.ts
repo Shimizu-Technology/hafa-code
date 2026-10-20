@@ -8,6 +8,22 @@ async function openPython(page: Page) {
   await page.locator('.monaco-editor').first().waitFor()
 }
 
+/**
+ * A signed-in student's new project saves to the cloud about a second after it opens, and
+ * the Teacher feedback panel appears above the code then. Layout checks wait for that, so
+ * they measure what the student keeps seeing rather than the moment before it arrives.
+ */
+async function openPythonAfterCloudSave(page: Page) {
+  const feedbackLoaded = page.waitForResponse((response) => (
+    response.request().method() === 'GET' && /^\/api\/v1\/projects\/\d+\/comments$/.test(new URL(response.url()).pathname)
+  ))
+  await openPython(page)
+  expect((await feedbackLoaded).status()).toBe(200)
+  const feedback = page.locator('.project-feedback')
+  await expect(feedback).toBeVisible()
+  return feedback
+}
+
 test('the editor starts high and Run is the only visible primary action', async ({ page }) => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport)
@@ -136,7 +152,14 @@ test('toasts sit bottom-right without covering controls and leave on their own',
 
 test('a phone turned sideways keeps the navigation rail and Run reachable', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 })
-  await openPython(page)
+  const feedback = await openPythonAfterCloudSave(page)
+  // With no feedback yet, the panel is one row; the code and Run keep the screen.
+  await expect(feedback).not.toHaveAttribute('open')
+  const feedbackBox = (await feedback.boundingBox())!
+  expect(feedbackBox.height).toBeLessThanOrEqual(56)
+  const editor = (await page.locator('.editor-panel .monaco-editor').boundingBox())!
+  expect(editor.y + editor.height, 'editor bottom stays on screen').toBeLessThanOrEqual(390)
+  expect(editor.height, 'editor height').toBeGreaterThanOrEqual(200)
   const navigation = page.getByRole('navigation', { name: 'Workspace sections' })
   await expect(navigation).toBeVisible()
   const nav = (await navigation.boundingBox())!
@@ -148,4 +171,22 @@ test('a phone turned sideways keeps the navigation rail and Run reachable', asyn
   expect(runBox.y + runBox.height).toBeLessThanOrEqual(390)
   expect(runBox.height).toBeGreaterThanOrEqual(44)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  // The composer is one tap away.
+  const summary = feedback.locator('summary')
+  expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await summary.click()
+  await expect(page.getByLabel('Add feedback or reply')).toBeVisible()
+})
+
+test('a signed-in phone keeps the code above an empty feedback composer', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const feedback = await openPythonAfterCloudSave(page)
+  await expect(feedback).not.toHaveAttribute('open')
+  const run = (await page.locator('[data-hafa-run-button]:visible').first().boundingBox())!
+  const editor = (await page.locator('.editor-panel .monaco-editor').boundingBox())!
+  const nav = (await page.getByRole('navigation', { name: 'Workspace sections' }).boundingBox())!
+  expect(run.y + run.height).toBeLessThanOrEqual(editor.y)
+  expect(editor.height, 'editor height').toBeGreaterThanOrEqual(400)
+  expect(editor.y + editor.height, 'editor ends above the navigation').toBeLessThanOrEqual(nav.y)
 })

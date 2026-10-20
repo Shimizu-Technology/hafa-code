@@ -849,8 +849,18 @@ export default function App() {
     scheduleCloudSave(project.id)
   }, [canEditProject, hasLoadedCloudProjects, isSignedIn, project, scheduleCloudSave, updateCloudSaveStatus])
 
+  // Pending saves call the latest syncCloudProject through its ref, so they survive the
+  // sync function changing identity (for example when the signed-in user arrives after the
+  // project list). Clearing them then would leave the save pending until the next edit.
   useEffect(() => {
     const syncTimers = syncTimersRef.current
+    return () => {
+      syncTimers.forEach((timer) => window.clearTimeout(timer))
+      syncTimers.clear()
+    }
+  }, [])
+
+  useEffect(() => {
     const flushPendingProjects = () => {
       pendingCloudProjectIds().forEach((projectId) => {
         if (libraryRef.current.projects.some((candidate) => candidate.id === projectId)) {
@@ -868,8 +878,6 @@ export default function App() {
     return () => {
       window.removeEventListener('pagehide', flushPendingProjects)
       window.removeEventListener('online', retryPendingProjects)
-      syncTimers.forEach((timer) => window.clearTimeout(timer))
-      syncTimers.clear()
     }
   }, [syncCloudProject])
 
@@ -2404,7 +2412,7 @@ export default function App() {
             )}
 
             {canAccessProjectFeedback && (
-              <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
+              <ProjectFeedback key={project.id} projectId={project.id} files={project.files} currentUserId={user?.id} />
             )}
 
             {currentPracticeChallengeId && !currentPracticeChallenge && practiceLabState !== 'ready' && (

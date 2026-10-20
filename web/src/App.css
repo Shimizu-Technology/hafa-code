@@ -4227,6 +4227,47 @@ textarea {
   align-items: flex-start;
 }
 
+/* Phones: one 44px row above the code until the learner opens it or feedback arrives. */
+.project-feedback-compact {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.project-feedback-compact > summary {
+  align-items: center;
+  border-radius: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-2);
+  list-style: none;
+  min-height: var(--control-lg);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+}
+
+.project-feedback-compact > summary::-webkit-details-marker { display: none; }
+.project-feedback-compact > summary:active { background: var(--surface-sunken); }
+
+.project-feedback-compact > summary h2 {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.project-feedback-compact .feedback-count { min-height: 1.75rem; }
+.feedback-disclosure-icon { flex: 0 0 auto; color: var(--text-muted); transition: transform 160ms ease; }
+.project-feedback-compact[open] .feedback-disclosure-icon { transform: rotate(180deg); }
+.project-feedback-compact[open] > summary { border-bottom: 1px solid var(--border-subtle); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.feedback-compact-body { padding: var(--space-3); }
+.feedback-compact-body > .helper-text { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-disclosure-icon { transition: none; }
+}
+
 .feedback-count {
   align-items: center;
   background: color-mix(in srgb, var(--status-success) 12%, var(--surface-panel));
@@ -4335,6 +4376,11 @@ textarea {
   gap: var(--space-3);
   grid-template-columns: minmax(12rem, 1fr) minmax(6rem, 8rem) auto;
 }
+
+/* Fields fill their column instead of their intrinsic width, so Line never slides under Post. */
+.feedback-reference-row > label { min-width: 0; }
+.feedback-reference-row select,
+.feedback-reference-row input { width: 100%; min-width: 0; }
 
 .feedback-error {
   color: var(--status-danger);

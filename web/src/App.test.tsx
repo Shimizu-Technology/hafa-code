@@ -283,6 +283,38 @@ describe('App language guide practice projects', () => {
     expect(runnerHarness.unmountCount).toBe(0)
   })
 
+  it('still saves a new project when the signed-in user arrives during the save delay', async () => {
+    const signedInUser = { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' }
+    authHarness.value = {
+      isSignedIn: true,
+      isLoading: false,
+      user: null,
+      organizations: [],
+      syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
+    }
+    vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
+    vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    const createCloudProject = vi.spyOn(api, 'createProject').mockImplementation(async (localProject) => ({
+      data: { ...localProject, id: '42', owner: { id: 7, fullName: 'Student One' }, lockVersion: 0 },
+      error: null,
+      status: 201,
+      code: null,
+      conflictProject: null,
+    }) as never)
+
+    const { rerender } = render(<App />)
+    // The project list has loaded and the first save is waiting out its debounce...
+    await waitFor(() => expect(api.getProjects).toHaveBeenCalled())
+    await act(async () => { await Promise.resolve() })
+    // ...when the session finishes and the user arrives.
+    authHarness.value = { ...authHarness.value, user: signedInUser }
+    rerender(<App />)
+
+    await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+    await waitFor(() => expect(storedLibrary().activeProjectId).toBe('42'))
+  })
+
   it('opens desktop error advice directly in the docked Coach', () => {
     render(<App />)
 
