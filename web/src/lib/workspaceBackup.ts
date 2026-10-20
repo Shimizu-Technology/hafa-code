@@ -14,6 +14,15 @@ import {
   type ProjectLibrary,
 } from './projectStorage'
 import {
+  LESSON_LINKS_STORAGE_KEY,
+  emptyLessonLinks,
+  lessonLinksForProjects,
+  loadLessonLinks,
+  normalizeLessonLinks,
+  resetLessonLinksCache,
+  type LessonLinks,
+} from './lessonLinks'
+import {
   loadPracticeProgress,
   normalizePracticeProgress,
   PRACTICE_PROGRESS_STORAGE_KEY,
@@ -32,6 +41,12 @@ export interface WorkspaceBackup {
     library: ProjectLibrary
     checkpoints: CheckpointLibrary
     practiceProgress: PracticeProgress
+    /**
+     * Which lesson each project came from ("Back to your lesson" and reopen-by-link).
+     * Backups made before this field existed have none. Never part of a project, so it
+     * stays out of Share links, server snapshots, and cloud saves.
+     */
+    lessonLinks: LessonLinks
     preferences: {
       theme: ThemePreference
       colorMode: ColorModePreference
@@ -65,6 +80,7 @@ export function createWorkspaceBackup({ library, theme, colorMode }: WorkspaceBa
       library: normalizedLibrary,
       checkpoints: loadCheckpointLibrary(),
       practiceProgress: loadPracticeProgress(),
+      lessonLinks: lessonLinksForProjects(loadLessonLinks(), normalizedLibrary.projects.map((project) => project.id)),
       preferences: { theme, colorMode },
     },
   }
@@ -117,6 +133,10 @@ export function parseWorkspaceBackup(raw: string): WorkspaceBackup {
       library,
       checkpoints: normalizeCheckpointLibrary(data?.checkpoints),
       practiceProgress: normalizePracticeProgress(data?.practiceProgress as Partial<PracticeProgress> | null),
+      // The same allowlist as links and storage: a hand-edited backup cannot add a bad return link.
+      lessonLinks: data?.lessonLinks === undefined
+        ? emptyLessonLinks()
+        : lessonLinksForProjects(normalizeLessonLinks(data.lessonLinks), library.projects.map((project) => project.id)),
       preferences: {
         theme: normalizeTheme(preferences.theme),
         colorMode: normalizeColorMode(preferences.colorMode),
@@ -160,6 +180,7 @@ export type WorkspaceRestoreState = {
   library: ProjectLibrary
   checkpoints: CheckpointLibrary
   practiceProgress: PracticeProgress
+  lessonLinks: LessonLinks
   theme: ThemePreference
   colorMode: ColorModePreference
 }
@@ -170,6 +191,7 @@ export function persistWorkspaceRestore(state: WorkspaceRestoreState, storage: S
     [PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(state.library)],
     [CHECKPOINT_STORAGE_KEY, JSON.stringify(state.checkpoints)],
     [PRACTICE_PROGRESS_STORAGE_KEY, JSON.stringify(state.practiceProgress)],
+    [LESSON_LINKS_STORAGE_KEY, JSON.stringify(state.lessonLinks)],
     [THEME_STORAGE_KEY, state.theme],
     [COLOR_MODE_STORAGE_KEY, state.colorMode],
   ] as const
@@ -192,5 +214,6 @@ export function persistWorkspaceRestore(state: WorkspaceRestoreState, storage: S
   }
 
   resetPracticeProgressCache()
+  resetLessonLinksCache()
   return true
 }

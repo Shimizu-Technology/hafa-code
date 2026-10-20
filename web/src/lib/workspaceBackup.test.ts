@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { starterProject } from './codeRunner'
-import { saveCheckpointLibrary, type ProjectLibrary } from './projectStorage'
+import { decodeSharedProject, encodeProjectForShare, saveCheckpointLibrary, type ProjectLibrary } from './projectStorage'
 import { savePracticeProgress } from './practiceProgress'
+import { emptyLessonLinks, LESSON_LINKS_STORAGE_KEY, loadLessonLinks, mergeLessonLinks, recordLessonLink, resetLessonLinksCache, saveLessonLinks } from './lessonLinks'
 import {
   createWorkspaceBackup,
   mergeCheckpointLibraries,
@@ -129,11 +130,12 @@ describe('workspace backups', () => {
     expect(parsed.data.checkpoints[project.id].map((checkpoint) => checkpoint.title)).toEqual(['Keep me'])
   })
 
-  it.each([1, 2, 3, 4, 5])('rolls every storage key back when restore write %s fails', (failAt) => {
+  it.each([1, 2, 3, 4, 5, 6])('rolls every storage key back when restore write %s fails', (failAt) => {
     const initial = {
       'hafa-code-projects-v2': 'old-projects',
       'hafa-code-checkpoints-v1': 'old-checkpoints',
       'hafa-code-practice-progress-v1': 'old-progress',
+      'hafa-code-lesson-links-v1': 'old-lesson-links',
       'hafa-code-theme-v1': 'dark',
       'hafa-code-color-mode-v1': 'colorblind',
     }
@@ -144,6 +146,7 @@ describe('workspace backups', () => {
       library: nextLibrary,
       checkpoints: {},
       practiceProgress: { completedChallengeIds: [], projectChallenges: {} },
+      lessonLinks: emptyLessonLinks(),
       theme: 'light',
       colorMode: 'default',
     }, storage)).toThrow(/existing workspace was kept/i)
@@ -155,8 +158,96 @@ describe('workspace backups', () => {
       library: library('ruby'),
       checkpoints: {},
       practiceProgress: { completedChallengeIds: [], projectChallenges: {} },
+      lessonLinks: emptyLessonLinks(),
       theme: 'system',
       colorMode: 'default',
     })).toBe(true)
+  })
+})
+
+describe('workspace backups and lesson records', () => {
+  const LESSON_URL = 'https://learn.codeschoolofguam.com/lessons/42'
+
+  beforeEach(() => {
+    localStorage.clear()
+    resetLessonLinksCache()
+  })
+
+  it('round-trips the lesson return and starter key for backed-up projects only', () => {
+    const backedUp = library('ruby')
+    const projectId = backedUp.activeProjectId
+    let links = recordLessonLink(emptyLessonLinks(), projectId, { returnTarget: { url: LESSON_URL, label: 'Lesson 2' }, starterKey: 'csg-python-pilot:lesson-2' })
+    links = recordLessonLink(links, 'some-other-browser-project', { returnTarget: { url: `${LESSON_URL}9`, label: 'Elsewhere' }, starterKey: 'csg:other' })
+    saveLessonLinks(links)
+
+    const backup = createWorkspaceBackup({ library: backedUp, theme: 'system', colorMode: 'default' })
+    expect(Object.keys(backup.data.lessonLinks.projects)).toEqual([projectId])
+    expect(backup.data.lessonLinks.starters).toEqual({ 'csg-python-pilot:lesson-2': projectId })
+
+    const parsed = parseWorkspaceBackup(serializeWorkspaceBackup(backup))
+    expect(parsed.data.lessonLinks.projects[projectId]).toMatchObject({ returnUrl: LESSON_URL, returnLabel: 'Lesson 2', starterKey: 'csg-python-pilot:lesson-2' })
+
+    // Restoring on a fresh browser brings back "Back to your lesson" and reopen-by-link.
+    localStorage.clear()
+    resetLessonLinksCache()
+    const merged = mergeLessonLinks(loadLessonLinks(), parsed.data.lessonLinks, parsed.data.library.projects.map((project) => project.id))
+    persistWorkspaceRestore({ library: parsed.data.library, checkpoints: {}, practiceProgress: parsed.data.practiceProgress, lessonLinks: merged, theme: 'system', colorMode: 'default' })
+    expect(loadLessonLinks()).toEqual(merged)
+    expect(JSON.parse(localStorage.getItem(LESSON_LINKS_STORAGE_KEY)!).starters).toEqual({ 'csg-python-pilot:lesson-2': projectId })
+  })
+
+  it('re-validates lesson records with the return-link allowlist on import', () => {
+    const backedUp = library('ruby')
+    const projectId = backedUp.activeProjectId
+    const backup = createWorkspaceBackup({ library: backedUp, theme: 'system', colorMode: 'default' })
+    const tampered = JSON.parse(serializeWorkspaceBackup(backup))
+    tampered.data.lessonLinks = {
+      projects: {
+        [projectId]: { returnUrl: 'https://learn.codeschoolofguam.com.evil.com/lessons/1', returnLabel: 'Evil', starterKey: null, updatedAt: '2026-10-20T00:00:00.000Z' },
+        'not-in-backup': { returnUrl: LESSON_URL, returnLabel: 'Orphan', starterKey: null, updatedAt: '2026-10-20T00:00:00.000Z' },
+      },
+      starters: { 'bad key with spaces': projectId, 'csg:ok': 'not-in-backup' },
+    }
+    const parsed = parseWorkspaceBackup(JSON.stringify(tampered))
+    expect(parsed.data.lessonLinks).toEqual(emptyLessonLinks())
+
+    tampered.data.lessonLinks.projects[projectId].returnUrl = 'javascript:alert(1)'
+    expect(parseWorkspaceBackup(JSON.stringify(tampered)).data.lessonLinks.projects).toEqual({})
+
+    tampered.data.lessonLinks.projects[projectId].returnUrl = LESSON_URL
+    tampered.data.lessonLinks.projects[projectId].returnLabel = '\u202eLesson\u0000 two'
+    expect(parseWorkspaceBackup(JSON.stringify(tampered)).data.lessonLinks.projects[projectId]).toMatchObject({ returnUrl: LESSON_URL, returnLabel: 'Lesson two' })
+  })
+
+  it('opens older backups without lesson records', () => {
+    const backup = JSON.parse(serializeWorkspaceBackup(createWorkspaceBackup({ library: library('ruby'), theme: 'system', colorMode: 'default' })))
+    delete backup.data.lessonLinks
+    expect(parseWorkspaceBackup(JSON.stringify(backup)).data.lessonLinks).toEqual(emptyLessonLinks())
+  })
+
+  it("keeps this browser's record and adds the backup's for projects it does not track", () => {
+    const current = recordLessonLink(emptyLessonLinks(), 'p1', { returnTarget: { url: LESSON_URL, label: 'Current' }, starterKey: 'csg:one' })
+    let imported = recordLessonLink(emptyLessonLinks(), 'p1', { returnTarget: { url: `${LESSON_URL}0`, label: 'Old' }, starterKey: 'csg:one' })
+    imported = recordLessonLink(imported, 'p2', { returnTarget: { url: `${LESSON_URL}1`, label: 'Second' }, starterKey: 'csg:two' })
+    imported = recordLessonLink(imported, 'gone', { returnTarget: { url: `${LESSON_URL}2`, label: 'Gone' }, starterKey: 'csg:three' })
+    const merged = mergeLessonLinks(current, imported, ['p1', 'p2'])
+    expect(merged.projects.p1.returnLabel).toBe('Current')
+    expect(merged.projects.p2.returnLabel).toBe('Second')
+    expect(merged.projects.gone).toBeUndefined()
+    expect(merged.starters).toEqual({ 'csg:one': 'p1', 'csg:two': 'p2' })
+
+    // A starter pointing at a project this browser no longer has follows the backup.
+    const stale = { projects: {}, starters: { 'csg:two': 'deleted-here' } }
+    expect(mergeLessonLinks(stale, imported, ['p1', 'p2']).starters['csg:two']).toBe('p2')
+  })
+
+  it('never puts lesson records into a Share payload after a restore', () => {
+    const backedUp = library('ruby')
+    saveLessonLinks(recordLessonLink(emptyLessonLinks(), backedUp.activeProjectId, { returnTarget: { url: LESSON_URL, label: 'Lesson 2' }, starterKey: 'csg:share' }))
+    const parsed = parseWorkspaceBackup(serializeWorkspaceBackup(createWorkspaceBackup({ library: backedUp, theme: 'system', colorMode: 'default' })))
+    const encoded = encodeProjectForShare(parsed.data.library.projects[0])
+    const decoded = JSON.stringify(decodeSharedProject(encoded))
+    expect(decoded).not.toContain('learn.codeschoolofguam.com')
+    expect(decoded).not.toContain('csg:share')
   })
 })

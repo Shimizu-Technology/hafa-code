@@ -183,6 +183,31 @@ describe('App language guide practice projects', () => {
     expect(await screen.findByText(/Workspace restored: 1 project/)).toBeTruthy()
   })
 
+  it('restores a backed-up lesson project with its Back to your lesson link', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const lessonProject = createProject('python', 'Lesson 2 — values')
+    const otherBrowserLinks = {
+      projects: { [lessonProject.id]: { returnUrl: 'https://learn.codeschoolofguam.com/lessons/42', returnLabel: 'Lesson 2', starterKey: 'csg:lesson-2', updatedAt: '2026-10-20T00:00:00.000Z' } },
+      starters: { 'csg:lesson-2': lessonProject.id },
+    }
+    const backup = JSON.parse(serializeWorkspaceBackup(createWorkspaceBackup({
+      library: { activeProjectId: lessonProject.id, projects: [lessonProject] },
+      theme: 'light',
+      colorMode: 'default',
+    })))
+    backup.data.lessonLinks = otherBrowserLinks
+    await user.click(within(await openProjectMenu(user)).getByRole('button', { name: 'Workspace backup' }))
+    fireEvent.change(document.querySelector('.workspace-transfer-sheet input[type="file"]')!, {
+      target: { files: [{ text: async () => JSON.stringify(backup) }] },
+    })
+
+    expect(await screen.findByText(/Workspace restored: 1 project/)).toBeTruthy()
+    const bar = screen.getByRole('region', { name: 'Lesson' })
+    expect(within(bar).getByRole('link', { name: /Back to your lesson/ }).getAttribute('href')).toBe('https://learn.codeschoolofguam.com/lessons/42')
+    expect(JSON.parse(localStorage.getItem('hafa-code-lesson-links-v1')!).starters).toEqual({ 'csg:lesson-2': lessonProject.id })
+  })
+
   it('does not claim an unconfirmed cloud save when local storage is unavailable', async () => {
     authHarness.value = {
       isSignedIn: true,
