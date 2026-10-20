@@ -163,19 +163,18 @@ function preloadEditorChunks(): Plugin {
         const setup = Object.values(bundle).find((item) => item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts'))
         if (!setup) return []
         const files = [setup.fileName, ...(setup.imports ?? []).filter((name) => !bundle[name]?.isEntry)]
-        // Monaco's stylesheet and icon font would otherwise be found only after its code runs.
-        const editorAssets = Object.keys(bundle).filter((name) => /^assets\/(editor-[\w-]+\.css|codicon-[\w-]+\.ttf)$/.test(name))
+        // Monaco's stylesheet would otherwise be found only after its code runs.
+        const editorAssets = Object.keys(bundle).filter((name) => /^assets\/editor-[\w-]+\.css$/.test(name))
         return [
           ...files.map((fileName) => ({
             tag: 'link',
             attrs: { rel: 'modulepreload', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
             injectTo: 'head' as const,
           })),
+          // crossorigin matches the <link> Vite's loader adds, so the preload is reused.
           ...editorAssets.map((fileName) => ({
             tag: 'link',
-            attrs: fileName.endsWith('.css')
-              ? { rel: 'preload', as: 'style', href: `/${fileName}`, fetchpriority: 'low' }
-              : { rel: 'preload', as: 'font', type: 'font/ttf', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
+            attrs: { rel: 'preload', as: 'style', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
             injectTo: 'head' as const,
           })),
         ]
