@@ -1,2 +1,0 @@
-# Missing hashed assets: answer from a path outside /assets/ so the 404 is not cached as immutable.
-/assets/*  /asset-not-found.txt  404
