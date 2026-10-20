@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Database, Loader2, Play, RotateCcw, Square } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import { coachRunnerError, type ErrorCoachContext } from '../lib/errorCoach'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
+import { emptyEntryHint } from '../lib/workspace'
 import type { SqlQueryResult, SqlRunnerRequest, SqlRunnerResponse } from '../workers/sqlRunnerProtocol'
 
 type SqlStatus = 'idle' | 'loading' | 'running' | 'success' | 'error' | 'stopped'
@@ -213,6 +214,8 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   }, [advice, onErrorAdviceChange])
 
   const busy = status === 'loading' || status === 'running'
+  const entryIsEmpty = !entryFile.content.trim()
+  const emptyHintId = useId()
   const rowLabel = result ? `${result.rowCount} row${result.rowCount === 1 ? '' : 's'}` : ''
   const schemaFile = project.files.find((file) => file.path === 'schema.sql')
   const seedFile = project.files.find((file) => file.path === 'seed.sql')
@@ -231,10 +234,12 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
           {busy ? (
             <button className="secondary" type="button" onClick={stop} data-hafa-run-button><Square size={16} aria-hidden="true" /> Stop</button>
           ) : (
-            <button className="primary" type="button" onClick={() => start('run')} disabled={!entryFile.content.trim()} data-hafa-run-button><Play size={16} aria-hidden="true" /> Run SQL</button>
+            <button className="primary" type="button" onClick={() => start('run')} disabled={entryIsEmpty} aria-describedby={entryIsEmpty ? emptyHintId : undefined} data-hafa-run-button><Play size={16} aria-hidden="true" /> Run SQL</button>
           )}
         </div>
       </div>
+
+      {entryIsEmpty && !busy && <p className="run-empty-hint" id={emptyHintId}>{emptyEntryHint(entryFile.path)}</p>}
 
       <div className="sql-workspace-map" aria-label="SQL database setup">
         <div>
@@ -280,7 +285,7 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
         )}
       </div>
 
-      <div className="terminal-footer">
+      <div className="terminal-footer" data-dock-avoid>
         <span>{busy ? status === 'loading' ? 'Loading runtime' : 'Running' : status === 'idle' ? 'Ready' : status === 'success' ? 'Query finished' : status === 'error' ? 'Error' : status}</span>
         <span className="terminal-footer-detail">{durationMs === null ? `${RUNNER_TIMEOUT_MS / 1000}s query limit` : `Ran in ${durationMs} ms`}</span>
       </div>

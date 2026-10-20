@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, CircleAlert, CircleCheck, Copy, CornerDownLeft, Loader2, Play, Square, Terminal, TriangleAlert } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import type { RunnerOutcome, RunnerStatus } from '../lib/runnerOutcome'
+import { runAfterStartup } from '../lib/startupScheduler'
+import { runAnnouncement } from '../lib/runAnnouncement'
 import { coachRunnerError, errorHeadline, type ErrorCoachContext } from '../lib/errorCoach'
 import { appendTerminalChunks, emptyTerminalBuffer, type TerminalBuffer, type TerminalLine } from '../lib/terminalBuffer'
 import {
@@ -12,7 +14,7 @@ import {
   runtimeWasReady,
   takeIdleRunnerWorker,
 } from '../lib/runnerWorkerPool'
-import { writeClipboardText } from '../lib/workspace'
+import { emptyEntryHint, writeClipboardText } from '../lib/workspace'
 import { claimFirstSuccess, runMilestone, type RunMilestone } from '../lib/runMilestones'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 import { OUTPUT_LIMIT_CHARS, OUTPUT_LIMIT_LINES, OUTPUT_LIMIT_MESSAGE } from '../workers/runOutput'
@@ -33,7 +35,6 @@ interface RunState {
 type TerminalChunk = Omit<TerminalLine, 'id'>
 
 const emptyRunState: RunState = { status: 'idle', stdout: '', stderr: '', durationMs: null }
-const PREWARM_DELAY_MS = 600
 /** How long the one-time first-success outline stays before it fades. */
 export const FIRST_SUCCESS_MOMENT_MS = 1_600
 
@@ -169,11 +170,11 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
 
   useEffect(() => {
     if (!runner?.prewarm) return
-    const timer = window.setTimeout(() => {
+    // Prefetch the runtime once the page and editor are ready (see runAfterStartup).
+    return runAfterStartup(() => {
       if (workerRef.current || hasIdleRunnerWorker(runner.language)) return
       prewarmRunnerWorker(runner.language, runner.createWorker)
-    }, PREWARM_DELAY_MS)
-    return () => window.clearTimeout(timer)
+    })
   }, [runner])
 
   useEffect(() => {
@@ -518,6 +519,24 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     return () => window.removeEventListener('hafa-code-cancel-active-run', handleCancelRequest)
   }, [stopWorker])
 
+  const entryIsEmpty = !entryFile.content.trim()
+  const emptyHintId = useId()
+
+  const announcement = runAnnouncement({
+    status: runState.status,
+    phase: runPhase,
+    awaitingInput,
+    fixed: milestone === 'fixed',
+    durationMs: runState.durationMs,
+    stdout: runState.stdout,
+    headline,
+    location: runState.outputLimited ? null : errorAdvice?.location,
+    statusLabel: runStatusLabel,
+    runLabel: runner?.runLabel ?? 'the program',
+    entryPath: entryFile.path,
+    firstLoad: firstRuntimeLoad,
+  })
+
   const lastStderrIndex = terminal.lines.reduce((found, line, index) => line.kind === 'stderr' ? index : found, -1)
 
   return (
@@ -528,7 +547,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
       <div className="panel-header runner-header">
         <div className="runner-title">
           <h2><Terminal size={18} aria-hidden="true" /> Output</h2>
-          <p className="run-status" data-tone={statusTone} aria-live="polite">
+          <p className="run-status" data-tone={statusTone}>
             {statusTone === 'running'
               ? <Loader2 className="spin" size={14} aria-hidden="true" />
               : statusTone === 'success'
@@ -546,18 +565,23 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
             <Square size={16} aria-hidden="true" /> Stop
           </button>
         ) : (
-          <button className="primary" onClick={run} disabled={!entryFile.content.trim()} data-hafa-run-button>
+          <button className="primary" onClick={run} disabled={entryIsEmpty} aria-describedby={entryIsEmpty ? emptyHintId : undefined} data-hafa-run-button>
             <Play size={16} aria-hidden="true" /> {runState.status === 'idle' ? `Run ${runner?.runLabel}` : 'Run again'}
           </button>
         )}
       </div>
+      {entryIsEmpty && runState.status !== 'running' && (
+        <p className="run-empty-hint" id={emptyHintId}>{emptyEntryHint(entryFile.path)}</p>
+      )}
+      {/* One polite announcement per run step; the visible status, timer, and output stay silent. */}
+      <p className="sr-only" aria-live="polite" aria-atomic="true" data-testid="run-announcement">{announcement}</p>
       <p className="sr-only" aria-live="polite">{copyStatus === 'copied' ? 'Output copied to the clipboard.' : ''}</p>
       {copyStatus === 'failed' && (
         <p className="runner-copy-error" role="alert">Copy was blocked by this browser. Select the output below and copy it manually.</p>
       )}
       <div className="terminal" ref={terminalScrollRef} tabIndex={0} role="region" aria-label="Program output">
         {headline && (
-          <div className="run-error-headline" role="alert">
+          <div className="run-error-headline">
             <TriangleAlert size={17} aria-hidden="true" />
             <div>
               <strong>{headline}</strong>
@@ -566,7 +590,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
           </div>
         )}
         {runState.status === 'running' && terminal.lines.length <= 1 && !awaitingInput && (
-          <div className="runner-progress" role="status" aria-live="polite">
+          <div className="runner-progress">
             <Loader2 className="spin" size={16} />
             <div>
               <strong>{runPhase === 'loading' ? loadingTitle : `Running ${entryFile.path}…`}</strong>
@@ -626,7 +650,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
           </form>
         )}
       </div>
-      <div className="terminal-footer">
+      <div className="terminal-footer" data-dock-avoid>
         <span className="terminal-footer-detail">{footerDetail}</span>
         <button
           className="ghost runner-copy-button"
