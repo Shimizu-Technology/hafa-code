@@ -200,7 +200,7 @@ console.log(`Verified self-hosted, preloaded fonts: ${preloadedFonts.join(', ')}
 const entryScript = indexHtml.match(/<script type="module" crossorigin src="\/assets\/([^"]+\.js)"/)?.[1]
 assert(entryScript, 'Expected one module entry script in index.html')
 const entrySource = await readFile(new URL(entryScript, ASSETS_DIRECTORY), 'utf8')
-const ENTRY_BUDGET_BYTES = 1_000_000
+const ENTRY_BUDGET_BYTES = 600_000
 assert(entrySource.length < ENTRY_BUDGET_BYTES, `Entry chunk ${entryScript} is ${entrySource.length} bytes; keep it under ${ENTRY_BUDGET_BYTES} by loading heavy modules lazily`)
 assert(!entrySource.includes('editor.contrib.') && !entrySource.includes('MonacoEnvironment'), 'Monaco must load from its own chunk, not the entry chunk')
 console.log(`Verified entry chunk ${entryScript}: ${(entrySource.length / 1024).toFixed(0)} KB (budget ${ENTRY_BUDGET_BYTES / 1000} KB), Monaco lazy`)
@@ -209,3 +209,22 @@ const editorChunks = assetNames.filter((name) => /^(monacoSetup|editor\.api)/.te
 assert(editorChunks.length >= 2, `Expected the lazy editor chunks, found ${editorChunks.join(', ')}`)
 for (const chunk of editorChunks) assert(serviceWorker.includes(`/assets/${chunk}`), `${chunk} must be precached so the editor works offline`)
 console.log(`Verified the lazy editor is in the offline app shell: ${editorChunks.join(', ')}`)
+
+// Editor first: sign-in code and the learning tools stay out of the entry chunk. Clerk loads
+// only for sign-in or a likely session, so it is neither preloaded nor precached.
+const clerkChunks = assetNames.filter((name) => /^ClerkBridge-/.test(name) && name.endsWith('.js'))
+assert.equal(clerkChunks.length, 1, `Expected one lazy Clerk chunk, found ${clerkChunks.join(', ')}`)
+const clerkMarker = 'failed_to_load_clerk_js'
+assert((await readFile(new URL(clerkChunks[0], ASSETS_DIRECTORY), 'utf8')).includes(clerkMarker), 'The lazy Clerk chunk should contain the Clerk loader')
+assert(!entrySource.includes(clerkMarker), 'Clerk must load from its own chunk, not the entry chunk')
+assert(!indexHtml.includes(clerkChunks[0]), 'index.html must not preload the Clerk chunk; it would compete with the editor')
+assert(!serviceWorker.includes(`/assets/${clerkChunks[0]}`), 'The offline app shell must not precache Clerk for every visitor')
+assert(!entrySource.includes('ecmaVersion'), 'The practice-check JavaScript parser (acorn) must not be in the entry chunk')
+assert(!entrySource.includes('Build a greeting'), 'Practice Lab challenges must not be in the entry chunk')
+const sidecarChunks = assetNames.filter((name) => /^(LearningSidecar|practiceLab)-/.test(name) && name.endsWith('.js'))
+assert.equal(sidecarChunks.length, 2, `Expected lazy Learning sidecar and Practice Lab chunks, found ${sidecarChunks.join(', ')}`)
+for (const chunk of sidecarChunks) {
+  assert(!indexHtml.includes(chunk), `index.html must not preload ${chunk}`)
+  assert(serviceWorker.includes(`/assets/${chunk}`), `${chunk} must be precached so the Guide and Practice Lab work offline`)
+}
+console.log(`Verified Clerk (${clerkChunks[0]}) and the learning tools (${sidecarChunks.join(', ')}) load lazily; only the learning tools are precached`)
