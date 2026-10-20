@@ -1,9 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 import App from './App.tsx'
-import { AuthProvider, configureE2EAuthToken, E2EAuthProvider } from './contexts/AuthContext.tsx'
+import { CloudAuthProvider, configureE2EAuthToken, E2EAuthProvider } from './contexts/AuthContext.tsx'
 import { hasClerkPublishableKey } from './lib/clerk.ts'
 import { e2eAuthEnabled } from './lib/e2eAuth.ts'
 import { loadEditorRuntime } from './lib/editorRuntime.ts'
@@ -19,11 +18,10 @@ const app = e2eAuthEnabled ? (
     <App />
   </E2EAuthProvider>
 ) : cloudEnabled ? (
-  <ClerkProvider publishableKey={clerkPublishableKey}>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </ClerkProvider>
+  // Clerk itself loads on demand (see CloudAuthProvider), never in the entry bundle.
+  <CloudAuthProvider publishableKey={clerkPublishableKey}>
+    <App />
+  </CloudAuthProvider>
 ) : (
   <App />
 )

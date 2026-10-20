@@ -66,6 +66,7 @@ vi.mock('./components/RunnerPanel', async () => {
 })
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
+const TEST_CLOUD_AUTH: AppAuthContext['cloudAuth'] = { status: 'ready', openSignIn: () => {}, openSignUp: () => {}, mountUserButton: null }
 
 async function openProjectMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'More project actions' }))
@@ -90,6 +91,7 @@ describe('App language guide practice projects', () => {
       user: null,
       organizations: [],
       syncSession: async () => {},
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     runnerHarness.onErrorAdviceChange = undefined
     runnerHarness.onRunCancel = undefined
@@ -215,6 +217,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: null, error: 'offline' })
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
@@ -241,6 +244,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -644,6 +648,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [{ id: 20, name: 'Robotics', slug: 'robotics', role: 'student' }],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [cloudProject], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -687,7 +692,7 @@ describe('App language guide practice projects', () => {
     authHarness.value = {
       isSignedIn: true, isLoading: false,
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
-      organizations: [], syncSession: vi.fn(),
+      organizations: [], syncSession: vi.fn(), cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [source], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -762,6 +767,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'teacher@example.com', first_name: 'Tess', last_name: 'Teacher', full_name: 'Tess Teacher', role: 'user' },
       organizations: [organization],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     const getProjects = vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
     vi.spyOn(api, 'getOrgMembers').mockResolvedValue({ data: [student], error: null })

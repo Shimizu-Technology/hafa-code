@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
   BookOpen,
   Bug,
-  Cloud,
   Code2,
   Copy,
   DatabaseBackup,
@@ -56,7 +54,7 @@ import {
 import { useAuthContext } from './contexts/AuthContext'
 import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
-import { AuthControls } from './components/AuthControls'
+import { AuthControls, SignInButton } from './components/AuthControls'
 import { ClassroomReviewPanel } from './components/ClassroomReviewPanel'
 import { ProjectFeedback } from './components/ProjectFeedback'
 import {
@@ -241,7 +239,7 @@ export default function App() {
   const checkpointRequestIdRef = useRef(0)
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const practiceCheckWatchdogRef = useRef<number | null>(null)
-  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
+  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession, cloudAuth } = useAuthContext()
   // A learner who arrived from a project or lesson link keeps that message (and its Start over) over the cloud-load summary.
   const showCloudLoadNotice = useCallback((message: string) => {
     setNotice((current) => (initial.notice && current === initial.notice ? current : message))
@@ -1980,7 +1978,8 @@ export default function App() {
         </section>
       )}
 
-      {welcomeVisible && !isSignedIn && !inviteRequiresAuth && (
+      {/* A returning signed-in learner sees neither welcome nor sign-in prompts while their session is checked. */}
+      {welcomeVisible && !isSignedIn && !workspaceIsSettling && !inviteRequiresAuth && (
         <WelcomeHero
           starterLabel={projectKindDefinition(project.kind).shortLabel}
           canRunStarter={projectKindCanRun(project.kind) && project.kind !== 'python'}
@@ -2006,12 +2005,8 @@ export default function App() {
           </div>
           {!isSignedIn && (
             <div className="invite-auth-actions">
-              <SignInButton mode="modal">
-                <button className="secondary" type="button"><Cloud size={16} aria-hidden="true" /> Sign in</button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="primary" type="button"><UserPlus size={16} aria-hidden="true" /> Create account</button>
-              </SignUpButton>
+              <SignInButton className="secondary" />
+              <button className="primary" type="button" onClick={cloudAuth.openSignUp}><UserPlus size={16} aria-hidden="true" /> Create account</button>
             </div>
           )}
           {isSignedIn && invitationAccepting && <Loader2 className="spin" size={20} />}
