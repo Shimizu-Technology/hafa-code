@@ -111,7 +111,9 @@ test('toasts sit bottom-right without covering controls and leave on their own',
   await expect(toast).toHaveAttribute('data-tone', 'success')
   const box = (await toast.boundingBox())!
   expect(box.x + box.width).toBeGreaterThan(1440 - 40)
-  expect(box.y + box.height).toBeGreaterThan(900 - 40)
+  // Bottom-right, lifted only as far as needed to clear the output footer and page footer.
+  expect(box.y + box.height).toBeLessThanOrEqual(900)
+  expect(box.y).toBeGreaterThan(900 / 2)
   const covered = await page.evaluate(() => {
     const toastNode = document.querySelector('.floating-dock .toast')!
     const t = toastNode.getBoundingClientRect()
@@ -127,7 +129,7 @@ test('toasts sit bottom-right without covering controls and leave on their own',
   await expect(toast).toHaveCount(0, { timeout: 6_000 })
 })
 
-test('a phone turned sideways keeps the bottom navigation and Run reachable', async ({ page }) => {
+test('a phone turned sideways keeps the navigation rail and Run reachable', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 })
   await openPython(page)
   const navigation = page.getByRole('navigation', { name: 'Workspace sections' })
@@ -136,7 +138,9 @@ test('a phone turned sideways keeps the bottom navigation and Run reachable', as
   expect(nav.y + nav.height).toBeLessThanOrEqual(390)
   const run = page.locator('[data-hafa-run-button]:visible').first()
   const runBox = (await run.boundingBox())!
-  expect(runBox.y + runBox.height).toBeLessThanOrEqual(nav.y)
+  // The rail sits beside the code instead of over it.
+  expect(nav.x + nav.width).toBeLessThanOrEqual(runBox.x)
+  expect(runBox.y + runBox.height).toBeLessThanOrEqual(390)
   expect(runBox.height).toBeGreaterThanOrEqual(44)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })

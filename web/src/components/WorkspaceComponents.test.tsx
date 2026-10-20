@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../lib/projectStorage'
 import { EditorWorkspace } from './EditorWorkspace'
 import { MobileWorkspaceNav } from './MobileWorkspaceNav'
@@ -24,6 +24,8 @@ vi.mock('./RunnerPanel', () => ({ RunnerPanel: () => <section aria-label="Runner
 vi.mock('./WebPreview', () => ({ WebPreview: () => <section aria-label="Web preview" /> }))
 
 describe('workspace presentation components', () => {
+  afterEach(cleanup)
+
   it('routes project navigation actions through the project sidebar', async () => {
     const user = userEvent.setup()
     const project = createProject('ruby', 'Warmup')
@@ -55,6 +57,127 @@ describe('workspace presentation components', () => {
 
     expect(onAddProject).toHaveBeenCalledWith('python')
     expect(onSelectProject).toHaveBeenCalledWith(project.id)
+  })
+
+  it('offers project search once the list is long and filters by name or language', async () => {
+    const user = userEvent.setup()
+    const projects = Array.from({ length: 35 }, (_, index) => createProject(index % 2 ? 'python' : 'ruby', index === 7 ? 'Expense tracker' : `Lesson ${index}`))
+    const sidebarProps = {
+      activeOrganizationId: null,
+      activeProjectCount: projects.length,
+      archivedProjectCount: 0,
+      currentProjectId: projects[0].id,
+      currentProjectTitle: projects[0].title,
+      isSignedIn: false,
+      mobileProjectsOpen: false,
+      showArchived: false,
+      workspaceName: 'Personal projects',
+      onAddProject: vi.fn(),
+      onCollapse: vi.fn(),
+      onExpand: vi.fn(),
+      onSelectProject: vi.fn(),
+      onShowArchivedChange: vi.fn(),
+    }
+    const { rerender } = render(<ProjectSidebar {...sidebarProps} projects={projects.slice(0, 3)} />)
+    expect(screen.queryAllByRole('searchbox', { name: 'Search projects' })).toHaveLength(0)
+
+    rerender(<ProjectSidebar {...sidebarProps} projects={projects} />)
+    // The desktop sidebar and phone Projects tab each render the list; ids stay unique.
+    const boxes = screen.getAllByRole('searchbox', { name: 'Search projects' })
+    expect(boxes).toHaveLength(2)
+    expect(new Set(boxes.map((box) => box.id)).size).toBe(2)
+    const sidebar = boxes[1].closest('.sidebar-content') as HTMLElement
+    const box = within(sidebar).getByRole('searchbox', { name: 'Search projects' })
+
+    await user.type(box, 'expense')
+    expect(within(sidebar).getAllByRole('button', { name: /^Expense tracker/ })).toHaveLength(1)
+    expect(within(sidebar).queryByRole('button', { name: /^Lesson 1 / })).toBeNull()
+    expect(within(sidebar).getByText('1 of 35 projects')).toBeDefined()
+
+    await user.clear(box)
+    await user.type(box, 'ruby lesson 1')
+    expect(within(sidebar).getAllByRole('button', { name: /^Lesson 1\d? Ruby/ }).length).toBeGreaterThan(0)
+    expect(within(sidebar).queryByRole('button', { name: /Python ·/ })).toBeNull()
+
+    await user.clear(box)
+    await user.type(box, 'zzz')
+    expect(within(sidebar).getByText('No projects match “zzz”.')).toBeDefined()
+    await user.keyboard('{Escape}')
+    expect(box).toHaveProperty('value', '')
+    expect(within(sidebar).getAllByRole('button', { name: /· / }).length).toBe(35)
+  })
+
+  it('shows the code read-only while the editor loads, and offers a retry if it fails', async () => {
+    const user = userEvent.setup()
+    const project = createProject('python', 'Receipt')
+    const props = {
+      activeFile: project.files[0],
+      canEditProject: true,
+      editorExpanded: false,
+      editorFontSize: 14,
+      entryFile: project.files[0],
+      project,
+      runnerInstanceKey: project.id,
+      onCreateFile: vi.fn(),
+      onDeleteFile: vi.fn(),
+      onDuplicateFile: vi.fn(),
+      onEditorExpandedChange: vi.fn(),
+      onOpenGuide: vi.fn(),
+      onOpenPractice: vi.fn(),
+      onRenameFile: vi.fn(),
+      onRunFromMobileCode: vi.fn(),
+      onSelectFile: vi.fn(),
+      onSetEntryPath: vi.fn(),
+      onUpdateActiveFile: vi.fn(),
+    }
+    const runtime = globalThis as { __HAFA_EDITOR_RUNTIME_STATE__?: string }
+    runtime.__HAFA_EDITOR_RUNTIME_STATE__ = 'loading'
+    const { rerender } = render(<EditorWorkspace {...props} />)
+    expect(screen.queryByLabelText('Code editor')).toBeNull()
+    const placeholder = screen.getByLabelText(`${project.files[0].path}, read-only while the editor loads`)
+    expect(placeholder.textContent).toContain(project.files[0].content.split('\n')[0])
+    expect(screen.getByRole('status').textContent).toContain('Loading the editor')
+
+    runtime.__HAFA_EDITOR_RUNTIME_STATE__ = 'failed'
+    rerender(<EditorWorkspace {...props} />)
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(screen.getByRole('status').textContent).toContain('did not load')
+
+    runtime.__HAFA_EDITOR_RUNTIME_STATE__ = 'ready'
+    rerender(<EditorWorkspace {...props} />)
+    expect(screen.getByLabelText('Code editor')).toBeDefined()
+  })
+
+  it('explains why Run is unavailable when the entry file is empty', () => {
+    const project = createProject('python', 'Blank')
+    const empty = { ...project.files[0], content: '  \n' }
+    const blank = { ...project, files: [empty] }
+    render(
+      <EditorWorkspace
+        activeFile={empty}
+        canEditProject
+        editorExpanded={false}
+        editorFontSize={14}
+        entryFile={empty}
+        project={blank}
+        runnerInstanceKey={project.id}
+        onCreateFile={vi.fn()}
+        onDeleteFile={vi.fn()}
+        onDuplicateFile={vi.fn()}
+        onEditorExpandedChange={vi.fn()}
+        onOpenGuide={vi.fn()}
+        onOpenPractice={vi.fn()}
+        onRenameFile={vi.fn()}
+        onRunFromMobileCode={vi.fn()}
+        onSelectFile={vi.fn()}
+        onSetEntryPath={vi.fn()}
+        onUpdateActiveFile={vi.fn()}
+      />,
+    )
+    const run = screen.getByRole('button', { name: 'Run Python' })
+    expect(run).toHaveProperty('disabled', true)
+    const hint = document.getElementById(run.getAttribute('aria-describedby')!)
+    expect(hint?.textContent).toBe(`${empty.path} is empty. Type some code in it, then press Run.`)
   })
 
   it('keeps editor actions controlled by the workspace owner', async () => {
