@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { SignedIn, SignedOut, SignInButton, UserButton, useAuth } from '@clerk/clerk-react'
-import { Cloud, Loader2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Cloud, Loader2, RotateCcw } from 'lucide-react'
+import { useAuthContext } from '../contexts/AuthContext'
 import { e2eAuthEnabled } from '../lib/e2eAuth'
 
 export function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEnabled: boolean; sessionLoading?: boolean }) {
@@ -15,36 +15,67 @@ export function AuthControls({ cloudEnabled, sessionLoading = false }: { cloudEn
   return <CloudAuthControls sessionLoading={sessionLoading} />
 }
 
+/** Signed-out learners get a plain button; Clerk's code downloads only when it is pressed. */
+export function SignInButton({ className = 'secondary sign-in-button', label = 'Sign in' }: { className?: string; label?: string }) {
+  const { cloudAuth } = useAuthContext()
+  const opening = cloudAuth.status === 'opening'
+  return (
+    <button
+      className={className}
+      type="button"
+      title="Sign in to sync your projects to your account"
+      aria-busy={opening || undefined}
+      onClick={cloudAuth.openSignIn}
+    >
+      {opening ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Cloud size={16} aria-hidden="true" />}
+      {opening ? 'Opening sign-in…' : label}
+    </button>
+  )
+}
+
 function CloudAuthControls({ sessionLoading }: { sessionLoading: boolean }) {
-  const { isLoaded } = useAuth()
-  const [loadTimedOut, setLoadTimedOut] = useState(false)
+  const { cloudAuth, isSignedIn } = useAuthContext()
 
-  useEffect(() => {
-    if (isLoaded) return
-
-    const timeout = window.setTimeout(() => setLoadTimedOut(true), 8_000)
-    return () => window.clearTimeout(timeout)
-  }, [isLoaded])
-
-  if (!isLoaded && loadTimedOut) {
-    return <span className="cloud-pill muted"><Cloud size={15} aria-hidden="true" /> Cloud sign-in unavailable</span>
+  if (cloudAuth.status === 'unavailable') {
+    return (
+      <button
+        className="secondary sign-in-button"
+        type="button"
+        title={cloudAuth.retryReloadsPage
+          ? 'Cloud sign-in could not load. Reload the page to try again; your projects are saved in this browser.'
+          : 'Cloud sign-in could not load. Check your connection, then try again.'}
+        onClick={cloudAuth.openSignIn}
+      >
+        <RotateCcw size={16} aria-hidden="true" /> {cloudAuth.retryReloadsPage ? 'Reload to sign in' : 'Retry sign-in'}
+      </button>
+    )
   }
 
-  if (!isLoaded || sessionLoading) {
-    return <span className="cloud-pill muted"><Loader2 className="spin" size={15} aria-hidden="true" /> Loading sign-in</span>
+  if (cloudAuth.status === 'checking' || (isSignedIn && sessionLoading)) {
+    return <span className="cloud-pill muted" role="status"><Loader2 className="spin" size={15} aria-hidden="true" /> Checking your account</span>
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="auth-actions">
+        <SignInButton />
+      </div>
+    )
   }
 
   return (
     <div className="auth-actions">
-      <SignedOut>
-        <SignInButton mode="modal">
-          <button className="secondary sign-in-button" title="Sign in to sync your projects to your account"><Cloud size={16} aria-hidden="true" /> Sign in</button>
-        </SignInButton>
-      </SignedOut>
-      <SignedIn>
-        <span className="cloud-pill"><Cloud size={15} aria-hidden="true" /> Cloud sync on</span>
-        <UserButton afterSignOutUrl="/" />
-      </SignedIn>
+      <span className="cloud-pill"><Cloud size={15} aria-hidden="true" /> Cloud sync on</span>
+      {cloudAuth.mountUserButton && <ClerkUserButton mount={cloudAuth.mountUserButton} />}
     </div>
   )
+}
+
+function ClerkUserButton({ mount }: { mount: (node: HTMLDivElement) => () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    return mount(ref.current)
+  }, [mount])
+  return <div className="clerk-user-button" ref={ref} />
 }

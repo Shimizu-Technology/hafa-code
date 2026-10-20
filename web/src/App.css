@@ -1495,20 +1495,13 @@ textarea {
 .file-row-actions .icon-button { width: var(--control-sm); min-height: var(--control-sm); }
 .file-row-actions .danger-icon { color: var(--code-danger); }
 
-.editor-loading {
-  display: grid;
-  place-items: center;
-  height: var(--workspace-pane-height);
-  background: var(--surface-code);
-  color: var(--text-on-code-muted);
-}
-
 /* Groups the editor's header rows; only the sideways-phone layout gives it a box. */
 .editor-header { display: contents; }
 
 /* Read-only code shown while the editor chunk downloads; mirrors Monaco's gutter and padding. */
 .editor-placeholder {
   position: relative;
+  width: 100%;
   height: var(--editor-height);
   overflow: hidden;
   background: var(--surface-code);
@@ -2117,6 +2110,75 @@ textarea {
 
 .learning-sidecar-backdrop { display: contents; }
 
+/* Shown for the moment the Guide, Practice, and Coach code downloads on first open.
+   When the content replaces the skeleton, neither the panel nor the drawer backdrop
+   animates in again (two classes beat the drawer animation in the overlay media query). */
+.learning-sidecar.learning-sidecar-entered,
+.learning-sidecar-backdrop.learning-sidecar-entered { animation: none; }
+
+.learning-sidecar-tab-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.learning-sidecar-tab-placeholder.active {
+  background: var(--surface-panel);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgba(20, 17, 15, 0.12);
+}
+
+[data-theme="dark"] .learning-sidecar-tab-placeholder.active { background: var(--surface-code-raised); }
+
+.learning-sidecar-skeleton { padding: var(--space-4); }
+
+.learning-sidecar-load-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.skeleton-lines { display: grid; gap: var(--space-3); }
+
+.skeleton-lines span {
+  height: 0.85rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  animation: hafa-skeleton 1.4s ease-in-out infinite alternate;
+}
+
+.skeleton-lines span:nth-child(1) { width: 62%; height: 1.15rem; }
+.skeleton-lines span:nth-child(2) { width: 94%; }
+.skeleton-lines span:nth-child(3) { width: 88%; }
+.skeleton-lines span:nth-child(4) { width: 72%; }
+.skeleton-lines span:nth-child(5) { width: 80%; }
+
+.learning-sidecar-load-failed { display: grid; gap: var(--space-3); justify-items: start; }
+.learning-sidecar-load-failed p { margin: 0; color: var(--text-body); font-size: var(--text-sm); line-height: var(--leading-body); }
+
+/* Holds the challenge panel's place (its heading row is 72px) while the challenge module downloads. */
+.practice-session-loading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.practice-session-loading > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+
 @media (max-width: 1599px) {
   .coding-stage.learning-open { grid-template-columns: minmax(0, 1fr); }
 
@@ -2291,6 +2353,7 @@ textarea {
 @keyframes hafa-fade { from { opacity: 0; } }
 @keyframes hafa-enter { from { opacity: 0; transform: translateY(var(--motion-distance)); } }
 @keyframes hafa-enter-up { from { opacity: 0; transform: translateY(var(--motion-distance)); } }
+@keyframes hafa-skeleton { from { opacity: 0.55; } to { opacity: 1; } }
 @keyframes hafa-drawer { from { opacity: 0; transform: translateX(calc(2 * var(--motion-distance))); } }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2303,6 +2366,9 @@ textarea {
   .output-panel.first-success,
   .floating-dock { transition: none; }
   .learning-sidecar { animation-name: hafa-fade; }
+  .learning-sidecar.learning-sidecar-entered,
+  .learning-sidecar-backdrop.learning-sidecar-entered { animation: none; }
+  .skeleton-lines span { animation: none; }
 }
 
 /* ---- Laptop and tablet ---- */

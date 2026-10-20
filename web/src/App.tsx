@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import {
   BookOpen,
   Bug,
-  Cloud,
   Code2,
   Copy,
   DatabaseBackup,
@@ -56,14 +54,12 @@ import {
 import { useAuthContext } from './contexts/AuthContext'
 import { api, type CloudAuditEvent, type CloudOrgInvitation, type CloudOrgMember } from './lib/api'
 import { hasClerkPublishableKey } from './lib/clerk'
-import { AuthControls } from './components/AuthControls'
+import { AuthControls, SignInButton } from './components/AuthControls'
 import { ClassroomReviewPanel } from './components/ClassroomReviewPanel'
 import { ProjectFeedback } from './components/ProjectFeedback'
-import {
-  LEARNING_SIDECAR_OVERLAY_QUERY,
-  LearningSidecar,
-  type LearningTab,
-} from './components/LearningSidecar'
+import { LEARNING_SIDECAR_OVERLAY_QUERY } from './hooks/useOverlaySidecar'
+import type { LearningTab } from './lib/learningTabs'
+import { LazyLearningSidecar } from './components/LazyLearningSidecar'
 import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
@@ -81,7 +77,8 @@ import { editorThemeFor } from './lib/monacoThemes'
 import { WorkspaceDialogs, type ProjectCopyDestination, type ShareDialogState } from './components/WorkspaceDialogs'
 import { WorkspaceTransferDialog } from './components/WorkspaceTransferDialog'
 import type { LanguageGuideTopic } from './lib/languageGuides'
-import { evaluatePracticeChallenge, nextIncompletePracticeChallenge, practiceChallengeById, type PracticeChallenge, type PracticeCheckResult } from './lib/practiceLab'
+import type { PracticeChallenge, PracticeCheckResult } from './lib/practiceLab'
+import { practiceLabModule } from './lib/practiceRuntime'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -241,7 +238,7 @@ export default function App() {
   const checkpointRequestIdRef = useRef(0)
   const pendingPracticeCheckRef = useRef<PendingPracticeCheck | null>(null)
   const practiceCheckWatchdogRef = useRef<number | null>(null)
-  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession } = useAuthContext()
+  const { isSignedIn, isLoading: authLoading, user, organizations, syncSession, cloudAuth } = useAuthContext()
   // A learner who arrived from a project or lesson link keeps that message (and its Start over) over the cloud-load summary.
   const showCloudLoadNotice = useCallback((message: string) => {
     setNotice((current) => (initial.notice && current === initial.notice ? current : message))
@@ -326,12 +323,11 @@ export default function App() {
     setPendingCheckpoint(null)
   })
 
-  const currentPracticeChallenge = useMemo(
-    () => practiceChallengeById(practiceChallengeIdForProject(project.id)),
-    [project.id],
-  )
-  const nextPracticeChallenge = currentPracticeChallenge && practiceResult?.passed
-    ? nextIncompletePracticeChallenge(currentPracticeChallenge, new Set([...completedPracticeIds, currentPracticeChallenge.id]))
+  const currentPracticeChallengeId = useMemo(() => practiceChallengeIdForProject(project.id), [project.id])
+  const { module: practiceLab, state: practiceLabState, retry: retryPracticeLab } = practiceLabModule.useModule(Boolean(currentPracticeChallengeId))
+  const currentPracticeChallenge = practiceLab?.practiceChallengeById(currentPracticeChallengeId) ?? null
+  const nextPracticeChallenge = practiceLab && currentPracticeChallenge && practiceResult?.passed
+    ? practiceLab.nextIncompletePracticeChallenge(currentPracticeChallenge, new Set([...completedPracticeIds, currentPracticeChallenge.id]))
     : null
   const activeFile = project.files.find((file) => file.path === activePath) ?? project.files[0]
   const entryFile = project.files.find((file) => file.path === project.entryPath) ?? project.files[0]
@@ -983,11 +979,11 @@ export default function App() {
   }
 
   const checkPracticeWork = () => {
-    if (!currentPracticeChallenge || practiceChecking) return
+    if (!practiceLab || !currentPracticeChallenge || practiceChecking) return
     setPracticeResult(null)
 
     if (currentPracticeChallenge.kind === 'web') {
-      recordPracticeResult(currentPracticeChallenge, evaluatePracticeChallenge(currentPracticeChallenge, project.files))
+      recordPracticeResult(currentPracticeChallenge, practiceLab.evaluatePracticeChallenge(currentPracticeChallenge, project.files))
       return
     }
 
@@ -1031,12 +1027,14 @@ export default function App() {
       setPracticeResult(null)
       return
     }
-    const challenge = practiceChallengeById(pending.challengeId)
-    if (!challenge) {
+    // A practice check only starts once the challenge code is loaded (see checkPracticeWork).
+    const lab = practiceLabModule.peek()
+    const challenge = lab?.practiceChallengeById(pending.challengeId)
+    if (!lab || !challenge) {
       setPracticeChecking(false)
       return
     }
-    recordPracticeResult(challenge, evaluatePracticeChallenge(challenge, pending.files, outcome))
+    recordPracticeResult(challenge, lab.evaluatePracticeChallenge(challenge, pending.files, outcome))
   }
 
   const updateProjectVisibility = (visibility: ProjectVisibility) => {
@@ -1980,7 +1978,8 @@ export default function App() {
         </section>
       )}
 
-      {welcomeVisible && !isSignedIn && !inviteRequiresAuth && (
+      {/* A returning signed-in learner sees neither welcome nor sign-in prompts while their session is checked. */}
+      {welcomeVisible && !isSignedIn && !workspaceIsSettling && !inviteRequiresAuth && (
         <WelcomeHero
           starterLabel={projectKindDefinition(project.kind).shortLabel}
           canRunStarter={projectKindCanRun(project.kind) && project.kind !== 'python'}
@@ -2006,12 +2005,8 @@ export default function App() {
           </div>
           {!isSignedIn && (
             <div className="invite-auth-actions">
-              <SignInButton mode="modal">
-                <button className="secondary" type="button"><Cloud size={16} aria-hidden="true" /> Sign in</button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="primary" type="button"><UserPlus size={16} aria-hidden="true" /> Create account</button>
-              </SignUpButton>
+              <SignInButton className="secondary" />
+              <button className="primary" type="button" onClick={cloudAuth.openSignUp}><UserPlus size={16} aria-hidden="true" /> Create account</button>
             </div>
           )}
           {isSignedIn && invitationAccepting && <Loader2 className="spin" size={20} />}
@@ -2412,6 +2407,19 @@ export default function App() {
               <ProjectFeedback projectId={project.id} files={project.files} currentUserId={user?.id} />
             )}
 
+            {currentPracticeChallengeId && !currentPracticeChallenge && practiceLabState !== 'ready' && (
+              <section className="practice-session practice-session-loading panel" aria-label="Practice challenge">
+                {practiceLabState === 'failed' ? (
+                  <>
+                    <span>The practice challenge could not load. Your code is safe.</span>
+                    <button className="secondary compact" type="button" onClick={retryPracticeLab}>Try again</button>
+                  </>
+                ) : (
+                  <span role="status"><Loader2 className="spin" size={16} aria-hidden="true" /> Loading your practice challenge…</span>
+                )}
+              </section>
+            )}
+
             {currentPracticeChallenge && (
               <PracticeSessionPanel
                 key={`${project.id}:${currentPracticeChallenge.id}`}
@@ -2460,7 +2468,7 @@ export default function App() {
           </section>
         </div>
 
-        <LearningSidecar
+        <LazyLearningSidecar
           activeTab={learningTab}
           coachContext={learningCoachContext}
           completedChallengeIds={completedPracticeIds}

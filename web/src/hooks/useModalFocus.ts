@@ -9,19 +9,28 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
-export function useModalFocus<T extends HTMLElement>(open: boolean, onClose: () => void): RefObject<T | null> {
+/**
+ * `returnFocusTo` names the element that opened the dialog when it is no longer focused at
+ * open time, for example when a loading placeholder held focus before this dialog replaced it.
+ */
+export function useModalFocus<T extends HTMLElement>(open: boolean, onClose: () => void, returnFocusTo?: HTMLElement | null): RefObject<T | null> {
   const dialogRef = useRef<T | null>(null)
   const closeRef = useRef(onClose)
   const returnFocusRef = useRef<HTMLElement | null>(null)
+  const returnFocusToRef = useRef(returnFocusTo)
 
   useEffect(() => {
     closeRef.current = onClose
-  }, [onClose])
+    returnFocusToRef.current = returnFocusTo
+  }, [onClose, returnFocusTo])
 
   useEffect(() => {
     if (!open) return
 
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const opener = returnFocusToRef.current
+    returnFocusRef.current = opener?.isConnected
+      ? opener
+      : document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = dialogRef.current
     const focusable = dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) : []
     const initialFocus = dialog?.querySelector<HTMLElement>('[data-modal-initial-focus]') ?? focusable[0]

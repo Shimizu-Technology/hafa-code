@@ -9,11 +9,12 @@ web/src/
   App.tsx                     Main workspace orchestration and page composition
   App.css                     App-level styling for the workspace UI
   components/
-    AuthControls.tsx          Clerk/local cloud-sync controls
+    AuthControls.tsx          Sign-in button, neutral "checking" state, and Clerk account menu
     EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
     ErrorCoach.tsx            Plain-language error explanation and guide deep link
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
-    LearningSidecar.tsx       Docked Guide/Practice/Coach shell and responsive mobile drawer
+    LazyLearningSidecar.tsx   Loads the learning sidecar on first open, with a matching skeleton
+    LearningSidecar.tsx       Docked Guide/Practice/Coach shell and responsive mobile drawer (lazy chunk)
     MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
     PracticeLab.tsx           All-language challenge browser and progress overview
     PracticeSessionPanel.tsx  Active challenge instructions, hints, and check results
@@ -24,12 +25,17 @@ web/src/
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
     WorkspaceDialogs.tsx      Controlled file, share, organization, action, and confirmation dialogs
   contexts/
-    AuthContext.tsx           Clerk session sync into Rails
+    AuthContext.tsx           Session sync into Rails; decides when Clerk downloads (no Clerk import)
+    ClerkBridge.tsx           Lazy chunk: ClerkProvider beside the app, reporting state to AuthContext
   hooks/
+    useOverlaySidecar.ts      Drawer-or-column breakpoint for the learning sidecar
     usePreferences.ts         Theme, color mode, and editor-size hooks
   lib/
     api.ts                    Rails API client and cloud/local data mapping
     clerk.ts                  Clerk env validation
+    clerkSessionHint.ts       When to load Clerk: on demand, after the editor, or at once
+    editorRuntime.ts          Lazy Monaco loader and its loading/failed state
+    lazyModule.ts             Retryable dynamic-import wrapper for sidecar chunks
     codeRunner.ts             Starter-project and web-preview helpers
     errorCoach.ts             Deterministic runtime/preview error classification and next steps
     languageGuides.ts         Guide topics and complete practice projects for every project kind
@@ -37,6 +43,8 @@ web/src/
     practiceLab.ts            Challenge catalog and deterministic source/output checks
     practiceChallenges/       Per-language challenge catalogs
     practiceProgress.ts       Local challenge completion and project-to-challenge links
+    practiceRuntime.ts        Lazy loader for the Practice Lab challenge module
+    startupScheduler.ts       Runs optional downloads after the editor (and any sign-in) is ready
     projectTypes.ts           Shared project, file, and language types
     projectStorage.ts         localStorage, import/export, checkpoints
     runnerOutcome.ts          Shared runner completion contract for learning tools
@@ -72,6 +80,7 @@ web/src/
 - Keep reusable visual panes in `components/`.
 - Keep hooks that own browser subscriptions or persisted preferences in `hooks/`.
 - Let `App.tsx` remain the composition root, but avoid adding new large panels directly to it.
+- Keep the first visit editor-first: the entry chunk holds the workspace shell only. Monaco, the learning sidecar, Practice Lab challenges, and Clerk load lazily, and `scripts/verify-production-build.mjs` enforces it. Do not import `@clerk/clerk-react`, `lib/practiceLab.ts`, `lib/languageGuides.ts`, or `components/LearningSidecar.tsx` statically from always-loaded code.
 
 ## Next Cleanup Targets
 

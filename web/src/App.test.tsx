@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { LEARNING_SIDECAR_OVERLAY_QUERY } from './components/LearningSidecar'
+import { LEARNING_SIDECAR_OVERLAY_QUERY } from './hooks/useOverlaySidecar'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
 import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
@@ -66,6 +66,7 @@ vi.mock('./components/RunnerPanel', async () => {
 })
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
+const TEST_CLOUD_AUTH: AppAuthContext['cloudAuth'] = { status: 'ready', retryReloadsPage: false, openSignIn: () => {}, openSignUp: () => {}, mountUserButton: null }
 
 async function openProjectMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'More project actions' }))
@@ -90,6 +91,7 @@ describe('App language guide practice projects', () => {
       user: null,
       organizations: [],
       syncSession: async () => {},
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     runnerHarness.onErrorAdviceChange = undefined
     runnerHarness.onRunCancel = undefined
@@ -132,7 +134,7 @@ describe('App language guide practice projects', () => {
     await user.click(screen.getAllByRole('button', { name: 'Ruby guide' })[0])
     const learningSidecar = screen.getByRole('complementary', { name: 'Ruby learning' })
     expect(document.querySelector('.layout-grid')?.contains(learningSidecar)).toBe(false)
-    await user.type(screen.getByRole('searchbox'), 'variables')
+    await user.type(await screen.findByRole('searchbox'), 'variables')
     await user.click(screen.getByRole('button', { name: /variables and data types/i }))
     await user.click(screen.getByRole('button', { name: 'Try example' }))
 
@@ -215,6 +217,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: null, error: 'offline' })
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
@@ -241,6 +244,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -644,6 +648,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
       organizations: [{ id: 20, name: 'Robotics', slug: 'robotics', role: 'student' }],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [cloudProject], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -687,7 +692,7 @@ describe('App language guide practice projects', () => {
     authHarness.value = {
       isSignedIn: true, isLoading: false,
       user: { id: 7, email: 'student@example.com', first_name: 'Student', last_name: 'One', full_name: 'Student One', role: 'user' },
-      organizations: [], syncSession: vi.fn(),
+      organizations: [], syncSession: vi.fn(), cloudAuth: TEST_CLOUD_AUTH,
     }
     vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [source], error: null })
     vi.spyOn(api, 'getProjectComments').mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
@@ -762,6 +767,7 @@ describe('App language guide practice projects', () => {
       user: { id: 7, email: 'teacher@example.com', first_name: 'Tess', last_name: 'Teacher', full_name: 'Tess Teacher', role: 'user' },
       organizations: [organization],
       syncSession: vi.fn(),
+      cloudAuth: TEST_CLOUD_AUTH,
     }
     const getProjects = vi.spyOn(api, 'getProjects').mockResolvedValue({ data: [], error: null })
     vi.spyOn(api, 'getOrgMembers').mockResolvedValue({ data: [student], error: null })
