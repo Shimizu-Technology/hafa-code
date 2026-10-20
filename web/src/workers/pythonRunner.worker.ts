@@ -40,7 +40,7 @@ function streamWriter(output: RunOutput, stream: 'stdout' | 'stderr') {
 }
 
 function pyodideIndexUrl() {
-  return new URL(`${import.meta.env.BASE_URL}assets/pyodide/`, self.location.origin).href
+  return new URL(`${import.meta.env.BASE_URL}${__HAFA_PYODIDE_ASSET_DIRECTORY__}`, self.location.origin).href
 }
 
 function getPyodide(indexURL = pyodideIndexUrl()) {

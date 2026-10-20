@@ -44,9 +44,23 @@ const PYODIDE_RUNTIME_FILES = [
   'python_stdlib.zip',
 ]
 
+const PYODIDE_DIRECTORY = dirname(createRequire(import.meta.url).resolve('pyodide'))
+
+/**
+ * Pyodide's file names never change between versions, so the files are served from a
+ * directory named after their content hash. That makes them safe to cache as immutable.
+ */
+const PYODIDE_ASSET_DIRECTORY = (() => {
+  const hash = createHash('sha256')
+  // Sorted so scripts/verify-production-build.mjs can recompute the same hash.
+  for (const fileName of [...PYODIDE_RUNTIME_FILES].sort()) {
+    hash.update(fileName).update('\0').update(readFileSync(join(PYODIDE_DIRECTORY, fileName)))
+  }
+  return `assets/pyodide/${hash.digest('hex').slice(0, 12)}/`
+})()
+
 // Only these pinned core files are served; arbitrary package paths stay private.
 function copyPyodideRuntime(): Plugin {
-  const pyodideDirectory = dirname(createRequire(import.meta.url).resolve('pyodide'))
   const contentTypes: Record<string, string> = {
     'pyodide.asm.mjs': 'application/javascript',
     'pyodide.asm.wasm': 'application/wasm',
@@ -57,12 +71,12 @@ function copyPyodideRuntime(): Plugin {
     name: 'hafa-code-pyodide-runtime',
     configureServer(server) {
       const routes = new Map(PYODIDE_RUNTIME_FILES.map((fileName) => [
-        `${server.config.base}assets/pyodide/${fileName}`, fileName,
+        `${server.config.base}${PYODIDE_ASSET_DIRECTORY}${fileName}`, fileName,
       ]))
       server.middlewares.use((request, response, next) => {
         const fileName = routes.get(request.url?.split('?')[0] ?? '')
         if (!fileName || !['GET', 'HEAD'].includes(request.method ?? '')) return next()
-        const stream = createReadStream(join(pyodideDirectory, fileName))
+        const stream = createReadStream(join(PYODIDE_DIRECTORY, fileName))
         stream.on('error', next)
         stream.on('open', () => {
           response.setHeader('Content-Type', contentTypes[fileName])
@@ -79,8 +93,8 @@ function copyPyodideRuntime(): Plugin {
     generateBundle() {
       for (const fileName of PYODIDE_RUNTIME_FILES) {
         this.emitFile({
-          type: 'asset', fileName: `assets/pyodide/${fileName}`,
-          source: readFileSync(join(pyodideDirectory, fileName)),
+          type: 'asset', fileName: `${PYODIDE_ASSET_DIRECTORY}${fileName}`,
+          source: readFileSync(join(PYODIDE_DIRECTORY, fileName)),
         })
       }
     },
@@ -193,6 +207,9 @@ function preloadEditorChunks(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __HAFA_PYODIDE_ASSET_DIRECTORY__: JSON.stringify(PYODIDE_ASSET_DIRECTORY),
+  },
   plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker(), preloadEditorChunks()],
   worker: {
     plugins: () => [bundleTypeScriptLibraries()],

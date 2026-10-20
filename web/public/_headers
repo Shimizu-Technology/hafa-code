@@ -32,6 +32,15 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=()
   Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; img-src data: blob: https:; font-src data:; style-src 'unsafe-inline' data: blob:; script-src 'unsafe-inline' data: blob:; connect-src 'none'; frame-src about: data: blob:;
 
+# Every file under /assets/ is named by its content: Vite adds a content hash to each
+# chunk, worker, stylesheet, and asset, and Pyodide lives in a directory named after the
+# hash of its files. A changed file gets a new URL, so browsers can keep these for a year
+# without asking again. scripts/verify-production-build.mjs fails the build if an
+# unhashed file lands here. index.html, sw.js, the manifest, and other public files keep
+# revalidating so a deploy is seen on the next visit.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /sw.js
   Cache-Control: no-cache
 

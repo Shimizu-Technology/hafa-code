@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -168,12 +169,22 @@ for (const assetName of sqliteRuntimeAssets) {
 }
 console.log(`Verified lazy SQLite runtime assets: ${sqliteRuntimeAssets.sort().join(', ')}`)
 
-const pyodideAssets = (await readdir(new URL('pyodide/', ASSETS_DIRECTORY))).sort()
+const pyodideDirectories = await readdir(new URL('pyodide/', ASSETS_DIRECTORY))
+assert.equal(pyodideDirectories.length, 1, `Expected one content-addressed Pyodide directory, found ${pyodideDirectories.join(', ')}`)
+const pyodideDirectoryUrl = new URL(`pyodide/${pyodideDirectories[0]}/`, ASSETS_DIRECTORY)
+const pyodideAssets = (await readdir(pyodideDirectoryUrl)).sort()
 assert.deepEqual(pyodideAssets, PYODIDE_RUNTIME_FILES, 'Expected only the pinned core Pyodide runtime assets')
-for (const assetName of pyodideAssets) {
-  assert(!serviceWorker.includes(`/assets/pyodide/${assetName}`), `Pyodide runtime asset ${assetName} must remain lazy and outside the service-worker app shell`)
+// Same scheme as vite.config.ts: the directory name must be the hash of the files inside it.
+const pyodideHash = createHash('sha256')
+for (const assetName of PYODIDE_RUNTIME_FILES) {
+  pyodideHash.update(assetName).update('\0').update(await readFile(new URL(assetName, pyodideDirectoryUrl)))
 }
-console.log(`Verified self-hosted Pyodide runtime: ${pyodideAssets.join(', ')}`)
+assert.equal(pyodideDirectories[0], pyodideHash.digest('hex').slice(0, 12), 'The Pyodide directory name must be the hash of its files')
+const pyodidePath = `/assets/pyodide/${pyodideDirectories[0]}/`
+assert(!serviceWorker.includes('/assets/pyodide/'), 'Pyodide runtime assets must remain lazy and outside the service-worker app shell')
+const pythonRunnerSource = await readFile(new URL(assetNames.find((name) => /^pythonRunner\.worker-[^.]+\.js$/.test(name)), ASSETS_DIRECTORY), 'utf8')
+assert(pythonRunnerSource.includes(pyodidePath.slice(1)), `The Python runner must load Pyodide from ${pyodidePath}`)
+console.log(`Verified self-hosted Pyodide runtime in ${pyodidePath}: ${pyodideAssets.join(', ')}`)
 
 const productionScriptNames = assetNames.filter((name) => name.endsWith('.js'))
 const productionScripts = await Promise.all(productionScriptNames.map((name) => readFile(new URL(name, ASSETS_DIRECTORY), 'utf8')))
@@ -228,3 +239,50 @@ for (const chunk of sidecarChunks) {
   assert(serviceWorker.includes(`/assets/${chunk}`), `${chunk} must be precached so the Guide and Practice Lab work offline`)
 }
 console.log(`Verified Clerk (${clerkChunks[0]}) and the learning tools (${sidecarChunks.join(', ')}) load lazily; only the learning tools are precached`)
+
+// Long-term caching: content-addressed files are immutable for a year; everything a deploy
+// changes in place (the HTML, the service worker, the manifest, public files) revalidates.
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+const VITE_HASHED_ASSET = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/
+const VERSIONED_FONT = /^\/fonts\/[a-z0-9-]+-\d+\.\d+\.\d+\.woff2$/
+const isContentAddressed = (filePath) => VITE_HASHED_ASSET.test(filePath)
+  || filePath.startsWith(pyodidePath)
+  || VERSIONED_FONT.test(filePath)
+
+function cacheControlFor(filePath) {
+  const matches = [...headers]
+    .filter(([pattern, values]) => values.has('cache-control') && wildcardPathMatches(pattern, filePath))
+  // Netlify may combine one header from several matching rules, so allow one source per path.
+  assert(matches.length <= 1, `${filePath} matches more than one Cache-Control rule: ${matches.map(([pattern]) => pattern).join(', ')}`)
+  return matches[0]?.[1].get('cache-control') ?? null
+}
+
+async function listFiles(directory, prefix = '') {
+  const entries = await readdir(directory, { withFileTypes: true })
+  const nested = await Promise.all(entries.map((entry) => entry.isDirectory()
+    ? listFiles(new URL(`${entry.name}/`, directory), `${prefix}/${entry.name}`)
+    : [`${prefix}/${entry.name}`]))
+  return nested.flat()
+}
+
+const distFiles = (await listFiles(DIST_DIRECTORY)).filter((filePath) => filePath !== '/_headers')
+let immutableCount = 0
+for (const filePath of distFiles) {
+  const cacheControl = cacheControlFor(filePath)
+  const immutable = Boolean(cacheControl?.includes('immutable'))
+  if (immutable) {
+    assert.equal(cacheControl, IMMUTABLE_CACHE_CONTROL, `${filePath} has an unexpected immutable Cache-Control`)
+    assert(isContentAddressed(filePath), `${filePath} is cached as immutable but its URL does not change with its content`)
+    immutableCount += 1
+  }
+  if (filePath.startsWith('/assets/')) {
+    assert(isContentAddressed(filePath), `${filePath} is under /assets/ (cached as immutable) but has no content hash in its URL`)
+    assert(immutable, `${filePath} is content-addressed and should be cached as immutable`)
+  }
+}
+for (const filePath of ['/', '/index.html', '/sw.js', '/manifest.json', '/preview-frame.html', '/javaRunner.bootstrap.js', '/favicon.svg', '/icons/icon-192.png']) {
+  const cacheControl = cacheControlFor(filePath)
+  assert(!cacheControl?.includes('immutable') && !/max-age=[1-9]/.test(cacheControl ?? ''), `${filePath} must revalidate, not be cached long-term (got ${cacheControl})`)
+}
+assert.equal(cacheControlFor('/sw.js'), 'no-cache', 'The service worker script must always revalidate')
+console.log(`Verified long-term caching: ${immutableCount} content-addressed files immutable; HTML, service worker, manifest, and public files revalidate`)

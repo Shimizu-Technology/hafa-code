@@ -74,7 +74,9 @@ The TypeScript worker never executes emitted JavaScript in the browser worker it
 
 Use the pinned Pyodide npm runtime in a Web Worker. Core runtime files are
 self-hosted under the app origin so the runner remains compatible with the
-production CSP and can be cached after first use.
+production CSP and can be cached after first use. They are served from
+`/assets/pyodide/<content hash>/`, so a Pyodide upgrade gets new URLs and the
+files can be cached as immutable like the rest of `/assets/`.
 
 - mount every project file into an in-memory project directory
 - execute the configured entry file with normal local Python imports

@@ -61,7 +61,7 @@ test('Python survives a slow first runtime download and runs again from the warm
   await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
 
   let delayedRuntime = false
-  await page.route('**/assets/pyodide/pyodide.asm.wasm', async (route) => {
+  await page.route('**/assets/pyodide/*/pyodide.asm.wasm', async (route) => {
     delayedRuntime = true
     await new Promise((resolve) => setTimeout(resolve, 31_000))
     await route.continue()
@@ -114,7 +114,7 @@ test('Python runtime download failure explains startup recovery and can retry', 
   await openStudent(page)
   await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
   let abortedRuntime = false
-  await page.route('**/assets/pyodide/pyodide.asm.wasm', async (route) => {
+  await page.route('**/assets/pyodide/*/pyodide.asm.wasm', async (route) => {
     abortedRuntime = true
     await route.abort('failed')
   })
@@ -143,7 +143,7 @@ test('Python runtime download failure explains startup recovery and can retry', 
     }, { message: `Visible 44px review target at ${viewport.width}×${viewport.height}` }).toBe(true)
   }
 
-  await page.unroute('**/assets/pyodide/pyodide.asm.wasm')
+  await page.unroute('**/assets/pyodide/*/pyodide.asm.wasm')
   await page.getByRole('button', { name: 'Run again' }).click()
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Python!', { timeout: 30_000 })
   await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
