@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { api, type CloudProjectComment } from '../lib/api'
 import { ProjectFeedback } from './ProjectFeedback'
 
@@ -26,7 +26,23 @@ const comment: CloudProjectComment = {
   resolved_by: null,
 }
 
+function usePhoneViewport() {
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+    matches: true,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })))
+}
+
+const files = [{ path: 'main.rb', language: 'ruby' as const, content: '3.times { puts :hafa }' }]
+
 describe('ProjectFeedback', () => {
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
   beforeEach(() => {
     vi.mocked(api.getProjectComments).mockResolvedValue({
       data: { comments: [comment], unread_count: 1 },
@@ -70,5 +86,39 @@ describe('ProjectFeedback', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Resolve' })[0])
     await waitFor(() => expect(api.resolveProjectComment).toHaveBeenCalledWith('42', 1, true))
+  })
+
+  test('on a phone, an empty thread stays one row until the learner opens it', async () => {
+    usePhoneViewport()
+    vi.mocked(api.getProjectComments).mockResolvedValue({ data: { comments: [], unread_count: 0 }, error: null })
+    const user = userEvent.setup()
+    const { container } = render(<ProjectFeedback projectId="42" currentUserId={4} files={files} />)
+
+    expect(await screen.findByText('No feedback yet. Start a focused project conversation here.')).toBeTruthy()
+    const disclosure = container.querySelector('details.project-feedback')!
+    expect(disclosure.hasAttribute('open')).toBe(false)
+    expect(screen.getByText('0 open')).toBeTruthy()
+
+    await user.click(screen.getByRole('heading', { name: 'Teacher feedback' }))
+    await waitFor(() => expect(disclosure.hasAttribute('open')).toBe(true))
+    expect(screen.getByLabelText(/Add feedback or reply/)).toBeTruthy()
+  })
+
+  test('on a phone, feedback from a teacher opens the thread by itself', async () => {
+    usePhoneViewport()
+    const { container } = render(<ProjectFeedback projectId="42" currentUserId={4} files={files} />)
+
+    expect(await screen.findByText('Explain why this loop stops.')).toBeTruthy()
+    await waitFor(() => expect(container.querySelector('details.project-feedback')!.hasAttribute('open')).toBe(true))
+    expect(screen.getByText('1 open')).toBeTruthy()
+  })
+
+  test('on a phone, a feedback load error opens the thread so the learner sees it', async () => {
+    usePhoneViewport()
+    vi.mocked(api.getProjectComments).mockResolvedValue({ data: null, error: 'Network error' })
+    const { container } = render(<ProjectFeedback projectId="42" currentUserId={4} files={files} />)
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    await waitFor(() => expect(container.querySelector('details.project-feedback')!.hasAttribute('open')).toBe(true))
   })
 })

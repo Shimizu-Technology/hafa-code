@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, CornerDownRight, MessageSquare, RotateCcw, Send } from 'lucide-react'
+import { CheckCircle2, ChevronDown, CornerDownRight, MessageSquare, RotateCcw, Send } from 'lucide-react'
+import { usePhoneLayout } from '../hooks/usePhoneLayout'
 import { api, type CloudProjectComment } from '../lib/api'
 import type { ProjectFile } from '../lib/codeRunner'
 
@@ -17,6 +18,10 @@ export function ProjectFeedback({ projectId, files, currentUserId }: ProjectFeed
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // On a phone the panel is a disclosure above the code. It opens by itself only when
+  // there is feedback (or a load error) to read; an empty composer should not push the editor and Run away.
+  const phoneLayout = usePhoneLayout()
+  const [expandedChoice, setExpandedChoice] = useState<boolean | null>(null)
   const unresolvedCount = useMemo(() => comments.filter((comment) => !comment.resolved_at).length, [comments])
 
   useEffect(() => {
@@ -76,17 +81,10 @@ export function ProjectFeedback({ projectId, files, currentUserId }: ProjectFeed
     }
   }
 
-  return (
-    <section className="project-feedback panel surface-grid" aria-labelledby="project-feedback-title">
-      <div className="panel-header feedback-header">
-        <div>
-          <p className="eyebrow">Review</p>
-          <h2 id="project-feedback-title"><MessageSquare size={18} /> Teacher feedback</h2>
-          <p className="helper-text">Private to the student who owns this project and the class teaching staff.</p>
-        </div>
-        <span className="feedback-count">{unresolvedCount} open</span>
-      </div>
-
+  const privacyNote = <p className="helper-text">Private to the student who owns this project and the class teaching staff.</p>
+  const countBadge = <span className="feedback-count">{unresolvedCount} open</span>
+  const thread = (
+    <>
       {loading ? (
         <p className="helper-text">Loading feedback…</p>
       ) : comments.length === 0 ? (
@@ -158,6 +156,42 @@ export function ProjectFeedback({ projectId, files, currentUserId }: ProjectFeed
         </div>
         {error && <p className="feedback-error" role="alert">{error}</p>}
       </form>
+    </>
+  )
+
+  if (phoneLayout) {
+    // A load error opens it too, so the learner sees the failure rather than a quiet "0 open".
+    const expanded = expandedChoice ?? (!loading && (comments.length > 0 || Boolean(error)))
+    return (
+      <details
+        className="project-feedback project-feedback-compact panel surface-grid"
+        open={expanded}
+        onToggle={(event) => setExpandedChoice(event.currentTarget.open)}
+      >
+        <summary>
+          <h2 id="project-feedback-title"><MessageSquare size={16} aria-hidden="true" /> Teacher feedback</h2>
+          {countBadge}
+          <ChevronDown className="feedback-disclosure-icon" size={18} aria-hidden="true" />
+        </summary>
+        <div className="feedback-compact-body">
+          {privacyNote}
+          {thread}
+        </div>
+      </details>
+    )
+  }
+
+  return (
+    <section className="project-feedback panel surface-grid" aria-labelledby="project-feedback-title">
+      <div className="panel-header feedback-header">
+        <div>
+          <p className="eyebrow">Review</p>
+          <h2 id="project-feedback-title"><MessageSquare size={18} /> Teacher feedback</h2>
+          {privacyNote}
+        </div>
+        {countBadge}
+      </div>
+      {thread}
     </section>
   )
 }
