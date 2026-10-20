@@ -2117,8 +2117,11 @@ textarea {
 
 .learning-sidecar-backdrop { display: contents; }
 
-/* Shown for the moment the Guide, Practice, and Coach code downloads on first open. */
-.learning-sidecar-entered { animation: none; }
+/* Shown for the moment the Guide, Practice, and Coach code downloads on first open.
+   When the content replaces the skeleton, neither the panel nor the drawer backdrop
+   animates in again (two classes beat the drawer animation in the overlay media query). */
+.learning-sidecar.learning-sidecar-entered,
+.learning-sidecar-backdrop.learning-sidecar-entered { animation: none; }
 
 .learning-sidecar-tab-placeholder {
   display: inline-flex;
@@ -2370,7 +2373,8 @@ textarea {
   .output-panel.first-success,
   .floating-dock { transition: none; }
   .learning-sidecar { animation-name: hafa-fade; }
-  .learning-sidecar-entered { animation: none; }
+  .learning-sidecar.learning-sidecar-entered,
+  .learning-sidecar-backdrop.learning-sidecar-entered { animation: none; }
   .skeleton-lines span { animation: none; }
 }
 

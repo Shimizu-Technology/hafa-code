@@ -38,8 +38,15 @@ function CloudAuthControls({ sessionLoading }: { sessionLoading: boolean }) {
 
   if (cloudAuth.status === 'unavailable') {
     return (
-      <button className="secondary sign-in-button" type="button" title="Cloud sign-in could not load. Check your connection, then try again." onClick={cloudAuth.openSignIn}>
-        <RotateCcw size={16} aria-hidden="true" /> Retry sign-in
+      <button
+        className="secondary sign-in-button"
+        type="button"
+        title={cloudAuth.retryReloadsPage
+          ? 'Cloud sign-in could not load. Reload the page to try again; your projects are saved in this browser.'
+          : 'Cloud sign-in could not load. Check your connection, then try again.'}
+        onClick={cloudAuth.openSignIn}
+      >
+        <RotateCcw size={16} aria-hidden="true" /> {cloudAuth.retryReloadsPage ? 'Reload to sign in' : 'Retry sign-in'}
       </button>
     )
   }

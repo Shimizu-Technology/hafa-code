@@ -186,6 +186,6 @@ export function LearningSidecar({
   )
 
   return overlay
-    ? <div className="learning-sidecar-backdrop" role="presentation" onClick={onClose}>{sidecar}</div>
+    ? <div className={`learning-sidecar-backdrop${entered ? ' learning-sidecar-entered' : ''}`} role="presentation" onClick={onClose}>{sidecar}</div>
     : sidecar
 }

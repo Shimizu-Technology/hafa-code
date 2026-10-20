@@ -33,7 +33,7 @@ const SKELETON_TABS = [
 /**
  * Same frame as the real sidecar, so nothing moves when the content arrives. It leaves
  * focus on the button that opened it: the real sidecar then takes focus and returns it
- * to that button on close. Escape still closes it.
+ * to that button on close. As a drawer, Escape still closes it.
  */
 function LearningSidecarSkeleton({
   activeTab,
@@ -47,6 +47,8 @@ function LearningSidecarSkeleton({
   const loadingLabel = activeTab === 'practice' ? 'Loading the practice lab…' : activeTab === 'coach' ? 'Loading the error coach…' : `Loading the ${label} guide…`
 
   useEffect(() => {
+    // Matches the loaded sidecar: Escape closes the drawer, not the docked column.
+    if (!overlay) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
@@ -54,7 +56,7 @@ function LearningSidecarSkeleton({
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [onClose, overlay])
 
   useEffect(() => {
     if (!overlay) return

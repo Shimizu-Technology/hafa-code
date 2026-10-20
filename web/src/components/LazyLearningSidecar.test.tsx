@@ -36,8 +36,16 @@ function props(overrides: Partial<LearningSidecarProps> = {}): LearningSidecarPr
   }
 }
 
+function setOverlay(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn((query: string) => ({ matches, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+  })
+}
+
 describe('LazyLearningSidecar', () => {
   beforeEach(() => {
+    setOverlay(true)
     vi.resetModules()
     chunk.fail = false
     chunk.gate = new Promise<void>((resolve) => { chunk.release = resolve })
@@ -60,6 +68,7 @@ describe('LazyLearningSidecar', () => {
     expect(screen.getByRole('complementary', { name: 'Python learning' }).getAttribute('aria-busy')).toBe('true')
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(opened.onClose).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('.learning-sidecar-backdrop')).toBeTruthy()
 
     await act(async () => chunk.release())
     expect(screen.getByLabelText('Loaded sidecar').dataset.entered).toBe('true')
@@ -82,5 +91,16 @@ describe('LazyLearningSidecar', () => {
     vi.doMock('./LearningSidecar', sidecarFactory)
     await act(async () => screen.getByRole('button', { name: 'Try again' }).click())
     expect(await screen.findByLabelText('Loaded sidecar')).toBeTruthy()
+  })
+
+  it('leaves Escape to the editor when docked as a column, like the loaded sidecar', async () => {
+    setOverlay(false)
+    const { LazyLearningSidecar } = await import('./LazyLearningSidecar')
+    const docked = props()
+    render(<LazyLearningSidecar {...docked} />)
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(document.querySelector('.learning-sidecar-backdrop')).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(docked.onClose).not.toHaveBeenCalled()
   })
 })

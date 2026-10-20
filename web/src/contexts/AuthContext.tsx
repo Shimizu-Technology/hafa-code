@@ -23,6 +23,11 @@ export type CloudAuthStatus = 'off' | 'signed-out' | 'checking' | 'opening' | 'r
 
 export interface CloudAuthControls {
   status: CloudAuthStatus
+  /**
+   * Clerk's own script failed after loading started. Clerk keeps that failed instance for
+   * the page, so a retry reloads the page (projects autosave locally on every change).
+   */
+  retryReloadsPage: boolean
   openSignIn: () => void
   openSignUp: () => void
   /** Mounts Clerk's account menu; null until Clerk is loaded. */
@@ -40,6 +45,7 @@ interface AuthContextType {
 
 const OFFLINE_CLOUD_AUTH: CloudAuthControls = {
   status: 'off',
+  retryReloadsPage: false,
   openSignIn: () => {},
   openSignUp: () => {},
   mountUserButton: null,
@@ -78,7 +84,10 @@ class ClerkErrorBoundary extends Component<{ children: ReactNode; onError: () =>
   }
 }
 
-/** Optional downloads wait for a returning learner's sign-in, but never longer than this. */
+/**
+ * Optional downloads and the neutral "Checking your account" state wait for a returning
+ * learner's sign-in, but never longer than this; after it the app shows Sign in.
+ */
 const SIGN_IN_HOLD_LIMIT_MS = 20_000
 
 let startupPlan: { startup: ClerkStartup; settle: () => void } | null = null
@@ -125,6 +134,10 @@ export function CloudAuthProvider({ publishableKey, children }: { publishableKey
   const [bridgeCrashed, setBridgeCrashed] = useState(false)
   const clerkFailed = bridgeState === 'failed' || bridgeCrashed || Boolean(snapshot?.failed)
   const isLoaded = Boolean(snapshot?.isLoaded)
+  // Set after a failed first attempt or a stalled one (SIGN_IN_HOLD_LIMIT_MS). The app has then
+  // settled as signed out, and a retry from Sign in does not bring back the neutral state.
+  const [gaveUpWaiting, setGaveUpWaiting] = useState(false)
+  if (clerkFailed && !gaveUpWaiting) setGaveUpWaiting(true)
   const isSignedIn = isLoaded && Boolean(snapshot?.isSignedIn)
 
   useEffect(() => {
@@ -189,10 +202,20 @@ export function CloudAuthProvider({ publishableKey, children }: { publishableKey
     if (firstAnswer || clerkFailed) settle()
   }, [clerkFailed, firstAnswer, settle])
 
+  useEffect(() => {
+    if (!expectingSession || firstAnswer || gaveUpWaiting) return
+    const timeout = window.setTimeout(() => setGaveUpWaiting(true), SIGN_IN_HOLD_LIMIT_MS)
+    return () => window.clearTimeout(timeout)
+  }, [expectingSession, firstAnswer, gaveUpWaiting])
+
   const open = useCallback((intent: 'sign-in' | 'sign-up') => {
     rememberSignInIntent()
     const current = snapshotRef.current
-    if (current && !current.failed) {
+    if (current?.failed) {
+      window.location.reload()
+      return
+    }
+    if (current) {
       if (intent === 'sign-in') current.openSignIn()
       else current.openSignUp()
       return
@@ -214,21 +237,19 @@ export function CloudAuthProvider({ publishableKey, children }: { publishableKey
       ? 'ready'
       : opening
         ? 'opening'
-        : expectingSession
+        : expectingSession && !gaveUpWaiting
           ? 'checking'
           : 'signed-out'
 
+  const retryReloadsPage = Boolean(snapshot?.failed)
   const cloudAuth = useMemo<CloudAuthControls>(() => ({
     status,
+    retryReloadsPage,
     openSignIn: () => open('sign-in'),
     openSignUp: () => open('sign-up'),
     mountUserButton: isLoaded ? mountUserButton : null,
-  }), [isLoaded, mountUserButton, open, status])
+  }), [isLoaded, mountUserButton, open, retryReloadsPage, status])
 
-  // After a failed first attempt the app has already settled as signed out; a retry from
-  // the Sign in button should not put it back into the neutral loading state.
-  const [gaveUpWaiting, setGaveUpWaiting] = useState(false)
-  if (clerkFailed && !gaveUpWaiting) setGaveUpWaiting(true)
   const isLoading = expectingSession && !firstAnswer && !clerkFailed && !gaveUpWaiting
   const Bridge = bridge?.default
 

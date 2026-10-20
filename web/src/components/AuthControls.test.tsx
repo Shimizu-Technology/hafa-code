@@ -15,7 +15,7 @@ vi.mock('../contexts/AuthContext', () => ({
 
 function setStatus(status: CloudAuthStatus, isSignedIn = false) {
   auth.isSignedIn = isSignedIn
-  auth.cloudAuth = { status, openSignIn: vi.fn(), openSignUp: vi.fn(), mountUserButton: isSignedIn ? vi.fn(() => () => {}) : null }
+  auth.cloudAuth = { status, retryReloadsPage: false, openSignIn: vi.fn(), openSignUp: vi.fn(), mountUserButton: isSignedIn ? vi.fn(() => () => {}) : null }
 }
 
 describe('AuthControls', () => {
@@ -56,5 +56,9 @@ describe('AuthControls', () => {
     setStatus('unavailable')
     rerender(<AuthControls cloudEnabled />)
     expect(screen.getByRole('button', { name: 'Retry sign-in' })).toBeTruthy()
+
+    auth.cloudAuth = { ...auth.cloudAuth, retryReloadsPage: true }
+    rerender(<AuthControls cloudEnabled />)
+    expect(screen.getByRole('button', { name: 'Reload to sign in' })).toBeTruthy()
   })
 })

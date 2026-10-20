@@ -31,6 +31,20 @@ const api = vi.hoisted(() => ({
   tokenGetter: null as null | (() => Promise<string | null>),
 }))
 
+const scheduler = vi.hoisted(() => ({ afterEditorCalls: 0 }))
+
+// Counts the after-editor path while keeping its real timing.
+vi.mock('../lib/startupScheduler', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/startupScheduler')>()
+  return {
+    ...actual,
+    runAfterEditor: (...args: Parameters<typeof actual.runAfterEditor>) => {
+      scheduler.afterEditorCalls += 1
+      return actual.runAfterEditor(...args)
+    },
+  }
+})
+
 vi.mock('../lib/api', () => ({
   api: { createSession: api.createSession },
   setAuthTokenGetter: (getter: () => Promise<string | null>) => { api.tokenGetter = getter },
@@ -81,7 +95,10 @@ describe('CloudAuthProvider', () => {
     bridge.crash = false
     bridge.props = null
     api.createSession.mockClear()
+    scheduler.afterEditorCalls = 0
     clearCookies()
+    localStorage.clear()
+    window.history.replaceState(null, '', '/')
   })
 
   afterEach(() => {
@@ -116,6 +133,7 @@ describe('CloudAuthProvider', () => {
     await renderProvider()
     expect(state()).toBe('checking|loading|out|-')
     await waitFor(() => expect(bridge.props).not.toBeNull())
+    expect(scheduler.afterEditorCalls).toBe(1)
 
     act(() => bridge.props!.onSnapshot(snapshot({ isLoaded: false })))
     expect(state()).toBe('checking|loading|out|-')
@@ -157,6 +175,7 @@ describe('CloudAuthProvider', () => {
     await renderProvider()
     await waitFor(() => expect(bridge.props).not.toBeNull())
     expect(state()).toBe('checking|loading|out|-')
+    expect(scheduler.afterEditorCalls).toBe(0)
   })
 
   it('keeps the app running when Clerk throws while rendering', async () => {
@@ -167,5 +186,35 @@ describe('CloudAuthProvider', () => {
     await waitFor(() => expect(state()).toBe('unavailable|settled|out|-'))
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy()
     vi.mocked(console.error).mockRestore()
+  })
+
+  it('stops showing the neutral state when Clerk stalls, so Sign in comes back', async () => {
+    vi.useFakeTimers()
+    try {
+      localStorage.setItem('hafa-code-signed-in-hint-v1', '1')
+      await renderProvider()
+      expect(state()).toBe('checking|loading|out|-')
+      await act(() => vi.advanceTimersByTimeAsync(20_000))
+      expect(state()).toBe('signed-out|settled|out|-')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reloads the page to retry when Clerk itself failed to start', async () => {
+    const reload = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } })
+    try {
+      await renderProvider()
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }))
+      await waitFor(() => expect(bridge.props).not.toBeNull())
+      act(() => bridge.props!.onSnapshot(snapshot({ isLoaded: false, failed: true })))
+      expect(state()).toBe('unavailable|settled|out|-')
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }))
+      expect(reload).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
   })
 })

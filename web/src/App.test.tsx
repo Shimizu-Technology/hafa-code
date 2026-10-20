@@ -66,7 +66,7 @@ vi.mock('./components/RunnerPanel', async () => {
 })
 
 const STORAGE_KEY = 'hafa-code-projects-v2'
-const TEST_CLOUD_AUTH: AppAuthContext['cloudAuth'] = { status: 'ready', openSignIn: () => {}, openSignUp: () => {}, mountUserButton: null }
+const TEST_CLOUD_AUTH: AppAuthContext['cloudAuth'] = { status: 'ready', retryReloadsPage: false, openSignIn: () => {}, openSignUp: () => {}, mountUserButton: null }
 
 async function openProjectMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'More project actions' }))
