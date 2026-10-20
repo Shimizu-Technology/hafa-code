@@ -182,3 +182,25 @@ for (const testOnlyMarker of ['test_token_', 'e2e_user', 'VITE_E2E_AUTH', 'Class
   assert(!productionScriptSource.includes(testOnlyMarker), `Production JavaScript must not include E2E auth marker: ${testOnlyMarker}`)
 }
 console.log('Verified classroom E2E authentication code is absent from production JavaScript')
+
+// First paint: no third-party stylesheet or font host, self-hosted fonts present, and Monaco
+// kept out of the entry chunk so the workspace renders before the editor downloads.
+const indexHtml = await readFile(new URL('index.html', DIST_DIRECTORY), 'utf8')
+assert(!/<link[^>]+rel="stylesheet"[^>]+href="https?:/i.test(indexHtml), 'index.html must not load a third-party stylesheet')
+assert(!/fonts\.bunny\.net|fonts\.googleapis\.com/.test(applicationPolicy + indexHtml), 'Fonts must be self-hosted')
+assert.deepEqual(directiveSources(applicationPolicy, 'font-src'), ["'self'"], 'Application CSP font-src must be self only')
+const preloadedFonts = [...indexHtml.matchAll(/<link rel="preload" href="([^"]+\.woff2)" as="font" type="font\/woff2" crossorigin/g)].map((match) => match[1])
+assert(preloadedFonts.length >= 2, 'Expected the UI and code fonts to be preloaded')
+for (const fontPath of preloadedFonts) {
+  await readFile(new URL(`.${fontPath}`, DIST_DIRECTORY))
+  assert(serviceWorker.includes(fontPath), `${fontPath} should be in the offline app shell`)
+}
+console.log(`Verified self-hosted, preloaded fonts: ${preloadedFonts.join(', ')}`)
+
+const entryScript = indexHtml.match(/<script type="module" crossorigin src="\/assets\/([^"]+\.js)"/)?.[1]
+assert(entryScript, 'Expected one module entry script in index.html')
+const entrySource = await readFile(new URL(entryScript, ASSETS_DIRECTORY), 'utf8')
+const ENTRY_BUDGET_BYTES = 1_000_000
+assert(entrySource.length < ENTRY_BUDGET_BYTES, `Entry chunk ${entryScript} is ${entrySource.length} bytes; keep it under ${ENTRY_BUDGET_BYTES} by loading heavy modules lazily`)
+assert(!entrySource.includes('editor.contrib.') && !entrySource.includes('MonacoEnvironment'), 'Monaco must load from its own chunk, not the entry chunk')
+console.log(`Verified entry chunk ${entryScript}: ${(entrySource.length / 1024).toFixed(0)} KB (budget ${ENTRY_BUDGET_BYTES / 1000} KB), Monaco lazy`)

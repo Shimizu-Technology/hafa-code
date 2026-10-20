@@ -24,6 +24,9 @@ const STATIC_APP_SHELL = [
   '/icons/maskable-icon.svg',
   '/icons/maskable-icon-512.png',
   '/icons/apple-touch-icon.png',
+  '/fonts/outfit-latin-wght-5.3.0.woff2',
+  '/fonts/jetbrains-mono-latin-wght-5.3.0.woff2',
+  '/fonts/space-grotesk-latin-700-5.3.0.woff2',
 ]
 
 const PYODIDE_RUNTIME_FILES = [

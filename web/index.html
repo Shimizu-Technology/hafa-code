@@ -38,8 +38,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
-    <link rel="stylesheet" href="https://fonts.bunny.net/css?family=jetbrains-mono:400,600|outfit:400,500,600,700|space-grotesk:700&display=swap" />
+    <!-- Self-hosted fonts (see src/index.css): no third-party stylesheet blocks the first paint. -->
+    <link rel="preload" href="/fonts/outfit-latin-wght-5.3.0.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin-wght-5.3.0.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="canonical" href="https://code.shimizu-technology.com/" />
 
     <meta name="apple-mobile-web-app-capable" content="yes" />

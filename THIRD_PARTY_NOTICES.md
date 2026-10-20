@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## Fonts
+
+Hafa Code self-hosts the Latin and Latin Extended subsets of three typefaces from
+Fontsource 5.3.0 in `web/public/fonts/`, with each license file alongside them.
+
+- Outfit (variable): Copyright 2021 The Outfit Project Authors
+- JetBrains Mono (variable): Copyright 2020 The JetBrains Mono Project Authors
+- Space Grotesk (700): Copyright 2020 The Space Grotesk Project Authors
+- License: SIL Open Font License 1.1
+
 ## SQLite WebAssembly
 
 Hafa Code includes the official SQLite WebAssembly distribution in its on-demand SQL worker.
