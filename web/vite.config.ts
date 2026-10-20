@@ -147,9 +147,35 @@ function buildServiceWorker(): Plugin {
   }
 }
 
+/**
+ * Starts the lazy editor chunks downloading as soon as the HTML arrives, at low priority,
+ * so the entry script and fonts still win the first paint but Monaco is not a waterfall.
+ */
+function preloadEditorChunks(): Plugin {
+  return {
+    name: 'hafa-code-preload-editor',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, context) {
+        const bundle = context.bundle as Record<string, BundleEntry> | undefined
+        if (!bundle) return []
+        const setup = Object.values(bundle).find((item) => item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts'))
+        if (!setup) return []
+        const files = [setup.fileName, ...(setup.imports ?? []).filter((name) => !bundle[name]?.isEntry)]
+        return files.map((fileName) => ({
+          tag: 'link',
+          attrs: { rel: 'modulepreload', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
+          injectTo: 'head' as const,
+        }))
+      },
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker()],
+  plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker(), preloadEditorChunks()],
   worker: {
     plugins: () => [bundleTypeScriptLibraries()],
   },
