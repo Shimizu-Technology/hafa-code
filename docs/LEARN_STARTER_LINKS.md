@@ -77,7 +77,9 @@ To allow another origin, change `isAllowedLearnOrigin` in `web/src/lib/starterLi
 
 ## Privacy and sharing
 
-The lesson URL, label, and starter key are kept in this browser's storage (`hafa-code-lesson-links-v1`), not in the project. They are never included in Share links, server snapshots, exports, or cloud saves. When a signed-in learner's project first syncs and gets its cloud id, the record moves with it.
+The lesson URL, label, and starter key are kept in this browser's storage (`hafa-code-lesson-links-v1`), not in the project. They are never included in Share links, server snapshots, single-project exports, or cloud saves. When a signed-in learner's project first syncs and gets its cloud id, the record moves with it.
+
+A complete **Workspace backup** does include the records for the projects it contains, so restoring it on a new browser brings back "Back to your lesson" and reopening by link. Restoring re-checks every record against the allowlist above, drops records for projects that are not in the backup, and keeps this browser's own record when both have one. Backups made before this change restore without lesson records.
 
 ## Length limits
 
@@ -95,11 +97,10 @@ Base64 makes the payload about a third longer than its bytes, and the return URL
 
 ## Phones
 
-The link opens straight to the code with Run reachable, in portrait and landscape. The lesson bar sits above the code and the output: on phones it shows the lesson title on one line and two 44px buttons, "Back to your lesson" and "Copy code for Learn" (shortened to "Lesson" under 380px wide). A phone turned sideways keeps the bar to one row.
+The link opens straight to the code with Run reachable, in portrait and landscape. The lesson bar sits above the code and the output: on phones it shows the lesson title on one line and two 44px buttons, "Back to your lesson" and "Copy code for Learn" (shortened to "Lesson" under 380px wide). A phone turned sideways moves the navigation to a rail on the left and keeps the bar to one 44px row ("Lesson", the lesson title, "Copy for Learn"), so the editor gets most of the height (about 267px of a 390px-tall screen).
 
 The copy button uses the system clipboard, which needs a tap; in-app browsers that block clipboard access get the select-and-copy message instead.
 
 ## Limits
 
 - The starter-to-project record is per browser. A learner who opens the same lesson link on a second device gets a new copy there; signed-in learners also see their first copy in Projects after it syncs.
-- Workspace backups do not include lesson records yet.

@@ -135,13 +135,17 @@ Storage variant processing. `npm audit --audit-level=high` and
 
 ## Lesson return links
 
-Lesson starter links can carry a `return` URL for "Back to your lesson". It is accepted only for `https://learn.codeschoolofguam.com`, CSG Learn Netlify deploy previews (`https://deploy-preview-<n>--csg-learn.netlify.app`), and, in development builds only, `http://localhost` or `http://127.0.0.1`. Any other value is ignored without a message, so the link cannot be used as an open redirect. The check rejects non-http(s) schemes, protocol-relative and relative URLs, credentials, backslashes, control characters, and look-alike hosts, and it runs again whenever a saved target is read from browser storage. The label is rendered as plain text after control and direction-override characters are removed. Return targets are stored per browser outside the project, so Share links, snapshots, exports, and cloud saves never contain them. See [Lesson starter links](LEARN_STARTER_LINKS.md).
+Lesson starter links can carry a `return` URL for "Back to your lesson". It is accepted only for `https://learn.codeschoolofguam.com`, CSG Learn Netlify deploy previews (`https://deploy-preview-<n>--csg-learn.netlify.app`), and, in development builds only, `http://localhost` or `http://127.0.0.1`. Any other value is ignored without a message, so the link cannot be used as an open redirect. The check rejects non-http(s) schemes, protocol-relative and relative URLs, credentials, backslashes, control characters, and look-alike hosts, and it runs again whenever a saved target is read from browser storage. The label is rendered as plain text after control and direction-override characters are removed. Return targets are stored per browser outside the project, so Share links, snapshots, single-project exports, and cloud saves never contain them. A complete workspace backup carries the records for its own projects, and restoring one runs every record through the same allowlist and label sanitizing. See [Lesson starter links](LEARN_STARTER_LINKS.md).
 
 ## Automated classroom auth
 
 Browser tests use deterministic local personas instead of Clerk. The frontend adapter is enabled only when Vite is in development mode, the mode is exactly `e2e`, and `VITE_E2E_AUTH=true`. Its tokens are accepted only by Rails in the test environment. The fixture reset task also verifies that the active database name ends in `_e2e` before deleting data.
 
 This is a test seam, not an alternate production login. Production and preview builds must continue to use Clerk, and deployment smoke tests must prove real Clerk login and deployed environment configuration separately.
+
+## Fonts and first paint
+
+The app self-hosts its fonts from `/fonts/` (Fontsource subsets, versioned file names), so the application CSP allows fonts from `'self'` only and no third-party stylesheet loads before the first paint. The production build check fails if a third-party stylesheet or font host returns.
 
 ## Known Limitations
 
