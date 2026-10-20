@@ -286,7 +286,9 @@ export function EditorWorkspace({
             theme={editorTheme}
             beforeMount={defineThemes}
             value={activeFile.content}
-            loading={<div className="editor-loading"><Loader2 className="spin" size={20} /> Loading editor...</div>}
+            // Monaco needs a moment to build the editor after its code arrives; keep showing the
+            // read-only code meanwhile instead of a blank spinner.
+            loading={<EditorPlaceholder content={activeFile.content} failed={false} fontSize={editorFontSize} path={activeFile.path} onRetry={() => {}} />}
             onChange={(value) => onUpdateActiveFile(value ?? '')}
             onMount={handleEditorMount}
             options={{

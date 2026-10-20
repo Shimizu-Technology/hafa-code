@@ -1495,20 +1495,13 @@ textarea {
 .file-row-actions .icon-button { width: var(--control-sm); min-height: var(--control-sm); }
 .file-row-actions .danger-icon { color: var(--code-danger); }
 
-.editor-loading {
-  display: grid;
-  place-items: center;
-  height: var(--workspace-pane-height);
-  background: var(--surface-code);
-  color: var(--text-on-code-muted);
-}
-
 /* Groups the editor's header rows; only the sideways-phone layout gives it a box. */
 .editor-header { display: contents; }
 
 /* Read-only code shown while the editor chunk downloads; mirrors Monaco's gutter and padding. */
 .editor-placeholder {
   position: relative;
+  width: 100%;
   height: var(--editor-height);
   overflow: hidden;
   background: var(--surface-code);
