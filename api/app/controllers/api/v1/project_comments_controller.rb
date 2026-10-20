@@ -74,9 +74,15 @@ module Api
         params.permit(:body, :file_path, :line_number)
       end
 
+      # One atomic upsert: opening a thread (mark_read) and posting a reply can arrive together,
+      # and a find-then-insert let the second request fail on the unique index after its
+      # comment had already saved.
       def mark_read!
-        read = @project.project_comment_reads.find_or_initialize_by(user: current_user)
-        read.update!(read_at: Time.current)
+        ProjectCommentRead.upsert(
+          { project_id: @project.id, user_id: current_user.id, read_at: Time.current },
+          unique_by: %i[project_id user_id],
+          update_only: %i[read_at]
+        )
       end
 
       def last_read_at

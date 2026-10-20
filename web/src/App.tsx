@@ -438,6 +438,13 @@ export default function App() {
       updateCloudSaveStatus(projectId, 'offline')
       return
     }
+    // A pagehide or online flush starts this sync directly; drop the queued debounce for the
+    // same project so it does not send a second save afterwards.
+    const pendingTimer = syncTimersRef.current.get(projectId)
+    if (pendingTimer !== undefined) {
+      window.clearTimeout(pendingTimer)
+      syncTimersRef.current.delete(projectId)
+    }
     if (syncingProjectIdsRef.current.has(projectId)) {
       scheduleCloudSave(projectId, 150)
       return

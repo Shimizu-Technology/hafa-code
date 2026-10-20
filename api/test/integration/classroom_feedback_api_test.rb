@@ -74,6 +74,25 @@ class ClassroomFeedbackApiTest < ActionDispatch::IntegrationTest
     assert_equal 0, response.parsed_body.fetch("unread_count")
   end
 
+  test "marking read is idempotent and a reply after it keeps one read marker" do
+    post "/api/v1/projects/#{@project.id}/comments/mark_read", headers: headers_for(@teacher)
+    assert_response :no_content
+    first_read_at = ProjectCommentRead.find_by!(project: @project, user: @teacher).read_at
+
+    travel 1.minute do
+      post "/api/v1/projects/#{@project.id}/comments/mark_read", headers: headers_for(@teacher)
+      assert_response :no_content
+      post "/api/v1/projects/#{@project.id}/comments",
+        params: { body: "Nice start." }.to_json,
+        headers: headers_for(@teacher)
+      assert_response :created
+    end
+
+    reads = ProjectCommentRead.where(project: @project, user: @teacher)
+    assert_equal 1, reads.count
+    assert_operator reads.first.read_at, :>, first_read_at
+  end
+
   test "feedback file and line references must be valid" do
     post "/api/v1/projects/#{@project.id}/comments",
       params: { body: "Look here", file_path: "missing.rb", line_number: 4 }.to_json,
