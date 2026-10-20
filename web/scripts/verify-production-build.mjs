@@ -204,3 +204,8 @@ const ENTRY_BUDGET_BYTES = 1_000_000
 assert(entrySource.length < ENTRY_BUDGET_BYTES, `Entry chunk ${entryScript} is ${entrySource.length} bytes; keep it under ${ENTRY_BUDGET_BYTES} by loading heavy modules lazily`)
 assert(!entrySource.includes('editor.contrib.') && !entrySource.includes('MonacoEnvironment'), 'Monaco must load from its own chunk, not the entry chunk')
 console.log(`Verified entry chunk ${entryScript}: ${(entrySource.length / 1024).toFixed(0)} KB (budget ${ENTRY_BUDGET_BYTES / 1000} KB), Monaco lazy`)
+
+const editorChunks = assetNames.filter((name) => /^(monacoSetup|editor\.api)/.test(name) && name.endsWith('.js'))
+assert(editorChunks.length >= 2, `Expected the lazy editor chunks, found ${editorChunks.join(', ')}`)
+for (const chunk of editorChunks) assert(serviceWorker.includes(`/assets/${chunk}`), `${chunk} must be precached so the editor works offline`)
+console.log(`Verified the lazy editor is in the offline app shell: ${editorChunks.join(', ')}`)

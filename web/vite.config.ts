@@ -11,6 +11,7 @@ interface BundleEntry {
   type: 'asset' | 'chunk'
   isEntry?: boolean
   imports?: string[]
+  facadeModuleId?: string | null
 }
 
 const STATIC_APP_SHELL = [
@@ -124,6 +125,8 @@ function buildServiceWorker(): Plugin {
 
       Object.values(bundle).forEach((item) => {
         if (item.type === 'chunk' && item.isEntry) visitEntryImports(item.fileName)
+        // Monaco loads after the first paint, but offline use still needs it in the shell.
+        if (item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts')) visitEntryImports(item.fileName)
       })
 
       Object.values(bundle).forEach((item) => {
