@@ -30,6 +30,13 @@ const STATIC_APP_SHELL = [
   '/fonts/space-grotesk-latin-700-5.3.0.woff2',
 ]
 
+/** Lazy chunks that must still work offline once the service worker is installed. */
+const OFFLINE_LAZY_MODULES = [
+  '/src/lib/monacoSetup.ts',
+  '/src/components/LearningSidecar.tsx',
+  '/src/lib/practiceLab.ts',
+]
+
 const PYODIDE_RUNTIME_FILES = [
   'pyodide.asm.mjs',
   'pyodide.asm.wasm',
@@ -125,8 +132,9 @@ function buildServiceWorker(): Plugin {
 
       Object.values(bundle).forEach((item) => {
         if (item.type === 'chunk' && item.isEntry) visitEntryImports(item.fileName)
-        // Monaco loads after the first paint, but offline use still needs it in the shell.
-        if (item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts')) visitEntryImports(item.fileName)
+        // Monaco and the learning tools load after the first paint, but offline use still needs them.
+        // Clerk's chunk is left out on purpose: precaching it would download sign-in code for every visitor.
+        if (item.type === 'chunk' && OFFLINE_LAZY_MODULES.some((suffix) => item.facadeModuleId?.endsWith(suffix))) visitEntryImports(item.fileName)
       })
 
       Object.values(bundle).forEach((item) => {

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { BookOpen, Bug, Dumbbell, GraduationCap, X } from 'lucide-react'
 import { useModalFocus } from '../hooks/useModalFocus'
+import { useOverlaySidecar } from '../hooks/useOverlaySidecar'
+import type { LearningTab } from '../lib/learningTabs'
 import type { ErrorCoachContext } from '../lib/errorCoach'
 import { languageGuideFor, type LanguageGuideTopic } from '../lib/languageGuides'
 import type { PracticeChallenge } from '../lib/practiceLab'
@@ -9,16 +11,12 @@ import { ErrorCoach } from './ErrorCoach'
 import { LanguageGuideContent } from './LanguageGuide'
 import { PracticeLabContent } from './PracticeLab'
 
-export type LearningTab = 'guide' | 'practice' | 'coach'
+export type { LearningTab } from '../lib/learningTabs'
+export { LEARNING_SIDECAR_OVERLAY_QUERY } from '../hooks/useOverlaySidecar'
 
 const LEARNING_TABS: LearningTab[] = ['guide', 'practice', 'coach']
-/**
- * Below this width a side column would squeeze the editor under ~480px, so the
- * Guide, Practice, and Coach open as a drawer and the Coach waits for "Fix this error".
- */
-export const LEARNING_SIDECAR_OVERLAY_QUERY = '(max-width: 1599px)'
 
-interface LearningSidecarProps {
+export interface LearningSidecarProps {
   activeTab: LearningTab
   coachContext: ErrorCoachContext
   completedChallengeIds: string[]
@@ -33,23 +31,8 @@ interface LearningSidecarProps {
   onOpenGuideTopic: (topicId: string, kind: ProjectKind) => void
   onStartChallenge: (challenge: PracticeChallenge) => void
   onTryExample: (topic: LanguageGuideTopic, kind: ProjectKind) => void
-}
-
-function useOverlaySidecar() {
-  const [overlay, setOverlay] = useState(() => (
-    typeof window.matchMedia === 'function' && window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY).matches
-  ))
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia(LEARNING_SIDECAR_OVERLAY_QUERY)
-    const update = () => setOverlay(query.matches)
-    update()
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-
-  return overlay
+  /** Already on screen (it replaced the loading skeleton), so skip the entrance animation. */
+  entered?: boolean
 }
 
 /** Keeps reference, practice, and error help next to the learner's code. */
@@ -68,6 +51,7 @@ export function LearningSidecar({
   onOpenGuideTopic,
   onStartChallenge,
   onTryExample,
+  entered = false,
 }: LearningSidecarProps) {
   const overlay = useOverlaySidecar()
   const dialogRef = useModalFocus<HTMLElement>(open && overlay, onClose)
@@ -87,7 +71,7 @@ export function LearningSidecar({
   const sidecar = (
     <aside
       ref={dialogRef}
-      className="learning-sidecar panel"
+      className={`learning-sidecar panel${entered ? ' learning-sidecar-entered' : ''}`}
       role={overlay ? 'dialog' : 'complementary'}
       aria-modal={overlay || undefined}
       aria-labelledby="learning-sidecar-title"

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { LEARNING_SIDECAR_OVERLAY_QUERY } from './components/LearningSidecar'
+import { LEARNING_SIDECAR_OVERLAY_QUERY } from './hooks/useOverlaySidecar'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS } from './lib/codeRunner'
 import type { ErrorCoachContext } from './lib/errorCoach'
 import { languageGuideFor } from './lib/languageGuides'
@@ -134,7 +134,7 @@ describe('App language guide practice projects', () => {
     await user.click(screen.getAllByRole('button', { name: 'Ruby guide' })[0])
     const learningSidecar = screen.getByRole('complementary', { name: 'Ruby learning' })
     expect(document.querySelector('.layout-grid')?.contains(learningSidecar)).toBe(false)
-    await user.type(screen.getByRole('searchbox'), 'variables')
+    await user.type(await screen.findByRole('searchbox'), 'variables')
     await user.click(screen.getByRole('button', { name: /variables and data types/i }))
     await user.click(screen.getByRole('button', { name: 'Try example' }))
 
