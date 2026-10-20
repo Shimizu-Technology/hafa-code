@@ -11,6 +11,7 @@ interface BundleEntry {
   type: 'asset' | 'chunk'
   isEntry?: boolean
   imports?: string[]
+  facadeModuleId?: string | null
 }
 
 const STATIC_APP_SHELL = [
@@ -24,6 +25,9 @@ const STATIC_APP_SHELL = [
   '/icons/maskable-icon.svg',
   '/icons/maskable-icon-512.png',
   '/icons/apple-touch-icon.png',
+  '/fonts/outfit-latin-wght-5.3.0.woff2',
+  '/fonts/jetbrains-mono-latin-wght-5.3.0.woff2',
+  '/fonts/space-grotesk-latin-700-5.3.0.woff2',
 ]
 
 const PYODIDE_RUNTIME_FILES = [
@@ -121,6 +125,8 @@ function buildServiceWorker(): Plugin {
 
       Object.values(bundle).forEach((item) => {
         if (item.type === 'chunk' && item.isEntry) visitEntryImports(item.fileName)
+        // Monaco loads after the first paint, but offline use still needs it in the shell.
+        if (item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts')) visitEntryImports(item.fileName)
       })
 
       Object.values(bundle).forEach((item) => {
@@ -141,9 +147,45 @@ function buildServiceWorker(): Plugin {
   }
 }
 
+/**
+ * Starts the lazy editor chunks downloading as soon as the HTML arrives, at low priority,
+ * so the entry script and fonts still win the first paint but Monaco is not a waterfall.
+ */
+function preloadEditorChunks(): Plugin {
+  return {
+    name: 'hafa-code-preload-editor',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, context) {
+        const bundle = context.bundle as Record<string, BundleEntry> | undefined
+        if (!bundle) return []
+        const setup = Object.values(bundle).find((item) => item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/lib/monacoSetup.ts'))
+        if (!setup) return []
+        const files = [setup.fileName, ...(setup.imports ?? []).filter((name) => !bundle[name]?.isEntry)]
+        // Monaco's stylesheet would otherwise be found only after its code runs.
+        const editorAssets = Object.keys(bundle).filter((name) => /^assets\/editor-[\w-]+\.css$/.test(name))
+        return [
+          ...files.map((fileName) => ({
+            tag: 'link',
+            attrs: { rel: 'modulepreload', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
+            injectTo: 'head' as const,
+          })),
+          // crossorigin matches the <link> Vite's loader adds, so the preload is reused.
+          ...editorAssets.map((fileName) => ({
+            tag: 'link',
+            attrs: { rel: 'preload', as: 'style', href: `/${fileName}`, fetchpriority: 'low', crossorigin: '' },
+            injectTo: 'head' as const,
+          })),
+        ]
+      },
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker()],
+  plugins: [react(), copyPyodideRuntime(), bundleTypeScriptLibraries(), buildServiceWorker(), preloadEditorChunks()],
   worker: {
     plugins: () => [bundleTypeScriptLibraries()],
   },

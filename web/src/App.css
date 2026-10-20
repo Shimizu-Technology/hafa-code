@@ -292,6 +292,12 @@ button:active:not(:disabled):not([aria-disabled="true"]) {
   transform: scale(0.97);
 }
 
+/* Disclosure rows and button-like links answer a press too (no scale: they span the row). */
+.checkpoint-menu summary:active,
+.mobile-project-menu summary:active { background: var(--surface-sunken); }
+.file-browser summary:active,
+.terminal-full-traceback summary:active { background: var(--surface-code-raised); }
+
 button.primary {
   border-color: transparent;
   background: var(--action-primary);
@@ -436,6 +442,8 @@ textarea {
   /* Leaves room under the workspace for toasts so they never cover the runner controls. */
   --workspace-pane-height: clamp(360px, calc(100dvh - 280px), 820px);
   --editor-hint-height: 0px;
+  /* Monaco and its placeholder; the phone Code tab replaces this with a flex fill. */
+  --editor-height: calc(var(--workspace-pane-height) - var(--editor-hint-height));
 }
 
 .skip-link,
@@ -990,14 +998,6 @@ textarea {
   .lesson-copy { width: 100%; min-height: var(--control-lg); padding: 0 var(--space-2); }
 }
 
-@media (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
-  /* Sideways phone: one row so the code keeps its height. */
-  .lesson-bar { grid-template-columns: minmax(0, 1fr) auto auto; padding: var(--space-1) var(--space-2); }
-  .lesson-context { grid-column: auto; }
-  .lesson-back,
-  .lesson-copy { min-height: var(--control-md); }
-}
-
 @media (max-width: 640px) and (max-height: 700px) {
   /* Shorter phones keep the code's height; the project name already names the lesson. */
   .lesson-context { display: none; }
@@ -1164,12 +1164,67 @@ textarea {
   margin: var(--space-3) 0;
 }
 
+.project-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  margin-bottom: var(--space-2);
+  padding: 0 2px 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-field);
+  color: var(--text-muted);
+}
+
+.project-search:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.project-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: calc(var(--control-md) - 2px);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+}
+
+.project-search input::-webkit-search-cancel-button { display: none; }
+.project-search .icon-button { width: var(--control-sm); min-height: var(--control-sm); }
+
+.project-search-count {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  /* 16px keeps iOS Safari from zooming into a focused field. */
+  .project-search,
+  .project-search input { min-height: var(--control-lg); }
+  .project-search input,
+  .guide-search input { font-size: 16px; }
+}
+
+/* Desktop: the sticky sidebar never runs past the window; the list takes what is left. */
+@media (min-width: 981px) {
+  /* 96px: the app bar above it and the page padding, so the list ends inside the first screen. */
+  .project-sidebar { display: flex; flex-direction: column; max-height: calc(100dvh - 96px); }
+  .app-shell:not(.sidebar-collapsed) .project-sidebar .sidebar-content { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; }
+  .sidebar-content > .project-list { flex: 0 1 auto; min-height: 0; max-height: none; }
+}
+
+/* Sized to its cards: one project is one card, a long list scrolls inside the sidebar. */
 .project-list {
   display: grid;
   align-content: start;
   gap: var(--space-1);
-  max-height: calc(100dvh - 22rem);
-  min-height: 8rem;
+  max-height: max(12rem, calc(100dvh - 22rem));
   overflow-y: auto;
   overscroll-behavior: contain;
   margin-right: calc(-1 * var(--space-2));
@@ -1324,6 +1379,27 @@ textarea {
   font-size: var(--text-sm);
 }
 
+/* Why Run is disabled: shown beside the runner and under the phone Run bar. */
+.run-empty-hint,
+.mobile-run-empty-hint {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--status-info-surface);
+  color: var(--status-info);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.mobile-run-empty-hint {
+  display: none;
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-code);
+  background: var(--surface-code);
+  color: var(--code-command);
+  font-size: var(--text-xs);
+}
+
 .file-browser {
   border-bottom: 1px solid var(--border-code);
   background: var(--surface-code);
@@ -1426,6 +1502,49 @@ textarea {
   background: var(--surface-code);
   color: var(--text-on-code-muted);
 }
+
+/* Groups the editor's header rows; only the sideways-phone layout gives it a box. */
+.editor-header { display: contents; }
+
+/* Read-only code shown while the editor chunk downloads; mirrors Monaco's gutter and padding. */
+.editor-placeholder {
+  position: relative;
+  height: var(--editor-height);
+  overflow: hidden;
+  background: var(--surface-code);
+  color: var(--text-on-code);
+}
+
+.editor-placeholder-code {
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) 0;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: var(--code-leading);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor-placeholder-line { display: grid; grid-template-columns: 4.25em minmax(0, 1fr); }
+.editor-placeholder-number { padding-right: 1.6em; color: var(--text-on-code-faint); text-align: right; }
+
+.editor-placeholder-status {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-code);
+  border-radius: var(--radius-pill);
+  background: var(--surface-code-raised);
+  color: var(--text-on-code-muted);
+  font-size: var(--text-xs);
+}
+
+.editor-placeholder-status button { min-height: var(--control-sm); }
 
 .editor-keyboard-hint {
   display: none;
@@ -2049,8 +2168,12 @@ textarea {
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-2);
-  width: min(380px, calc(100vw - 2 * var(--space-4)));
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
   pointer-events: none;
+  /* FloatingDock lifts the dock above any control or footer that would sit under it. */
+  --dock-lift: 0px;
+  transform: translateY(calc(-1 * var(--dock-lift)));
+  transition: transform var(--duration-ui) var(--ease-out);
 }
 
 .floating-dock > * { pointer-events: auto; }
@@ -2072,7 +2195,15 @@ textarea {
 }
 
 .toast-icon { flex: 0 0 auto; margin-top: 2px; color: var(--status-tone); }
-.toast-message { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.toast-message {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* At most five lines; a longer message scrolls inside the toast instead of growing. */
+  max-height: calc(5 * var(--leading-body) * 1em);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
 .toast-action { flex: 0 0 auto; margin: -4px 0; }
 .toast-dismiss { width: var(--control-sm); min-height: var(--control-sm); margin: -4px 0; color: var(--text-muted); }
 
@@ -2148,8 +2279,11 @@ textarea {
 }
 
 .oss-footer a { font-weight: 600; text-decoration: none; }
-.oss-footer a:hover,
 .oss-footer a:focus-visible { color: var(--action-primary-hover); text-decoration: underline; }
+
+@media (hover: hover) and (pointer: fine) {
+  .oss-footer a:hover { color: var(--action-primary-hover); text-decoration: underline; }
+}
 
 /* ---- Motion ---- */
 
@@ -2166,7 +2300,8 @@ textarea {
   .run-status { transition-duration: 0.01ms; }
   button:active:not(:disabled) { transform: none; }
   .output-panel,
-  .output-panel.first-success { transition: none; }
+  .output-panel.first-success,
+  .floating-dock { transition: none; }
   .learning-sidecar { animation-name: hafa-fade; }
 }
 
@@ -2923,15 +3058,17 @@ textarea {
   transform: none;
 }
 
-.guide-topic-list button:hover:not(:disabled) {
-  border-color: var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-panel) 85%, var(--surface-field));
-  box-shadow: none;
-  transform: none;
+@media (hover: hover) and (pointer: fine) {
+  .guide-topic-list button:hover:not(:disabled, .active) {
+    border-color: var(--border-subtle);
+    background: color-mix(in srgb, var(--surface-panel) 85%, var(--surface-field));
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 .guide-topic-list button.active,
-.guide-topic-list button.active:hover:not(:disabled) {
+.guide-topic-list button.active:not(:disabled) {
   border-color: var(--surface-selected);
   background: var(--surface-selected);
   color: var(--text-on-selected);
@@ -4634,6 +4771,22 @@ textarea {
   .mobile-code-runbar button { min-width: 0; min-height: var(--control-lg); }
   .mobile-code-runbar button:not(.primary) { border-color: var(--border-code); background: var(--surface-code-raised); color: var(--text-on-code); }
   .mobile-code-runbar .primary { flex: 1 1 auto; }
+  .mobile-run-empty-hint { display: block; }
+
+  /*
+   * Code tab: the editor fills exactly the height left under the app bar, lesson bar,
+   * notices, and editor header, so its last lines never hide behind the navigation.
+   */
+  .app-shell.mobile-tab-code { display: flex; flex-direction: column; min-height: 100dvh; --editor-height: auto; }
+  .mobile-tab-code .coding-stage,
+  .mobile-tab-code .layout-grid,
+  .mobile-tab-code .main-workspace,
+  .mobile-tab-code .workspace,
+  .mobile-tab-code .editor-panel { display: flex; flex: 1 1 auto; flex-direction: column; align-items: stretch; min-height: 0; }
+  .mobile-tab-code .editor-panel > section,
+  .mobile-tab-code .editor-placeholder { flex: 1 1 0; min-height: 160px; }
+  .mobile-tab-code .oss-footer,
+  .mobile-tab-output .oss-footer { display: none; }
 
   .runner-header { padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); }
   .runner-title .helper-text { display: none; }
@@ -4710,22 +4863,128 @@ textarea {
   .mobile-bottom-nav button:hover:not(.active) { background: var(--surface-code-raised); }
 }
 
-/* Phone turned sideways: give the code the height; the app bar waits on Home and Projects. */
+/*
+ * Phone turned sideways (e.g. 844x390, 667x375): height is the scarce side, so the
+ * navigation becomes a rail on the left, the lesson bar is one 44px row, and the file
+ * tabs, Files, Practice, and Run share one header row. The editor gets the rest.
+ */
 @media (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
   .app-shell {
-    --nav-height: 48px;
-    --workspace-pane-height: max(160px, calc(100dvh - 220px - env(safe-area-inset-bottom)));
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    --rail-width: 72px;
+    --nav-height: 0px;
+    /* Output tab: the panel fills the height between the top and bottom padding. */
+    --workspace-pane-height: max(160px, calc(100dvh - 26px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+    padding:
+      max(var(--space-2), env(safe-area-inset-top))
+      max(var(--space-2), env(safe-area-inset-right))
+      max(var(--space-2), env(safe-area-inset-bottom))
+      calc(var(--rail-width) + var(--space-2) + max(var(--space-2), env(safe-area-inset-left)));
+  }
+
+  /* The Esc/Tab hint waits for a taller window; the editor's label still explains it. */
+  .app-shell { --editor-hint-height: 0px; }
+  .editor-keyboard-hint { display: none; }
+
+  .app-shell:has(.lesson-bar) {
+    /* ...less the 44px lesson row and its 8px gap. */
+    --workspace-pane-height: max(140px, calc(100dvh - 78px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   }
 
   .mobile-tab-code .app-bar,
   .mobile-tab-output .app-bar { display: none; }
 
-  .mobile-bottom-nav { right: auto; left: 50%; width: min(560px, calc(100vw - 2rem)); transform: translateX(-50%); }
-  .mobile-bottom-nav button { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-height: 40px; }
-  .mobile-code-runbar { padding-top: 0; }
-  .mobile-tab-projects .project-sidebar { height: calc(100dvh - 60px - 64px - env(safe-area-inset-bottom)); }
+  /* Navigation rail */
+  .mobile-bottom-nav {
+    top: max(var(--space-2), env(safe-area-inset-top));
+    right: auto;
+    bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    left: max(var(--space-2), env(safe-area-inset-left));
+    width: var(--rail-width);
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(var(--control-lg), 1fr);
+    align-content: stretch;
+  }
+
+  .mobile-bottom-nav button {
+    align-content: center;
+    min-height: var(--control-lg);
+    padding: 2px;
+    font-size: var(--text-2xs);
+  }
+
+  /* Lesson bar: one row of two 44px actions around the lesson name. */
+  .lesson-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .lesson-context { grid-column: auto; order: 0; padding: 0 var(--space-1); }
+  .lesson-context .school-badge { display: none; }
+  .lesson-back,
+  .lesson-copy { width: auto; min-height: var(--control-lg); padding: 0 var(--space-3); }
+  .lesson-bar .lesson-label-long { display: none; }
+  .lesson-bar .lesson-label-short { display: inline; }
+  .lesson-bar .lesson-copy { grid-column: 3; justify-self: end; }
+
+  /* Editor header: file tabs, Files, Practice, and Run in one 52px row. */
+  .editor-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    border-bottom: 1px solid var(--border-code);
+    background: var(--surface-code);
+  }
+
+  .editor-header > .file-tabs,
+  .editor-header > .file-browser,
+  .editor-header > .mobile-code-runbar { min-height: 52px; border-bottom: 0; }
+  .editor-header > .file-tabs { flex: 1 1 0; min-width: 0; }
+  .editor-header > .file-browser { display: flex; flex: 0 0 auto; align-items: center; }
+  .editor-header > .file-browser[open] { display: block; flex-basis: 100%; order: 1; border-top: 1px solid var(--border-code); }
+  .editor-header > .mobile-code-runbar { flex: 0 0 auto; align-items: center; padding: 0 var(--space-2) 0 0; }
+
+  .file-browser:not([open]) summary { min-height: var(--control-lg); padding: 0 var(--space-3); }
+  .file-browser:not([open]) summary small { display: none; }
+
+  /* 44px targets in the header even with a mouse (a short laptop window gets this layout too). */
+  .editor-header button { min-height: var(--control-lg); }
+  .editor-header button.icon-button { width: var(--control-lg); }
+  .file-tabs > button,
+  .mobile-code-runbar > button { flex-shrink: 0; }
+
+  /* Icon-only Guide and Practice; their aria-labels name them. */
+  .file-tabs .mobile-editor-guide-button,
+  .mobile-code-runbar button:not(.primary) {
+    gap: 0;
+    width: var(--control-lg);
+    padding: 0;
+    font-size: 0;
+  }
+
+  .mobile-code-runbar .primary { padding: 0 var(--space-4); }
+
+  .mobile-tab-projects .project-sidebar { height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .mobile-tab-home .mobile-home-panel { grid-template-columns: 1fr 1fr; }
+
+  .popover-panel {
+    bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    left: calc(var(--rail-width) + var(--space-4) + env(safe-area-inset-left));
+    max-height: calc(100dvh - var(--space-4) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  /* Toasts and "Fix this error" sit bottom-right, clear of the rail and the Run button. */
+  .floating-dock {
+    right: max(var(--space-2), env(safe-area-inset-right));
+    bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    left: auto;
+    align-items: flex-end;
+    width: min(360px, calc(100vw - var(--rail-width) - 2 * var(--space-4)));
+  }
 }
 
 @media (max-width: 360px) {

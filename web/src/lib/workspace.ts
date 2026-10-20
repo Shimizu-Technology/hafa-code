@@ -317,6 +317,16 @@ export function isArchived(project: SavedProject) {
   return Boolean(project.archivedAt)
 }
 
+/** A blank (or whitespace-only) entry file has nothing to run. */
+export function entryFileIsEmpty(file: Pick<ProjectFile, 'content'>) {
+  return !file.content.trim()
+}
+
+/** Why Run is unavailable for a blank entry file. */
+export function emptyEntryHint(path: string) {
+  return `${path} is empty. Type some code in it, then press Run.`
+}
+
 export async function writeClipboardText(text: string) {
   try {
     await navigator.clipboard.writeText(text)

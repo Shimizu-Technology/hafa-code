@@ -67,6 +67,7 @@ import {
 import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
+import { FloatingDock } from './components/FloatingDock'
 import { LessonBar } from './components/LessonBar'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { AppBar } from './components/AppBar'
@@ -141,7 +142,7 @@ import {
   type MobileTab,
 } from './lib/workspace'
 import { isLegacySiteHost, PUBLIC_SITE_URL } from './lib/siteConfig'
-import { LESSON_LINKS_STORAGE_KEY, lessonReturnForProject, loadLessonLinks, recordLessonLink, replaceLessonProjectId, saveLessonLinks, type LessonLinks } from './lib/lessonLinks'
+import { LESSON_LINKS_STORAGE_KEY, lessonReturnForProject, loadLessonLinks, mergeLessonLinks, recordLessonLink, replaceLessonProjectId, saveLessonLinks, type LessonLinks } from './lib/lessonLinks'
 import { projectKindCanRun } from './lib/languageRegistry'
 import { e2eAuthEnabled } from './lib/e2eAuth'
 import {
@@ -1852,12 +1853,14 @@ export default function App() {
       const nextLibrary = mergeWorkspaceLibraries(libraryRef.current, backup.data.library)
       const nextCheckpoints = mergeCheckpointLibraries(loadCheckpointLibrary(), backup.data.checkpoints)
       const nextPracticeProgress = mergePracticeProgress(loadPracticeProgress(), backup.data.practiceProgress)
+      const nextLessonLinks = mergeLessonLinks(loadLessonLinks(), backup.data.lessonLinks, nextLibrary.projects.map((candidate) => candidate.id))
       const nextProject = nextLibrary.projects.find((candidate) => candidate.id === nextLibrary.activeProjectId) ?? nextLibrary.projects[0]
 
       const localRestoreAvailable = persistWorkspaceRestore({
         library: nextLibrary,
         checkpoints: nextCheckpoints,
         practiceProgress: nextPracticeProgress,
+        lessonLinks: nextLessonLinks,
         theme: backup.data.preferences.theme,
         colorMode: backup.data.preferences.colorMode,
       })
@@ -1870,6 +1873,7 @@ export default function App() {
       setActivePath(nextProject.files[0].path)
       setCheckpoints(nextCheckpoints[nextProject.id] ?? [])
       setCompletedPracticeIds(nextPracticeProgress.completedChallengeIds)
+      setLessonLinks(nextLessonLinks)
       setThemePreference(backup.data.preferences.theme)
       setColorModePreference(backup.data.preferences.colorMode)
       setShowArchived(isArchived(nextProject))
@@ -2356,7 +2360,7 @@ export default function App() {
         <p className="mobile-home-stats" aria-label="Project summary">
           <span><strong>{activeContextProjects.length}</strong> active</span>
           <span><strong>{archivedContextProjects.length}</strong> archived</span>
-          <span><strong>{checkpoints.length}</strong> checkpoints</span>
+          <span><strong>{checkpoints.length}</strong> {checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}</span>
         </p>
       </section>
 
@@ -2476,7 +2480,7 @@ export default function App() {
 
       <MobileWorkspaceNav activeTab={mobileTab} projectKind={project.kind} onChange={changeMobileTab} />
 
-      <div className="floating-dock">
+      <FloatingDock>
         {notice && (
           <Toast
             key={notice}
@@ -2497,7 +2501,7 @@ export default function App() {
             <Bug size={17} aria-hidden="true" /> Fix this error
           </button>
         )}
-      </div>
+      </FloatingDock>
 
       {workspaceTransferOpen && (
         <WorkspaceTransferDialog
@@ -2574,7 +2578,7 @@ export default function App() {
         onSubmitFileDialog={submitFileDialog}
       />
 
-      <footer className="oss-footer" aria-label="Open source project">
+      <footer className="oss-footer" aria-label="Open source project" data-dock-avoid>
         <span>Hafa Code is open source.</span>
         <a href="https://github.com/Shimizu-Technology/hafa-code" target="_blank" rel="noreferrer">
           View the code on GitHub

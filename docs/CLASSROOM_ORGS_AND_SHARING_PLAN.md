@@ -26,7 +26,6 @@ The production Share failure observed in the browser console was caused by the f
 The frontend CSP in `web/public/_headers` currently allows:
 
 - `self`
-- Bunny fonts
 - Clerk domains
 - `https://*.shimizutechnology.com`
 

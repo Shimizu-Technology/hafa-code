@@ -89,4 +89,26 @@ describe('design tokens', () => {
     expect([...weights].every((weight) => weight >= 400 && weight <= 700)).toBe(true)
     expect(css.match(/var\(--font-display\)/g)?.length ?? 0).toBeLessThanOrEqual(3)
   })
+
+  it('gates every hover rule behind a fine pointer so taps never leave sticky hover', () => {
+    const ungated: string[] = []
+    const stack: string[] = []
+    let selector = ''
+    for (const character of css) {
+      if (character === '{') {
+        const current = selector.trim()
+        stack.push(current)
+        if (current.includes(':hover') && !stack.some((entry) => /@media[^{]*hover:\s*hover/.test(entry))) ungated.push(current)
+        selector = ''
+      } else if (character === '}') {
+        stack.pop()
+        selector = ''
+      } else if (character === ';') {
+        selector = ''
+      } else {
+        selector += character
+      }
+    }
+    expect(ungated).toEqual([])
+  })
 })

@@ -71,12 +71,17 @@ export function loadLessonLinks(): LessonLinks {
   }
 }
 
-export function saveLessonLinks(links: LessonLinks) {
+/** Keeps the newest project records so storage stays bounded. */
+export function trimLessonLinks(links: LessonLinks): LessonLinks {
   const entries = Object.entries(links.projects)
   const projects = entries.length > MAX_PROJECT_RECORDS
     ? Object.fromEntries(entries.sort((a, b) => b[1].updatedAt.localeCompare(a[1].updatedAt)).slice(0, MAX_PROJECT_RECORDS))
     : links.projects
-  const trimmed = { projects, starters: links.starters }
+  return { projects, starters: links.starters }
+}
+
+export function saveLessonLinks(links: LessonLinks) {
+  const trimmed = trimLessonLinks(links)
   try {
     localStorage.setItem(LESSON_LINKS_STORAGE_KEY, JSON.stringify(trimmed))
     memoryFallback = null
@@ -131,4 +136,33 @@ export function replaceLessonProjectId(links: LessonLinks, fromId: string, toId:
   if (record) projects[toId] = record
   const starters = Object.fromEntries(Object.entries(links.starters).map(([key, id]) => [key, id === fromId ? toId : id]))
   return { projects, starters }
+}
+
+/** Only the records that belong to these projects (for a workspace backup). */
+export function lessonLinksForProjects(links: LessonLinks, projectIds: Iterable<string>): LessonLinks {
+  const ids = new Set(projectIds)
+  return {
+    projects: Object.fromEntries(Object.entries(links.projects).filter(([projectId]) => ids.has(projectId))),
+    starters: Object.fromEntries(Object.entries(links.starters).filter(([, projectId]) => ids.has(projectId))),
+  }
+}
+
+/**
+ * Adds a backup's lesson records to this browser's. This browser's record wins for a
+ * project or starter key it already tracks, unless its starter points at a project that
+ * no longer exists; then the backup's copy takes over.
+ */
+export function mergeLessonLinks(current: LessonLinks, imported: LessonLinks, projectIds: Iterable<string>): LessonLinks {
+  const ids = new Set(projectIds)
+  const projects = { ...current.projects }
+  for (const [projectId, record] of Object.entries(imported.projects)) {
+    if (ids.has(projectId) && !Object.hasOwn(projects, projectId)) projects[projectId] = record
+  }
+  const starters = { ...current.starters }
+  for (const [starterKey, projectId] of Object.entries(imported.starters)) {
+    if (!ids.has(projectId)) continue
+    const existing = Object.hasOwn(starters, starterKey) ? starters[starterKey] : undefined
+    if (!existing || !ids.has(existing)) starters[starterKey] = projectId
+  }
+  return trimLessonLinks({ projects, starters })
 }

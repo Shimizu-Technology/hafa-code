@@ -452,7 +452,8 @@ describe('RunnerPanel', () => {
         worker.respond({ id: run.id, type: 'output_limit', text: 'limit' })
         vi.advanceTimersByTime(20)
       })
-      expect(screen.getByRole('alert').textContent).toContain('Output limit reached — check your loop')
+      expect(document.querySelector('.run-error-headline')?.textContent).toContain('Output limit reached — check your loop')
+      expect(screen.getByTestId('run-announcement').textContent).toContain('Error: Output limit reached — check your loop')
       expect(screen.getByText(/stopped this program because it printed more than 10,000 lines/)).toBeTruthy()
       expect(worker.terminated).toBe(true)
       expect(onRunComplete).toHaveBeenCalledOnce()
@@ -484,7 +485,12 @@ describe('RunnerPanel', () => {
         exitCode: 1,
         fullTraceback: 'Traceback (most recent call last):\n  File "/lib/python314.zip/_pyodide/_base.py", line 597\nNameError: …',
       }))
-      const headline = screen.getByRole('alert')
+      const headline = document.querySelector<HTMLElement>('.run-error-headline')!
+      // Announced once, politely: the headline and where, never the whole traceback.
+      const announcement = screen.getByTestId('run-announcement').textContent ?? ''
+      expect(announcement).toContain("Error: NameError: name 'totl' is not defined")
+      expect(announcement).toContain('main.py · line 2')
+      expect(announcement).not.toContain('Traceback')
       expect(headline.textContent).toContain("NameError: name 'totl' is not defined. Did you mean: 'total'?")
       expect(headline.textContent).toContain('main.py · line 2')
       expect(screen.getByText(/Show full traceback/)).toBeTruthy()
@@ -506,11 +512,11 @@ describe('RunnerPanel', () => {
       expect(screen.getByRole('alert').textContent).toContain('Copy was blocked')
     })
 
-    it('starts Python in the background and reuses that runtime for the first run', () => {
+    it('starts Python in the background and reuses that runtime for the first run', async () => {
       vi.useFakeTimers()
       render(<RunnerPanel project={project} entryFile={project.files[0]} />)
       expect(screen.getByText('3s run limit')).toBeTruthy()
-      act(() => vi.advanceTimersByTime(700))
+      await act(async () => { await vi.advanceTimersByTimeAsync(700) })
       expect(FakeWorker.instances).toHaveLength(1)
       expect(FakeWorker.instances[0].messages[0]).toMatchObject({ type: 'warmup' })
       act(() => window.dispatchEvent(new Event('hafa-code-run-active-project')))

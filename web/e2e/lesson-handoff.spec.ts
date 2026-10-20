@@ -123,7 +123,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
     for (const control of [back, copy]) {
       await expect(control).toBeVisible()
       const box = await control.boundingBox()
-      expect(box!.height).toBeGreaterThanOrEqual(viewport.height < 500 ? 40 : 44)
+      expect(box!.height).toBeGreaterThanOrEqual(44)
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width)
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
