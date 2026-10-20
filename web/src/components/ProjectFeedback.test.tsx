@@ -112,4 +112,13 @@ describe('ProjectFeedback', () => {
     await waitFor(() => expect(container.querySelector('details.project-feedback')!.hasAttribute('open')).toBe(true))
     expect(screen.getByText('1 open')).toBeTruthy()
   })
+
+  test('on a phone, a feedback load error opens the thread so the learner sees it', async () => {
+    usePhoneViewport()
+    vi.mocked(api.getProjectComments).mockResolvedValue({ data: null, error: 'Network error' })
+    const { container } = render(<ProjectFeedback projectId="42" currentUserId={4} files={files} />)
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    await waitFor(() => expect(container.querySelector('details.project-feedback')!.hasAttribute('open')).toBe(true))
+  })
 })

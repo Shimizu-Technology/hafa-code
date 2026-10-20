@@ -19,7 +19,7 @@ export function ProjectFeedback({ projectId, files, currentUserId }: ProjectFeed
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   // On a phone the panel is a disclosure above the code. It opens by itself only when
-  // there is feedback to read; an empty composer should not push the editor and Run away.
+  // there is feedback (or a load error) to read; an empty composer should not push the editor and Run away.
   const phoneLayout = usePhoneLayout()
   const [expandedChoice, setExpandedChoice] = useState<boolean | null>(null)
   const unresolvedCount = useMemo(() => comments.filter((comment) => !comment.resolved_at).length, [comments])
@@ -160,7 +160,8 @@ export function ProjectFeedback({ projectId, files, currentUserId }: ProjectFeed
   )
 
   if (phoneLayout) {
-    const expanded = expandedChoice ?? (!loading && comments.length > 0)
+    // A load error opens it too, so the learner sees the failure rather than a quiet "0 open".
+    const expanded = expandedChoice ?? (!loading && (comments.length > 0 || Boolean(error)))
     return (
       <details
         className="project-feedback project-feedback-compact panel surface-grid"

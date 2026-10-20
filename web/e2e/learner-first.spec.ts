@@ -21,6 +21,8 @@ async function openPythonAfterCloudSave(page: Page) {
   expect((await feedbackLoaded).status()).toBe(200)
   const feedback = page.locator('.project-feedback')
   await expect(feedback).toBeVisible()
+  // The thread has replaced "Loading feedback…" (it sits inside the folded panel on phones).
+  await expect(feedback.locator('.empty-project-list')).toHaveCount(1)
   return feedback
 }
 
