@@ -107,11 +107,14 @@ export function ProjectSidebar({
           )}
         </div>
       )}
-      {trimmedQuery && (
-        <p className="project-search-count" id={`${searchId}-${place}-count`} aria-live="polite">
-          {shownProjects.length === 0
-            ? `No projects match “${trimmedQuery}”.`
-            : `${shownProjects.length} of ${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`}
+      {searchable && (
+        // Mounted whenever search is shown, so the first count after typing is announced.
+        <p className="project-search-count" id={`${searchId}-${place}-count`} aria-live="polite" hidden={!trimmedQuery}>
+          {!trimmedQuery
+            ? ''
+            : shownProjects.length === 0
+              ? `No projects match “${trimmedQuery}”.`
+              : `${shownProjects.length} of ${projects.length} projects`}
         </p>
       )}
       <div className="project-list">

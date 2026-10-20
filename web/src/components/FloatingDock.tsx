@@ -39,8 +39,13 @@ export function FloatingDock({ children }: { children: ReactNode }) {
     place()
     const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
     resizeObserver?.observe(dock)
+    // Controls move when the page grows or shrinks (a lesson bar or notice appears) ...
+    resizeObserver?.observe(document.body)
     const mutationObserver = new MutationObserver(schedule)
     mutationObserver.observe(dock, { childList: true, subtree: true, characterData: true })
+    // ... or when the phone switches between Code, Output, and the other tabs.
+    const shell = dock.closest('.app-shell')
+    if (shell) mutationObserver.observe(shell, { attributes: true, attributeFilter: ['class'] })
     window.addEventListener('resize', schedule)
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     return () => {

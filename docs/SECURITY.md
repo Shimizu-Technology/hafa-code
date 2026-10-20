@@ -105,7 +105,7 @@ Intentional restrictions:
 - `Referrer-Policy: no-referrer`
 - restrictive `Permissions-Policy`
 - `Cross-Origin-Opener-Policy: same-origin`
-- Content Security Policy tuned for WASM, workers, local assets, and Bunny fonts
+- Content Security Policy tuned for WASM, workers, and same-origin assets, including self-hosted fonts
 
 The application document deliberately permits WebAssembly compilation with
 `'wasm-unsafe-eval'` but does not permit JavaScript string evaluation. The Ruby

@@ -21,7 +21,7 @@ import { defineHafaEditorThemes, type HafaEditorTheme } from '../lib/monacoTheme
 import type { RunnerOutcome } from '../lib/runnerOutcome'
 import type { ErrorCoachContext } from '../lib/errorCoach'
 import { focusOutside, focusRunControl, isApplePlatform } from '../lib/focusNavigation'
-import { emptyEntryHint, formatFileLanguage, languageForFile, writeClipboardText } from '../lib/workspace'
+import { emptyEntryHint, entryFileIsEmpty, formatFileLanguage, languageForFile, writeClipboardText } from '../lib/workspace'
 import { loadEditorRuntime, useEditorRuntime } from '../lib/editorRuntime'
 import { RunnerPanel } from './RunnerPanel'
 import { SqlRunnerPanel } from './SqlRunnerPanel'
@@ -106,7 +106,7 @@ export function EditorWorkspace({
   const copyStatus = copyResult.projectId === project.id && copyResult.path === activeFile.path ? copyResult.state : 'idle'
   const runnable = projectKindCanRun(project.kind)
   const editorRuntime = useEditorRuntime()
-  const entryBlocksRun = project.kind !== 'web' && !entryFile.content.trim()
+  const entryBlocksRun = runnable && entryFileIsEmpty(entryFile)
   const mobileEmptyHintId = useId()
   const modifierLabel = isApplePlatform() ? '⌘' : 'Ctrl'
 
@@ -345,7 +345,7 @@ function EditorPlaceholder({ content, failed, fontSize, path, onRetry }: {
   const lines = content.split('\n').slice(0, PLACEHOLDER_LINE_LIMIT)
   return (
     <div className="editor-placeholder" style={{ fontSize }} aria-busy={!failed}>
-      <pre className="editor-placeholder-code" aria-label={`${path}, read-only while the editor loads`}>
+      <pre className="editor-placeholder-code" role="region" aria-label={`${path}, read-only while the editor loads`}>
         {lines.map((line, index) => (
           <span className="editor-placeholder-line" key={index}>
             <span className="editor-placeholder-number" aria-hidden="true">{index + 1}</span>

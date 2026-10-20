@@ -143,6 +143,9 @@ test('a long project list gets search and keeps one project compact', async ({ p
   await expect(search).toBeVisible()
   const scroller = await sidebar.locator('.project-list').evaluate((element) => ({ overflow: getComputedStyle(element).overflowY, scrolls: element.scrollHeight > element.clientHeight }))
   expect(scroller).toEqual({ overflow: 'auto', scrolls: true })
+  // The sticky sidebar ends inside the first screen, so the last project is reachable without page scrolling.
+  const sidebarBox = await box(page, '.project-sidebar')
+  expect(sidebarBox.y + sidebarBox.height).toBeLessThanOrEqual(800)
   await search.fill('expense')
   await expect(sidebar.locator('.project-card')).toHaveCount(1)
   await expect(sidebar.getByText('1 of 35 projects')).toBeVisible()

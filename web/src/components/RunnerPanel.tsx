@@ -14,7 +14,7 @@ import {
   runtimeWasReady,
   takeIdleRunnerWorker,
 } from '../lib/runnerWorkerPool'
-import { emptyEntryHint, writeClipboardText } from '../lib/workspace'
+import { emptyEntryHint, entryFileIsEmpty, writeClipboardText } from '../lib/workspace'
 import { claimFirstSuccess, runMilestone, type RunMilestone } from '../lib/runMilestones'
 import type { RunnerRequest, RunnerResponse, RunRequest } from '../workers/runnerProtocol'
 import { OUTPUT_LIMIT_CHARS, OUTPUT_LIMIT_LINES, OUTPUT_LIMIT_MESSAGE } from '../workers/runOutput'
@@ -519,7 +519,7 @@ export function RunnerPanel({ project, entryFile, onRunCancel, onRunComplete, on
     return () => window.removeEventListener('hafa-code-cancel-active-run', handleCancelRequest)
   }, [stopWorker])
 
-  const entryIsEmpty = !entryFile.content.trim()
+  const entryIsEmpty = entryFileIsEmpty(entryFile)
   const emptyHintId = useId()
 
   const announcement = runAnnouncement({

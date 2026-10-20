@@ -3,7 +3,7 @@ import { Database, Loader2, Play, RotateCcw, Square } from 'lucide-react'
 import { RUNNER_STARTUP_TIMEOUT_MS, RUNNER_TIMEOUT_MS, type ProjectFile, type SavedProject } from '../lib/codeRunner'
 import { coachRunnerError, type ErrorCoachContext } from '../lib/errorCoach'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
-import { emptyEntryHint } from '../lib/workspace'
+import { emptyEntryHint, entryFileIsEmpty } from '../lib/workspace'
 import type { SqlQueryResult, SqlRunnerRequest, SqlRunnerResponse } from '../workers/sqlRunnerProtocol'
 
 type SqlStatus = 'idle' | 'loading' | 'running' | 'success' | 'error' | 'stopped'
@@ -214,7 +214,7 @@ export function SqlRunnerPanel({ project, entryFile, onOpenFile, onRunCancel, on
   }, [advice, onErrorAdviceChange])
 
   const busy = status === 'loading' || status === 'running'
-  const entryIsEmpty = !entryFile.content.trim()
+  const entryIsEmpty = entryFileIsEmpty(entryFile)
   const emptyHintId = useId()
   const rowLabel = result ? `${result.rowCount} row${result.rowCount === 1 ? '' : 's'}` : ''
   const schemaFile = project.files.find((file) => file.path === 'schema.sql')

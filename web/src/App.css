@@ -1211,6 +1211,14 @@ textarea {
   .guide-search input { font-size: 16px; }
 }
 
+/* Desktop: the sticky sidebar never runs past the window; the list takes what is left. */
+@media (min-width: 981px) {
+  /* 96px: the app bar above it and the page padding, so the list ends inside the first screen. */
+  .project-sidebar { display: flex; flex-direction: column; max-height: calc(100dvh - 96px); }
+  .app-shell:not(.sidebar-collapsed) .project-sidebar .sidebar-content { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; }
+  .sidebar-content > .project-list { flex: 0 1 auto; min-height: 0; max-height: none; }
+}
+
 /* Sized to its cards: one project is one card, a long list scrolls inside the sidebar. */
 .project-list {
   display: grid;

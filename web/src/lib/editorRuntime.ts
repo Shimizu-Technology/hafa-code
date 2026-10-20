@@ -16,6 +16,11 @@ function notify() {
 }
 
 export function loadEditorRuntime(): Promise<void> {
+  if (!loading && failed) {
+    // "Try again" shows "Loading the editor…" while the retry downloads.
+    failed = false
+    notify()
+  }
   loading ??= import('./monacoSetup').then(
     () => {
       ready = true
