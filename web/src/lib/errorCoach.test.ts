@@ -45,6 +45,11 @@ describe('contextual error coach', () => {
     expect(advice).toMatchObject({ title: 'This import is not used', location: 'main.go · line 5' })
   })
 
+  it('does not coach a learner panic that mentions "expected" as a syntax error', () => {
+    const advice = coachRunnerError('go', 'main.go', failure('panic: expected a positive number\n\ngoroutine 1 [running]:\nmain.main()\n\tmain.go:6:3\nexit status 2\n'))
+    expect(advice).toMatchObject({ title: 'Let’s decode this go error', location: 'main.go · line 6', guideTopicId: 'go-output-comments' })
+  })
+
   it('falls back to general Go guidance for an unrecognized message', () => {
     const advice = coachRunnerError('go', 'main.go', failure('panic: something unusual happened\nexit status 2'))
     expect(advice).toMatchObject({ title: 'Let’s decode this go error', guideTopicId: 'go-output-comments', location: 'main.go' })

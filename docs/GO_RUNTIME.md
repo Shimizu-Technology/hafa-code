@@ -81,6 +81,8 @@ When a program passes the check but Yaegi cannot compile or run it, the terminal
 
 The generated files and outputs are ignored by Git. Vite emits the module as a content-hashed `/assets/hafago-<hash>.wasm` file. Netlify and CI therefore need Go available during the web build.
 
+Direct Go commands in `web/runtimes/go`, such as `go vet ./...`, `go test ./...`, or `golangci-lint`, need the generated files first. Run `node web/scripts/build-go-runtime.mjs` from the repository root, then build with `-modfile .build/go.mod` so the patched Yaegi is used. The npm scripts run the generation step automatically.
+
 Yaegi is pinned to commit `fcb76d1ece0c` (`v0.16.2-0.20260209085605-fcb76d1ece0c`) rather than the v0.16.1 tag. The tag predates Go 1.22 loop-variable semantics, range-over-int, and a fix for deferred-argument evaluation, and the content verification failed on it. Hafa Code applies two small patches to the copied `interp/run.go`; `hafagen` fails the build if either no longer applies:
 
 - panic frames track the executing statement, because the fast path shadowed the variable Yaegi's panic reporter reads and every frame pointed at the first line of its function; and

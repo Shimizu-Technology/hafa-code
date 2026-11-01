@@ -225,6 +225,15 @@ describe('practice challenge catalog', () => {
     })
   })
 
+  it('keeps checking Go code after a raw string that ends in a backslash', () => {
+    const challenge = practiceChallengeById('go-loop-stops')!
+    const source = 'package main\n\nimport "fmt"\n\nfunc main() {\n\tfolder := `C:\\stops\\`\n\tfmt.Println(folder)\n\tfor stop := 1; stop <= 3; stop++ {\n\t\tfmt.Println("Stop", stop)\n\t}\n}\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.go', language: 'go', content: source }], {
+      status: 'success', stdout: 'Stop 1\nStop 2\nStop 3', stderr: '', durationMs: 1,
+    })
+    expect(result.checks[0]).toMatchObject({ label: 'Use a for loop', passed: true })
+  })
+
   it('ignores Go syntax that appears only in comments or raw strings', () => {
     const challenge = practiceChallengeById('go-loop-stops')!
     const source = 'package main\n\nimport "fmt"\n\nfunc main() {\n\t// for i := 1; i <= 3; i++ {\n\tnote := `for stop := 1; stop <= 3; stop++ {\\`\n\tfmt.Println(note)\n}\n'

@@ -240,7 +240,7 @@ func writeCompilerSyntax(dir string) error {
 }
 
 // yaegiPackages are the Yaegi module directories the runner compiles.
-var yaegiPackages = []string{"interp", "internal/unsafe2", "stdlib/generic"}
+var yaegiPackages = []string{"interp", "internal/unsafe2", "stdlib/generic", "extract"}
 
 // writePatchedModule copies the pinned Yaegi packages into dir/yaegi, applies
 // yaegiPatches, and writes dir/go.mod, a module file that replaces Yaegi with

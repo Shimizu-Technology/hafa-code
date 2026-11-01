@@ -354,7 +354,8 @@ function sourceWithoutComments(file: ProjectFile) {
   return result
 }
 
-function sourceWithoutStringContents(source: string) {
+/** Blanks string contents; `rawBackticks` treats backtick strings as Go raw strings with no escapes. */
+function sourceWithoutStringContents(source: string, rawBackticks = false) {
   let result = ''
   let quote: string | null = null
   let tripleQuote = false
@@ -391,7 +392,7 @@ function sourceWithoutStringContents(source: string) {
 
     result += char === '\n' ? '\n' : ' '
     if (escaped) escaped = false
-    else if (char === '\\') escaped = true
+    else if (char === '\\' && !(rawBackticks && quote === '`')) escaped = true
   }
 
   return result
@@ -431,7 +432,7 @@ export function evaluatePracticeChallenge(challenge: PracticeChallenge, files: P
     }
     const commentFreeSource = file ? sourceWithoutComments(file) : ''
     const scopedSource = check.scope ? check.scope(commentFreeSource) : commentFreeSource
-    const comparableSource = check.ignoreStrings ? sourceWithoutStringContents(scopedSource) : scopedSource
+    const comparableSource = check.ignoreStrings ? sourceWithoutStringContents(scopedSource, file?.language === 'go') : scopedSource
     const source = check.matchLearnerText ? normalizeLearnerText(comparableSource) : comparableSource
     return { label: check.label, passed: Boolean(file && check.pattern?.test(source)) }
   })
