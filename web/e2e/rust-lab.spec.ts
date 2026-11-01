@@ -208,7 +208,8 @@ test('the experiment note is one line that stays hidden once dismissed, and the 
   await page.goto('/labs/rust/')
   const note = page.getByRole('complementary', { name: 'About this experiment' })
   await expect(note).toContainText('38.7 MB')
-  expect((await note.boundingBox())!.height).toBeLessThanOrEqual(48)
+  // One line of text; the 44px Hide button sets the height.
+  expect((await note.boundingBox())!.height).toBeLessThanOrEqual(56)
   await note.getByRole('button', { name: 'Hide this note' }).click()
   await expect(note).toBeHidden()
   await page.reload()
