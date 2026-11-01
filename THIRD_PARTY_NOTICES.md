@@ -96,3 +96,20 @@ The Java runner downloads the Java 8 `tools.jar` used by Leaning Technologies'
 JavaFiddle service from `https://javafiddle.leaningtech.com/tools.jar` and places
 it in CheerpJ's transient browser filesystem for compilation. The archive is
 not committed to or redistributed by this repository.
+
+## Rust Lab toolchain (experimental)
+
+The Rust Lab (`/labs/rust/`) self-hosts, unmodified, two files from the
+[oligamiq/rust_wasm](https://github.com/oligamiq/rust_wasm) `v0.2.0-release`:
+`rustc_opt.wasm.br` (rustc 1.83.0-dev with lld, built for WebAssembly) and
+`wasm32-wasip1.tar.br` (the Rust standard library for `wasm32-wasip1`, including
+wasi-libc). They are downloaded at build time, pinned by SHA-256, and not
+committed to this repository.
+
+- Rust compiler and standard library: <https://github.com/rust-lang/rust>, MIT OR Apache-2.0
+- LLVM and lld: <https://llvm.org/>, Apache-2.0 WITH LLVM-exception
+- wasi-libc: <https://github.com/WebAssembly/wasi-libc>, Apache-2.0 WITH LLVM-exception, MIT, and other permissive licenses
+- Toolchain builds: <https://github.com/oligamiq/rust_wasm> and <https://github.com/oligamiq/rubrc> by oligami (rubrc: MIT OR Apache-2.0)
+
+The lab's browser runtime includes `@oligami/browser_wasi_shim-threads`,
+`@bjorn3/browser_wasi_shim`, and `brotli-dec-wasm`, each MIT OR Apache-2.0.

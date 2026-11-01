@@ -21,6 +21,8 @@ Rails API + React SPA
       │   ├─ go/types + Yaegi Go WebAssembly
       │   └─ SQLite WASM in-memory database
       ├─ HTML preview iframe
+      ├─ Experimental Rust Lab page (/labs/rust/, separate build)
+      │   └─ rustc WASM + wasi-threads workers, program worker
       └─ Project storage adapter
           ├─ localStorage anonymous fallback
           └─ Rails cloud sync when signed in
@@ -146,6 +148,18 @@ Recommended sandbox flags for MVP:
 ```
 
 Do not allow same-origin unless there is a specific reason.
+
+### Rust Lab (experimental)
+
+The Rust Lab is a separate page, not a project kind. It is built by `vite.lab.config.ts`
+after the main app so the workspace bundle and service-worker shell do not change.
+
+- requires cross-origin isolation (COEP is sent only for `/labs/rust/*` and the lab workers)
+- downloads a pinned, self-hosted rustc + `wasm32-wasip1` standard library (38.7 MB) only after the learner agrees, verifying every chunk's SHA-256 and keeping it in Cache Storage
+- compiles one `main.rs` in a wasi-threads worker group and runs the program in its own worker; Stop and the time limit terminate that worker
+- keeps projects in `localStorage` with import/export; nothing is sent to Rails
+
+See [Rust Lab](RUST_LAB.md) for measurements, limits, and graduation criteria.
 
 ## Data Model Draft
 

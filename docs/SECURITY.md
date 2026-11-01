@@ -91,6 +91,20 @@ SQL runs through the official SQLite WebAssembly distribution in a dedicated Web
 - Stop, timeout, or leaving the project terminates the worker and its in-memory database
 - The SQL worker CSP permits same-origin scripts, WebAssembly, and the same-origin fetch needed to load the SQLite asset; the runner exposes no API or network bridge to learner SQL, and third-party origins such as Clerk or remote databases remain blocked
 
+### Rust Lab (experimental)
+
+The Rust Lab at `/labs/rust/` compiles and runs Rust in browser workers; Rails and other
+servers never see the code.
+
+- COEP `require-corp` is sent only for `/labs/rust/*` and the six `rustLab*.worker-*.js` assets; the workspace keeps its headers so Clerk and CheerpJ continue to load
+- COOP comes only from the site-wide rule, because a repeated COOP value would be invalid after Netlify joins matching rules
+- the lab page and workers allow same-origin scripts and connections only (plus WebAssembly); worker creation is limited to this origin, with no `blob:` workers
+- toolchain chunks are pinned by SHA-256 at build time and verified again in the browser before use
+- the compiled program runs in its own worker with in-memory WASI stdin/stdout/stderr, no filesystem, network, or API bridge, a 256 KB output limit, and a 10-second time limit
+- the service worker ignores `/labs/` and the toolchain files
+
+See [Rust Lab](RUST_LAB.md).
+
 ### HTML/CSS/JS Preview
 
 Web projects render in a sandboxed iframe.
@@ -137,6 +151,9 @@ inherit Clerk or other unrelated third-party origins.
 worker header rule and that the page-level policy remains free of
 `'unsafe-eval'`. A deploy-preview smoke test must still run Ruby in a real
 browser because Vite's local server does not apply Netlify's `_headers` rules.
+The build also verifies that COEP appears only on the Rust Lab rules and that
+COOP is set once; on a deploy preview, confirm `/labs/rust/` reports
+`crossOriginIsolated === true` and `/` does not.
 
 ## Dependency Audits
 

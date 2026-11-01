@@ -67,6 +67,24 @@ web/src/
 
 `web/public/javaRunner.bootstrap.js` is the small classic-worker entry point that loads CheerpJ before importing the bundled Java runner module. It exists because CheerpJ's worker API uses `importScripts`, while the application code is bundled as ES modules.
 
+The experimental Rust Lab is a separate page with its own entry and build:
+
+```txt
+web/labs/rust/index.html      Lab page entry (built by vite.lab.config.ts)
+web/src/labs/rust/
+  RustLab.tsx                 Page: gate, projects, editor, output, guide, practice
+  RustEditor.tsx / rustMonaco.ts  Lean Monaco with Rust highlighting
+  rustLabClient.ts            Toolchain and program worker handles
+  capability.ts               Desktop and cross-origin-isolation checks
+  diagnostics.ts / errorCoach.ts  rustc JSON diagnostics and coaching
+  guide.ts / challenges.ts / starter.ts  Lab content
+  storage.ts                  Local projects, import/export
+  toolchain.ts / toolchainManifest.json  Pinned toolchain chunks
+  workers/                    Toolchain, compiler, thread, program, and editor workers
+```
+
+It does not use `languageRegistry.ts`; see [Rust Lab](RUST_LAB.md).
+
 ## Organization Rules
 
 - Add project kinds and file-language behavior through `lib/languageRegistry.ts`; do not add parallel language switches in components.
