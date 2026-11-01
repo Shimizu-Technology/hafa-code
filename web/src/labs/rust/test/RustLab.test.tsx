@@ -96,6 +96,10 @@ describe('Rust Lab page', () => {
     expect(screen.queryByRole('button', { name: /download/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Run$/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Try running on this device/ })).toBeNull()
+    // A computer would not help here: the phone header's Run names the browser problem instead.
+    expect(screen.queryByRole('button', { name: /Run on a computer/ })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Browser unsupported' }))
+    expect(screen.getByRole('status').textContent).toBe('This browser cannot run Rust.')
     await userEvent.click(within(screen.getByRole('navigation', { name: 'Learning tools' })).getByRole('button', { name: 'Rust guide' }))
     expect(screen.getByRole('heading', { name: 'println! and variables' })).toBeTruthy()
   })

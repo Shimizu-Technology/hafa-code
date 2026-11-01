@@ -448,7 +448,9 @@ export function RustLab() {
   }
 
   const editorTheme = preferences.resolvedTheme === 'dark' ? 'hafa-dark' : 'hafa-light'
-  const runLabel = availability === 'available' ? 'Run Rust' : 'Run on a computer'
+  // A computer does not help an unsupported browser; the Output panel says which browser to use.
+  const runLabel = availability === 'available' ? 'Run Rust' : availability === 'unsupported' ? 'Browser unsupported' : 'Run on a computer'
+  const RunIcon = availability === 'available' ? Play : availability === 'unsupported' ? TriangleAlert : Laptop
   const learningVisible = learningOpen && !overlayLearning
   const challengeResult = report?.challenge && activeChallenge && report.challenge.id === activeChallenge.id
     ? { passed: report.challenge.passed, compiled: Boolean(report.program) }
@@ -543,7 +545,7 @@ export function RustLab() {
                   </div>
                   <div className="mobile-code-runbar">
                     <button className={availability === 'available' ? 'primary' : 'secondary'} type="button" disabled={busy} onClick={() => void run()}>
-                      {availability === 'available' ? <Play size={16} aria-hidden="true" /> : <Laptop size={16} aria-hidden="true" />} {runLabel}
+                      <RunIcon size={16} aria-hidden="true" /> {runLabel}
                     </button>
                   </div>
                 </div>
