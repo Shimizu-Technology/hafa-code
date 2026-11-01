@@ -66,6 +66,18 @@ third-party runtime dependency; deployment eligibility must continue to be
 checked against CheerpJ's current license terms. Hafa provides visible
 attribution and does not self-host CheerpJ Core.
 
+### Go
+
+Go source is type-checked and interpreted inside one self-hosted WebAssembly module in a dedicated Web Worker. Rails stores Go source but never compiles or runs it.
+
+- The worker accepts at most 50 files and 2,000,000 bytes of source per run and rejects hidden, absolute, traversal, nested `.go`, and module (`go.mod`, `go.sum`, `go.work`) paths before the runtime loads
+- The checker rejects any import outside a curated standard-library allowlist before anything runs; `net`, `os/exec`, `syscall`, `syscall/js`, `unsafe`, and `reflect` are not importable, and the interpreter has bindings only for the allowlisted packages
+- File and directory operations fail inside the worker; there is no host or persistent browser filesystem
+- Each run uses a fresh WebAssembly instance, so learner goroutines and state cannot outlive the run
+- Output is capped by the shared output limit; Stop or the execution deadline terminates the worker
+- The worker CSP permits same-origin scripts, WebAssembly compilation, and same-origin fetches for its own module, with no `'unsafe-eval'`, nested workers, API, Clerk, or third-party origins
+- The runtime is built from source in this repository with a pinned toolchain and pinned Yaegi commit; no third-party runtime CDN is used
+
 ### SQL
 
 SQL runs through the official SQLite WebAssembly distribution in a dedicated Web Worker. Rails stores the source files but never receives or executes the database.
@@ -113,7 +125,7 @@ runner is a narrower exception: ruby.wasm's `js` bridge evaluates a small amount
 of bridge code while loading, so only the generated `rubyRunner.worker-*.js`
 asset receives a worker-specific policy containing `'unsafe-eval'`. The separate
 `javascriptRunner.worker-*.js` policy permits WebAssembly compilation without
-that broader exception. The TypeScript, SQL, and Python workers follow the same stricter pattern.
+that broader exception. The TypeScript, SQL, Python, and Go workers follow the same stricter pattern.
 Like ruby.wasm, CheerpJ requires `'unsafe-eval'` for its trusted JavaScript
 bridge. That exception is limited to the generated Java worker response. The
 Java worker also allows the pinned CheerpJ script host and the two exact
@@ -155,6 +167,7 @@ The app self-hosts its fonts from `/fonts/` (Fontsource subsets, versioned file 
 - TypeScript adds a compiler worker and ES2020 declaration libraries on first use; it is intended for focused learning projects, not large application builds.
 - Java's first run downloads CheerpJ plus an approximately 18 MiB Java 8 compiler archive; slower connections can take noticeably longer.
 - Java is currently a Java 8, default-package learning environment without Maven, Gradle, external JARs, desktop GUIs, or arbitrary networking.
+- Go's first run downloads an approximately 4 MB (gzip) runtime. Go is interpreted by Yaegi, so a few panic messages and library behaviors differ from compiled Go; see the Go runtime document.
 - SQL database state is intentionally memory-only and project-session scoped; a page reload, Stop, or worker failure rebuilds it from `schema.sql` and `seed.sql` on the next run.
 - CheerpJ production use must remain within the Community License or move to an appropriate commercial license; technical evaluation alone does not cover normal organizational use.
 - Python package installation is intentionally unavailable in the initial release.

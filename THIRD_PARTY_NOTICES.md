@@ -30,6 +30,52 @@ Hafa Code includes the TypeScript compiler and a focused set of its standard dec
 
 The compiler is used in the browser to type-check and emit learner projects. Hafa Code does not provide Microsoft support, npm package access, Node APIs, or DOM APIs through this runtime.
 
+## Go
+
+Hafa Code's on-demand Go runner (`/assets/hafago-<hash>.wasm` and its worker) is built from the Go toolchain pinned in `web/runtimes/go/go.mod`. It contains compiled Go standard-library code, including `go/parser` and `go/types`, a copy of the Go compiler's syntax parser (`cmd/compile/internal/syntax`), gc export data for the allowlisted standard-library packages, and the toolchain's `wasm_exec.js` support file.
+
+- Project: <https://go.dev/>
+- Source: <https://go.googlesource.com/go>
+- License: BSD 3-Clause
+
+```text
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+## Yaegi
+
+The Go runner interprets learner programs with Yaegi, built into the same WebAssembly module from commit `fcb76d1ece0c` with symbol bindings generated for the allowlisted standard-library packages. Hafa Code modifies `interp/run.go` at build time so panic frames report the executing statement and goroutine panics reach the runner; the patch is in `web/runtimes/go/cmd/hafagen/main.go`. `web/runtimes/go/symbols/maptypes.go` adapts Yaegi's `stdlib/maptypes.go`.
+
+- Project: <https://github.com/traefik/yaegi>
+- Copyright 2019 Containous SAS; Copyright 2020 Traefik Labs SAS
+- License: Apache License 2.0 (<https://www.apache.org/licenses/LICENSE-2.0>)
+
 ## CheerpJ Core
 
 Hafa Code's Java runner uses CheerpJ Core 4.3 by Leaning Technologies Limited.
