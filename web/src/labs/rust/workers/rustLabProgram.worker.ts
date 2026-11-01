@@ -4,44 +4,30 @@
  * basics. The page terminates this worker for Stop and the time limit.
  */
 import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim'
+import { OutputWriter, type OutputStream } from '../programOutput'
 import type { ProgramRequest, ProgramResponse } from '../protocol'
 
 declare const self: DedicatedWorkerGlobalScope
 
 const post = (message: ProgramResponse) => self.postMessage(message)
-const FLUSH_INTERVAL_MS = 50
 
 class OutputLimitReached extends Error {}
 
 self.onmessage = async (event: MessageEvent<ProgramRequest>) => {
-  const { wasm, stdin, outputLimitBytes } = event.data
+  const { wasm, stdin, outputLimitBytes, output } = event.data
   const startedAt = performance.now()
-  const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() }
-  // One ordered list, so stdout and stderr arrive in the order the program wrote them.
-  const buffered: Array<{ stream: 'stdout' | 'stderr'; text: string }> = []
+  const log = new OutputWriter(output)
   let written = 0
-  let lastFlush = performance.now()
   let outputLimited = false
 
-  const append = (stream: 'stdout' | 'stderr', text: string) => {
-    if (!text) return
-    const last = buffered[buffered.length - 1]
-    if (last?.stream === stream) last.text += text
-    else buffered.push({ stream, text })
-  }
-  const flush = () => {
-    for (const { stream, text } of buffered.splice(0)) post({ type: 'output', stream, text })
-    lastFlush = performance.now()
-  }
-  const writer = (stream: 'stdout' | 'stderr') => new ConsoleStdout((bytes) => {
+  const writer = (stream: OutputStream) => new ConsoleStdout((bytes) => {
     const allowed = Math.max(0, outputLimitBytes - written)
     written += bytes.length
-    append(stream, decoders[stream].decode(bytes.subarray(0, allowed), { stream: true }))
-    if (written > outputLimitBytes) {
+    const fits = log.write(stream, bytes.slice(0, allowed))
+    if (written > outputLimitBytes || !fits) {
       outputLimited = true
       throw new OutputLimitReached()
     }
-    if (performance.now() - lastFlush > FLUSH_INTERVAL_MS) flush()
   })
 
   const wasi = new WASI(['main'], ['RUST_BACKTRACE=0'], [
@@ -62,10 +48,9 @@ self.onmessage = async (event: MessageEvent<ProgramRequest>) => {
       panicked = true
       exitCode = 101
     } else {
-      append('stderr', `\n${error instanceof Error ? error.message : String(error)}`)
+      log.write('stderr', new TextEncoder().encode(`\n${error instanceof Error ? error.message : String(error)}`))
       exitCode = 1
     }
   }
-  flush()
   post({ type: 'exit', exitCode, panicked, outputLimited, durationMs: Math.round(performance.now() - startedAt) })
 }

@@ -123,11 +123,13 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await expect(page.getByRole('region', { name: /An immutable variable was assigned twice/ })).toContainText('E0384')
 
     // Stop ends a loop that never finishes.
-    await setSource(page, 'fn main() {\n    let mut n: u64 = 0;\n    loop { n = n.wrapping_add(1); }\n}\n')
+    // Output printed just before an endless loop is kept after Stop.
+    await setSource(page, 'fn main() {\n    println!("started");\n    eprintln!("still here");\n    let mut n: u64 = 0;\n    loop { n = n.wrapping_add(1); }\n}\n')
     await page.getByRole('button', { name: 'Run', exact: true }).click()
     await expect(page.locator('.lab-status')).toContainText('Running', { timeout: 30_000 })
     await page.getByRole('button', { name: 'Stop' }).click()
     await expect(page.locator('.lab-status')).toHaveText('Stopped.')
+    await expect(page.locator('.lab-program-output')).toHaveText('started\nstill here\n')
 
     // A challenge fails with its starter and passes with a correct solution.
     await page.getByRole('tab', { name: 'Practice' }).click()

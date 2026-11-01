@@ -20,8 +20,7 @@ export type CompilerResponse =
   | { type: 'ready' }
   | { type: 'done'; exitCode: number | null; error?: string }
 
-export type ProgramRequest = { type: 'run'; wasm: ArrayBuffer; stdin: string; outputLimitBytes: number }
+/** Output goes through `output` (see programOutput.ts), not messages, so a terminated run keeps it. */
+export type ProgramRequest = { type: 'run'; wasm: ArrayBuffer; stdin: string; outputLimitBytes: number; output: SharedArrayBuffer }
 
-export type ProgramResponse =
-  | { type: 'output'; stream: 'stdout' | 'stderr'; text: string }
-  | { type: 'exit'; exitCode: number; panicked: boolean; outputLimited: boolean; durationMs: number }
+export type ProgramResponse = { type: 'exit'; exitCode: number; panicked: boolean; outputLimited: boolean; durationMs: number }

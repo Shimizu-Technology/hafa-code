@@ -8,7 +8,7 @@ import { RUST_GUIDE, guideTopic, type RustGuideTopicId } from './guide'
 import { RustEditor, type RustEditorHandle } from './RustEditor'
 import { RustToolchain, ToolchainError, runProgram, type ProgramResult, type RunningProgram, type ToolchainProgress } from './rustLabClient'
 import {
-  MAX_IMPORT_FILE_BYTES, MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, byteLength, cleanTitle, createProject, exportFileName, exportProject, importProject, loadState, saveState,
+  MAX_IMPORT_FILE_BYTES, MAX_INPUT_BYTES, MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, byteLength, cleanTitle, createProject, exportFileName, exportProject, importProject, loadState, saveState,
   type RustLabProject, type RustLabState,
 } from './storage'
 import {
@@ -630,7 +630,13 @@ export function RustLab() {
               rows={3}
               value={project.stdin}
               spellCheck={false}
-              onChange={(event) => updateProject({ stdin: event.target.value.slice(0, 20_000) })}
+              onChange={(event) => {
+                if (byteLength(event.target.value) > MAX_INPUT_BYTES) {
+                  setNotice(`Program input is limited to ${MAX_INPUT_BYTES / 1000} KB; that change was not kept.`)
+                  return
+                }
+                updateProject({ stdin: event.target.value })
+              }}
             />
           </details>
         </section>

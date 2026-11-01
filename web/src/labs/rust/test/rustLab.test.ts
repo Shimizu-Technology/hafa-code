@@ -10,6 +10,7 @@ import {
   MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, RUST_LAB_STORAGE_KEY, cleanTitle, createProject, exportProject, importProject, loadState, saveState,
 } from '../storage'
 import { TOOLCHAIN, TOOLCHAIN_DOWNLOAD_BYTES, chunkUrl, formatMegabytes } from '../toolchain'
+import { OutputReader, OutputWriter, createOutputBuffer } from '../programOutput'
 import { readTar } from '../workers/tar'
 import { CHUNK_BYTES, PINNED_FILES, TOOLCHAIN_ASSET_DIRECTORY, chunkFileName } from '../../../../scripts/rustToolchain.mjs'
 
@@ -234,6 +235,42 @@ describe('Rust Lab toolchain pinning', () => {
     const args = rustcArguments()
     expect(args).toEqual(expect.arrayContaining(['/main.rs', '--edition', '2021', '--target', 'wasm32-wasip1', '--error-format', 'json']))
     expect(args.join(' ')).toContain('--sysroot /sysroot')
+  })
+})
+
+describe('program output buffer', () => {
+  const encode = (text: string) => new TextEncoder().encode(text)
+
+  it('keeps stdout and stderr in write order and merges neighbors', () => {
+    const buffer = createOutputBuffer(1024)
+    const writer = new OutputWriter(buffer)
+    const reader = new OutputReader(buffer)
+    writer.write('stdout', encode('a'))
+    writer.write('stdout', encode('b'))
+    writer.write('stderr', encode('oops\n'))
+    writer.write('stdout', encode('c'))
+    expect(reader.read()).toEqual([{ stream: 'stdout', text: 'ab' }, { stream: 'stderr', text: 'oops\n' }, { stream: 'stdout', text: 'c' }])
+    expect(reader.read()).toEqual([])
+    writer.write('stdout', encode('d'))
+    expect(reader.read()).toEqual([{ stream: 'stdout', text: 'd' }])
+  })
+
+  it('decodes a character split across two writes', () => {
+    const buffer = createOutputBuffer(64)
+    const writer = new OutputWriter(buffer)
+    const reader = new OutputReader(buffer)
+    const bytes = encode('å')
+    writer.write('stdout', bytes.slice(0, 1))
+    writer.write('stdout', bytes.slice(1))
+    expect(reader.read()).toEqual([{ stream: 'stdout', text: 'å' }])
+  })
+
+  it('has room for the whole limit in one-byte writes, then reports full', () => {
+    const buffer = createOutputBuffer(16)
+    const writer = new OutputWriter(buffer)
+    for (let index = 0; index < 16; index++) expect(writer.write('stdout', encode('x'))).toBe(true)
+    expect(writer.write('stdout', new Uint8Array(4096))).toBe(false)
+    expect(new OutputReader(buffer).read()).toEqual([{ stream: 'stdout', text: 'x'.repeat(16) }])
   })
 })
 

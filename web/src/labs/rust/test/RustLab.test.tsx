@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fixtures from './rustcDiagnostics.fixture.json'
 import type { LabReadiness } from '../capability'
-import { MAX_PROJECTS, MAX_SOURCE_BYTES, RUST_LAB_STORAGE_KEY } from '../storage'
+import { MAX_INPUT_BYTES, MAX_PROJECTS, MAX_SOURCE_BYTES, RUST_LAB_STORAGE_KEY } from '../storage'
 
 const harness = vi.hoisted(() => ({
   readiness: { status: 'ready', warnings: [] } as LabReadiness,
@@ -162,6 +162,18 @@ describe('Rust Lab page', () => {
     expect(await screen.findByText(/main\.rs is limited to 200 KB/)).toBeTruthy()
     expect((screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement).value).toBe(before)
     expect(JSON.parse(localStorage.getItem(RUST_LAB_STORAGE_KEY)!).projects[0].source).toBe(before)
+  })
+
+  it('limits program input by bytes so non-ASCII input survives a reload', async () => {
+    const first = render(<RustLab />)
+    await userEvent.click(screen.getByText(/Program input \(stdin\)/))
+    const input = screen.getByLabelText(/Text your program reads/) as HTMLTextAreaElement
+    fireEvent.change(input, { target: { value: 'Håfa adai é\n' } })
+    fireEvent.change(input, { target: { value: 'é'.repeat(MAX_INPUT_BYTES / 2 + 1) } })
+    expect(await screen.findByText(/Program input is limited to 20 KB/)).toBeTruthy()
+    first.unmount()
+    render(<RustLab />)
+    expect(JSON.parse(localStorage.getItem(RUST_LAB_STORAGE_KEY)!).projects[0].stdin).toBe('Håfa adai é\n')
   })
 
   it('stops adding projects at the limit and says why', async () => {

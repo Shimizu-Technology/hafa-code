@@ -1,4 +1,5 @@
-import type { ProgramResponse, ToolchainPhase, ToolchainRequest, ToolchainResponse } from './protocol'
+import { OutputReader, createOutputBuffer } from './programOutput'
+import type { ProgramRequest, ProgramResponse, ToolchainPhase, ToolchainRequest, ToolchainResponse } from './protocol'
 
 export interface ToolchainProgress { phase: ToolchainPhase; loadedBytes: number; totalBytes: number }
 export interface CompileResult { wasm: ArrayBuffer | null; diagnostics: string; durationMs: number; crashed: boolean }
@@ -7,6 +8,7 @@ export interface ProgramResult { exitCode: number; panicked: boolean; outputLimi
 export const COMPILE_TIMEOUT_MS = 90_000
 export const RUN_TIMEOUT_MS = 10_000
 export const OUTPUT_LIMIT_BYTES = 256 * 1024
+const OUTPUT_POLL_MS = 50
 
 export class ToolchainError extends Error {
   readonly integrity: boolean
@@ -104,6 +106,12 @@ export function runProgram(
 ): RunningProgram {
   const worker = new Worker(new URL('./workers/rustLabProgram.worker.ts', import.meta.url), { type: 'module', name: 'Rust Lab program' })
   const startedAt = performance.now()
+  const output = createOutputBuffer(OUTPUT_LIMIT_BYTES)
+  const reader = new OutputReader(output)
+  const drain = () => {
+    for (const { stream, text } of reader.read()) onOutput(stream, text)
+  }
+  const poll = window.setInterval(drain, OUTPUT_POLL_MS)
   let settle: (result: ProgramResult) => void = () => {}
   const done = new Promise<ProgramResult>((resolve) => { settle = resolve })
   let finished = false
@@ -111,20 +119,22 @@ export function runProgram(
     if (finished) return
     finished = true
     window.clearTimeout(timer)
+    window.clearInterval(poll)
     worker.terminate()
+    // Whatever the program wrote before it ended or was stopped is still in shared memory.
+    drain()
     settle({ durationMs: Math.round(performance.now() - startedAt), ...result })
   }
   const timer = window.setTimeout(() => finish({ exitCode: 124, panicked: false, outputLimited: false, timedOut: true, stopped: false }), timeoutMs)
   worker.onmessage = (event: MessageEvent<ProgramResponse>) => {
-    const message = event.data
-    if (message.type === 'output') onOutput(message.stream, message.text)
-    else finish({ ...message, timedOut: false, stopped: false })
+    finish({ ...event.data, timedOut: false, stopped: false })
   }
   worker.onerror = (event) => {
     onOutput('stderr', event.message || 'The program worker stopped unexpectedly.')
     finish({ exitCode: 1, panicked: false, outputLimited: false, timedOut: false, stopped: false })
   }
-  worker.postMessage({ type: 'run', wasm, stdin, outputLimitBytes: OUTPUT_LIMIT_BYTES }, [wasm])
+  const request: ProgramRequest = { type: 'run', wasm, stdin, outputLimitBytes: OUTPUT_LIMIT_BYTES, output }
+  worker.postMessage(request, [wasm])
   return {
     done,
     stop: () => finish({ exitCode: 130, panicked: false, outputLimited: false, timedOut: false, stopped: true }),
