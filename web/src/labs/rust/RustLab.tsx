@@ -8,7 +8,7 @@ import { RUST_GUIDE, guideTopic, type RustGuideTopicId } from './guide'
 import { RustEditor, type RustEditorHandle } from './RustEditor'
 import { RustToolchain, ToolchainError, runProgram, type ProgramResult, type RunningProgram, type ToolchainProgress } from './rustLabClient'
 import {
-  MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, cleanTitle, createProject, exportFileName, exportProject, importProject, loadState, saveState,
+  MAX_IMPORT_FILE_BYTES, MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, byteLength, cleanTitle, createProject, exportFileName, exportProject, importProject, loadState, saveState,
   type RustLabProject, type RustLabState,
 } from './storage'
 import {
@@ -294,17 +294,15 @@ export function RustLab() {
   }, [])
 
   const addProject = useCallback((next: RustLabProject, message?: string) => {
-    setState((current) => {
-      if (current.projects.length >= MAX_PROJECTS) {
-        setNotice(`The Rust Lab keeps up to ${MAX_PROJECTS} projects. Delete one to add another.`)
-        return current
-      }
-      if (message) setNotice(message)
-      return { ...current, activeProjectId: next.id, projects: [next, ...current.projects] }
-    })
+    if (state.projects.length >= MAX_PROJECTS) {
+      setNotice(`The Rust Lab keeps up to ${MAX_PROJECTS} projects. Delete one to add another.`)
+      return
+    }
+    setState((current) => ({ ...current, activeProjectId: next.id, projects: [next, ...current.projects] }))
+    if (message) setNotice(message)
     setReport(null)
     setOutput([])
-  }, [])
+  }, [state.projects.length])
 
   const appendOutput = useCallback((stream: OutputLine['stream'], text: string) => {
     setOutput((current) => {
@@ -506,7 +504,7 @@ export function RustLab() {
   const onImport = async (file: File | undefined) => {
     if (!file) return
     try {
-      if (file.size > MAX_SOURCE_BYTES * 2) throw new ProjectImportError('That file is too large for the Rust Lab.')
+      if (file.size > MAX_IMPORT_FILE_BYTES) throw new ProjectImportError('That file is too large for the Rust Lab.')
       addProject(importProject(file.name, await file.text()), `Imported "${file.name}".`)
     } catch (error) {
       setNotice(error instanceof ProjectImportError ? error.message : 'That file could not be imported.')
@@ -612,7 +610,14 @@ export function RustLab() {
               value={project.source}
               theme={editorTheme}
               diagnostics={report?.diagnostics?.diagnostics ?? []}
-              onChange={(source) => updateProject({ source })}
+              onChange={(source) => {
+                // Larger code would not survive a reload, so keep the last version that fits.
+                if (byteLength(source) > MAX_SOURCE_BYTES) {
+                  setNotice(`main.rs is limited to ${MAX_SOURCE_BYTES / 1000} KB in the Rust Lab; that change was not kept.`)
+                  return
+                }
+                updateProject({ source })
+              }}
               onRun={(source) => void run(false, source)}
               onReady={(handle) => { editorRef.current = handle }}
             />
@@ -782,8 +787,10 @@ export function RustLab() {
       </main>
       <footer className="lab-footer">
         <p>
-          Rust compiler: rustc {TOOLCHAIN.rustcVersion} for WebAssembly from the <a href="https://github.com/oligamiq/rust_wasm" target="_blank" rel="noreferrer noopener">rust_wasm</a> and{' '}
-          <a href="https://github.com/oligamiq/rubrc" target="_blank" rel="noreferrer noopener">rubrc</a> projects (MIT or Apache-2.0). Edition 2021, standard library only; no crates.
+          Rust compiler: rustc {TOOLCHAIN.rustcVersion} (MIT or Apache-2.0) with LLVM lld, built for WebAssembly by the{' '}
+          <a href="https://github.com/oligamiq/rust_wasm" target="_blank" rel="noreferrer noopener">rust_wasm</a> and{' '}
+          <a href="https://github.com/oligamiq/rubrc" target="_blank" rel="noreferrer noopener">rubrc</a> projects. Edition 2021, standard library only; no crates.
+          See THIRD_PARTY_NOTICES.md for licenses.
         </p>
       </footer>
     </div>

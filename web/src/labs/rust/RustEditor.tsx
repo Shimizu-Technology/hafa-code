@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import type * as MonacoApi from 'monaco-editor'
 import { focusOutside, isApplePlatform } from '../../lib/focusNavigation'
@@ -12,6 +12,42 @@ const MonacoEditor = lazy(async () => {
   await import('./rustMonaco')
   return import('@monaco-editor/react')
 })
+
+/** A failed editor download (a lazy import) is cached as failed, so recovery means reloading the page. */
+class EditorBoundary extends Component<{ children: ReactNode; value: string }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="lab-editor-fallback" role="alert">
+        <p>The editor could not load. Your code is saved in this browser.</p>
+        <button className="lab-button" type="button" onClick={() => window.location.reload()}>Reload the page</button>
+        <pre aria-label="Code (read-only)">{this.props.value}</pre>
+      </div>
+    )
+  }
+}
+
+function applyMarkers(monaco: Monaco, editor: MonacoApi.editor.IStandaloneCodeEditor, diagnostics: RustDiagnostic[]) {
+  const model = editor.getModel()
+  if (!model) return
+  monaco.editor.setModelMarkers(model, 'rustc', diagnostics.flatMap((diagnostic) => diagnostic.spans
+    .filter((span) => span.primary)
+    .map((span) => ({
+      severity: diagnostic.level === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+      message: diagnostic.message,
+      code: diagnostic.code ?? undefined,
+      startLineNumber: span.line,
+      startColumn: span.column,
+      endLineNumber: span.endLine,
+      endColumn: span.endColumn,
+    }))))
+}
 
 export interface RustEditorHandle { focusLine: (line: number, column?: number) => void }
 
@@ -41,26 +77,17 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
   const runRef = useRef(onRun)
   useEffect(() => { runRef.current = onRun }, [onRun])
 
+  const diagnosticsRef = useRef(diagnostics)
   useEffect(() => {
-    const monaco = monacoRef.current
-    const model = editorRef.current?.getModel()
-    if (!monaco || !model) return
-    monaco.editor.setModelMarkers(model, 'rustc', diagnostics.flatMap((diagnostic) => diagnostic.spans
-      .filter((span) => span.primary)
-      .map((span) => ({
-        severity: diagnostic.level === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
-        message: diagnostic.message,
-        code: diagnostic.code ?? undefined,
-        startLineNumber: span.line,
-        startColumn: span.column,
-        endLineNumber: span.endLine,
-        endColumn: span.endColumn,
-      }))))
+    diagnosticsRef.current = diagnostics
+    if (monacoRef.current && editorRef.current) applyMarkers(monacoRef.current, editorRef.current, diagnostics)
   }, [diagnostics])
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco as unknown as Monaco
+    // Diagnostics may already exist when the lazily loaded editor mounts.
+    applyMarkers(monacoRef.current, editor, diagnosticsRef.current)
     // Tab indents code, so Escape then Tab (or Shift+Tab) leaves the editor, as in the workspace.
     const escapeArmed = editor.createContextKey<boolean>('rustLabEscapeArmed', false)
     const leaveEditor = (direction: 1 | -1) => {
@@ -88,6 +115,7 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
   return (
     <>
       <div className="lab-editor-surface">
+        <EditorBoundary value={value}>
         <Suspense fallback={<Fallback value={value} />}>
           <MonacoEditor
             language="rust"
@@ -114,6 +142,7 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
             }}
           />
         </Suspense>
+        </EditorBoundary>
       </div>
       <p className="lab-keyboard-hint" aria-hidden="true">
         <span><kbd>Esc</kbd> then <kbd>Tab</kbd> leaves the editor</span>

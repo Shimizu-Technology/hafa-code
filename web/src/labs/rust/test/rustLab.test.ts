@@ -143,6 +143,24 @@ describe('Rust Lab projects', () => {
     expect(imported.id).not.toBe(project.id)
   })
 
+  it('imports the largest valid export even though JSON escaping makes the file bigger', () => {
+    const source = `${'\n'.repeat(MAX_SOURCE_BYTES - 20)}fn main() {}`
+    const exported = exportProject(createProject({ source }))
+    expect(exported.length).toBeGreaterThan(MAX_SOURCE_BYTES * 2)
+    expect(importProject('big.hafa-rust.json', exported).source).toBe(source)
+  })
+
+  it('does not throw when the browser blocks localStorage itself', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage')
+    Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('blocked', 'SecurityError') } })
+    try {
+      expect(loadState().projects).toHaveLength(1)
+      expect(saveState(loadState())).toBe(false)
+    } finally {
+      Object.defineProperty(window, 'localStorage', descriptor!)
+    }
+  })
+
   it('imports a plain .rs file', () => {
     expect(importProject('ownership.rs', 'fn main() { println!("hi"); }')).toMatchObject({ title: 'ownership', source: 'fn main() { println!("hi"); }' })
   })

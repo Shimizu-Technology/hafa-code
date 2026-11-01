@@ -26,7 +26,14 @@ export interface RustLabState {
   completedChallenges: string[]
 }
 
-const byteLength = (text: string) => new TextEncoder().encode(text).length
+export const byteLength = (text: string) => new TextEncoder().encode(text).length
+/** JSON escaping can turn one byte into up to six (\u0000); leave room for the envelope as well. */
+export const MAX_IMPORT_FILE_BYTES = (MAX_SOURCE_BYTES + MAX_INPUT_BYTES) * 6 + 10_000
+
+/** Reads localStorage without throwing: some browsers throw just for touching it when storage is blocked. */
+function browserStorage() {
+  return window.localStorage
+}
 
 export class ProjectImportError extends Error {}
 
@@ -71,9 +78,9 @@ export function defaultState(): RustLabState {
   return { activeProjectId: project.id, projects: [project], completedChallenges: [] }
 }
 
-export function loadState(storage: Pick<Storage, 'getItem'> = localStorage): RustLabState {
+export function loadState(storage?: Pick<Storage, 'getItem'>): RustLabState {
   try {
-    const raw = storage.getItem(RUST_LAB_STORAGE_KEY)
+    const raw = (storage ?? browserStorage()).getItem(RUST_LAB_STORAGE_KEY)
     if (!raw) return defaultState()
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const seen = new Set<string>()
@@ -97,9 +104,9 @@ export function loadState(storage: Pick<Storage, 'getItem'> = localStorage): Rus
 }
 
 /** Returns false when the browser refused the write (private mode or full storage). */
-export function saveState(state: RustLabState, storage: Pick<Storage, 'setItem'> = localStorage) {
+export function saveState(state: RustLabState, storage?: Pick<Storage, 'setItem'>) {
   try {
-    storage.setItem(RUST_LAB_STORAGE_KEY, JSON.stringify(state))
+    (storage ?? browserStorage()).setItem(RUST_LAB_STORAGE_KEY, JSON.stringify(state))
     return true
   } catch {
     return false
@@ -121,7 +128,7 @@ export function exportFileName(project: RustLabProject) {
 
 /** Accepts a Rust Lab export (.hafa-rust.json) or a plain .rs file. Always creates a new project. */
 export function importProject(fileName: string, text: string): RustLabProject {
-  if (byteLength(text) > MAX_SOURCE_BYTES + MAX_INPUT_BYTES + 10_000) throw new ProjectImportError('That file is too large for the Rust Lab.')
+  if (byteLength(text) > MAX_IMPORT_FILE_BYTES) throw new ProjectImportError('That file is too large for the Rust Lab.')
   if (/\.rs$/i.test(fileName)) {
     if (byteLength(text) > MAX_SOURCE_BYTES) throw new ProjectImportError('That Rust file is too large for the Rust Lab.')
     return createProject({ title: fileName.replace(/\.rs$/i, ''), source: text })

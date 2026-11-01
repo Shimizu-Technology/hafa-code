@@ -17,22 +17,26 @@ self.onmessage = async (event: MessageEvent<ProgramRequest>) => {
   const { wasm, stdin, outputLimitBytes } = event.data
   const startedAt = performance.now()
   const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() }
-  const buffered = { stdout: '', stderr: '' }
+  // One ordered list, so stdout and stderr arrive in the order the program wrote them.
+  const buffered: Array<{ stream: 'stdout' | 'stderr'; text: string }> = []
   let written = 0
   let lastFlush = performance.now()
   let outputLimited = false
 
+  const append = (stream: 'stdout' | 'stderr', text: string) => {
+    if (!text) return
+    const last = buffered[buffered.length - 1]
+    if (last?.stream === stream) last.text += text
+    else buffered.push({ stream, text })
+  }
   const flush = () => {
-    for (const stream of ['stdout', 'stderr'] as const) {
-      if (buffered[stream]) post({ type: 'output', stream, text: buffered[stream] })
-      buffered[stream] = ''
-    }
+    for (const { stream, text } of buffered.splice(0)) post({ type: 'output', stream, text })
     lastFlush = performance.now()
   }
   const writer = (stream: 'stdout' | 'stderr') => new ConsoleStdout((bytes) => {
     const allowed = Math.max(0, outputLimitBytes - written)
     written += bytes.length
-    buffered[stream] += decoders[stream].decode(bytes.subarray(0, allowed), { stream: true })
+    append(stream, decoders[stream].decode(bytes.subarray(0, allowed), { stream: true }))
     if (written > outputLimitBytes) {
       outputLimited = true
       throw new OutputLimitReached()
@@ -58,7 +62,7 @@ self.onmessage = async (event: MessageEvent<ProgramRequest>) => {
       panicked = true
       exitCode = 101
     } else {
-      buffered.stderr += `\n${error instanceof Error ? error.message : String(error)}`
+      append('stderr', `\n${error instanceof Error ? error.message : String(error)}`)
       exitCode = 1
     }
   }

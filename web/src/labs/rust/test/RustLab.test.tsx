@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fixtures from './rustcDiagnostics.fixture.json'
 import type { LabReadiness } from '../capability'
-import { RUST_LAB_STORAGE_KEY } from '../storage'
+import { MAX_PROJECTS, MAX_SOURCE_BYTES, RUST_LAB_STORAGE_KEY } from '../storage'
 
 const harness = vi.hoisted(() => ({
   readiness: { status: 'ready', warnings: [] } as LabReadiness,
@@ -152,6 +152,28 @@ describe('Rust Lab page', () => {
     first.unmount()
     render(<RustLab />)
     expect((screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement).value).toBe('fn main() {}')
+  })
+
+  it('keeps the last version that fits when an edit makes main.rs too large', async () => {
+    render(<RustLab />)
+    const editor = screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement
+    const before = editor.value
+    fireEvent.change(editor, { target: { value: 'x'.repeat(MAX_SOURCE_BYTES + 1) } })
+    expect(await screen.findByText(/main\.rs is limited to 200 KB/)).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement).value).toBe(before)
+    expect(JSON.parse(localStorage.getItem(RUST_LAB_STORAGE_KEY)!).projects[0].source).toBe(before)
+  })
+
+  it('stops adding projects at the limit and says why', async () => {
+    localStorage.setItem(RUST_LAB_STORAGE_KEY, JSON.stringify({
+      activeProjectId: 'p0',
+      projects: Array.from({ length: MAX_PROJECTS }, (_, index) => ({ id: `p${index}`, title: `Project ${index}`, source: 'fn main() {}', stdin: '' })),
+      completedChallenges: [],
+    }))
+    render(<RustLab />)
+    await userEvent.click(screen.getByRole('button', { name: 'New' }))
+    expect(screen.getByText(`The Rust Lab keeps up to ${MAX_PROJECTS} projects. Delete one to add another.`)).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem(RUST_LAB_STORAGE_KEY)!).projects).toHaveLength(MAX_PROJECTS)
   })
 
   it('imports a .rs file as a new project', async () => {

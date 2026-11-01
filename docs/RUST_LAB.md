@@ -99,10 +99,14 @@ applies `dist/_headers`, so download time here is not network time.
 | Running the compiled starter | under 10 ms |
 | First Run press to output, including the local download | about 2.4 s |
 
+On the PR's Netlify deploy preview (same machine, home connection in Guam, fresh browser
+each time), the first Run took 12.9 s and 33.5 s end to end. The download and start took 9.7 s
+and 30.6 s, and the first compile took about 2 s. Later compiles took 0.4 s. Network speed to
+Netlify dominates the first run.
+
 Memory (process RSS above the browser's own baseline): about 0.7 GB once the toolchain is
 loaded and 1.2–1.5 GB while compiling, steady over six compiles. The lab warns when
-`navigator.deviceMemory` reports less than 4 GB. Over a real connection the 38.7 MB download
-dominates the first run (for example, about 6 s at 50 Mbps); later visits load from Cache Storage.
+`navigator.deviceMemory` reports less than 4 GB. Later visits load the compiler from Cache Storage instead of the network.
 
 ## Browsers and devices
 

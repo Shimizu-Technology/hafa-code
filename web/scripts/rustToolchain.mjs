@@ -39,19 +39,26 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 /** A chunk's public file name is a prefix of its own SHA-256, so the URL changes with the content. */
 export const chunkFileName = (chunkSha256) => `${chunkSha256.slice(0, 32)}.bin`
 
-async function download(file) {
+/** A stalled source must not hang a build; the files are about 20 MB each. */
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Tries each source in turn and returns the first copy whose SHA-256 matches the pin. */
+async function download(pinned) {
   const errors = []
   for (const source of SOURCES) {
-    const url = source(file)
+    const url = source(pinned.file)
     try {
-      const response = await fetch(url, { redirect: 'follow' })
+      const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return new Uint8Array(await response.arrayBuffer())
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      const actual = sha256(bytes)
+      if (actual !== pinned.sha256) throw new Error(`SHA-256 ${actual} does not match the pinned ${pinned.sha256}`)
+      return bytes
     } catch (error) {
       errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
-  throw new Error(`Could not download the Rust Lab toolchain file ${file}.\n${errors.join('\n')}`)
+  throw new Error(`Could not download a verified copy of the Rust Lab toolchain file ${pinned.file}.\n${errors.join('\n')}`)
 }
 
 /** Returns the verified bytes of one pinned file, downloading it into the cache when missing. */
@@ -62,11 +69,7 @@ export async function pinnedFileBytes(pinned) {
     const cached = readFileSync(cachePath)
     if (sha256(cached) === pinned.sha256) return cached
   }
-  const bytes = await download(pinned.file)
-  const actual = sha256(bytes)
-  if (actual !== pinned.sha256) {
-    throw new Error(`Rust Lab toolchain file ${pinned.file} has SHA-256 ${actual}; expected the pinned ${pinned.sha256}.`)
-  }
+  const bytes = await download(pinned)
   writeFileSync(`${cachePath}.partial`, bytes)
   renameSync(`${cachePath}.partial`, cachePath)
   return bytes
