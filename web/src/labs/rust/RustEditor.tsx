@@ -49,14 +49,20 @@ function applyMarkers(monaco: Monaco, editor: MonacoApi.editor.IStandaloneCodeEd
     }))))
 }
 
-export interface RustEditorHandle { focusLine: (line: number, column?: number) => void }
+export interface RustEditorHandle {
+  focusLine: (line: number, column?: number) => void
+  /** Appends text as a single editor edit, as a paste would (used by the e2e hook). */
+  appendText: (text: string) => void
+  getText: () => string
+}
 
 type RustEditorProps = {
   value: string
   readOnly?: boolean
   theme: 'hafa-light' | 'hafa-dark'
   diagnostics: RustDiagnostic[]
-  onChange: (value: string) => void
+  /** Return false to refuse a change; the editor then goes back to `value`. */
+  onChange: (value: string) => boolean | void
   /** Called with the editor's current text. */
   onRun: (source: string) => void
   onReady?: (handle: RustEditorHandle) => void
@@ -76,6 +82,18 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
   const editorRef = useRef<MonacoApi.editor.IStandaloneCodeEditor | null>(null)
   const runRef = useRef(onRun)
   useEffect(() => { runRef.current = onRun }, [onRun])
+  const valueRef = useRef(value)
+  useEffect(() => { valueRef.current = value }, [value])
+
+  const handleChange = (next: string | undefined) => {
+    if (onChange(next ?? '') !== false) return
+    // A controlled value that did not change is not pushed back into Monaco, so restore it here
+    // (after this change event finishes) to keep the editor, Run, and storage on the same text.
+    queueMicrotask(() => {
+      const model = editorRef.current?.getModel()
+      if (model && model.getValue() !== valueRef.current) model.setValue(valueRef.current)
+    })
+  }
 
   const diagnosticsRef = useRef(diagnostics)
   useEffect(() => {
@@ -108,6 +126,13 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
         editor.setPosition({ lineNumber: line, column })
         editor.focus()
       },
+      appendText(text) {
+        const model = editor.getModel()
+        if (!model) return
+        const end = model.getFullModelRange().getEndPosition()
+        editor.executeEdits('append', [{ range: { startLineNumber: end.lineNumber, startColumn: end.column, endLineNumber: end.lineNumber, endColumn: end.column }, text }])
+      },
+      getText: () => editor.getValue(),
     })
   }
 
@@ -123,7 +148,7 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
             theme={theme}
             value={value}
             loading={<Fallback value={value} />}
-            onChange={(next) => onChange(next ?? '')}
+            onChange={handleChange}
             onMount={handleMount}
             options={{
               readOnly,

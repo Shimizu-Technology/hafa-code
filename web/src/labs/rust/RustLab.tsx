@@ -275,8 +275,9 @@ export function RustLab() {
 
   useEffect(() => {
     if (import.meta.env.MODE !== 'e2e') return
-    const testWindow = window as Window & { __HAFA_RUST_LAB__?: { setSource: (source: string) => void } }
+    const testWindow = window as Window & { __HAFA_RUST_LAB__?: { setSource: (source: string) => void; editor: () => RustEditorHandle | null } }
     testWindow.__HAFA_RUST_LAB__ = {
+      editor: () => editorRef.current,
       setSource: (source) => setState((current) => ({
         ...current,
         projects: current.projects.map((candidate) => candidate.id === current.activeProjectId ? { ...candidate, source, updatedAt: new Date().toISOString() } : candidate),
@@ -614,9 +615,10 @@ export function RustLab() {
                 // Larger code would not survive a reload, so keep the last version that fits.
                 if (byteLength(source) > MAX_SOURCE_BYTES) {
                   setNotice(`main.rs is limited to ${MAX_SOURCE_BYTES / 1000} KB in the Rust Lab; that change was not kept.`)
-                  return
+                  return false
                 }
                 updateProject({ source })
+                return true
               }}
               onRun={(source) => void run(false, source)}
               onReady={(handle) => { editorRef.current = handle }}

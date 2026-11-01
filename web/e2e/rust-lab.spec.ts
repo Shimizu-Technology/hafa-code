@@ -9,7 +9,7 @@ const TOOLCHAIN_PATH = '/assets/rust-toolchain/'
 
 declare global {
   interface Window {
-    __HAFA_RUST_LAB__?: { setSource: (source: string) => void }
+    __HAFA_RUST_LAB__?: { setSource: (source: string) => void; editor: () => { appendText: (text: string) => void; getText: () => string } | null }
   }
 }
 
@@ -54,6 +54,13 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   await expect(page.getByRole('button', { name: 'Download and run' })).toBeVisible()
   await expect(page.getByText(/One-time download of 38\.7 MB/)).toBeVisible()
   expect(toolchainRequests).toEqual([])
+
+  // An edit past the 200 KB limit is refused and the real editor goes back to the saved text.
+  await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_RUST_LAB__?.editor()))).toBe(true)
+  const savedText = await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())
+  await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.appendText(`// ${'x'.repeat(200_001)}`))
+  await expect(page.getByText(/main\.rs is limited to 200 KB/)).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe(savedText)
 
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('.monaco-editor').analyze()
   expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target.join(' ')) }))).toEqual([])
