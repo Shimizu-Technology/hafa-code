@@ -316,6 +316,30 @@ assert(!indexHtml.includes('rustLab'), 'The workspace page must not load or prel
 assert(!serviceWorker.includes('/assets/rustLab') && !serviceWorker.includes('/labs/rust'), 'The Rust Lab must stay out of the offline app shell')
 assert(serviceWorker.includes("url.pathname.startsWith('/labs/')"), 'The service worker must not intercept Rust Lab pages (it would cache them as the workspace)')
 
+// The lab shares the workspace's design system and small presentational components, never its
+// sign-in, Java runtime, or API client: those would need other origins the lab's CSP and COEP refuse.
+const rustLabGraph = new Set([rustLabEntry])
+for (const pending = [rustLabEntry]; pending.length;) {
+  const source = await readFile(new URL(pending.pop(), ASSETS_DIRECTORY), 'utf8')
+  for (const [name] of source.matchAll(/[\w.-]+\.js(?=["'`])/g)) {
+    const file = name.split('/').pop()
+    if (assetNames.includes(file) && !rustLabGraph.has(file)) {
+      rustLabGraph.add(file)
+      pending.push(file)
+    }
+  }
+}
+const workspaceEntry = indexHtml.match(/<script type="module" crossorigin src="\/assets\/([^"]+\.js)"/)?.[1]
+assert(workspaceEntry, 'Could not find the workspace entry script in index.html to keep it out of the Rust Lab')
+for (const file of rustLabGraph) {
+  assert(file !== workspaceEntry && !/^(ClerkBridge|javaRunner|LearningSidecar|practiceLab)[-.]/.test(file), `The Rust Lab must not load ${file}`)
+  const source = await readFile(new URL(file, ASSETS_DIRECTORY), 'utf8')
+  for (const marker of ['clerk.com', 'clerk.accounts.dev', 'leaningtech.com', '/api/v1']) {
+    assert(!source.includes(marker), `The Rust Lab's ${file} must not include ${marker}`)
+  }
+}
+console.log(`Verified the Rust Lab's ${rustLabGraph.size} scripts load no Clerk, CheerpJ, API client, or workspace entry code`)
+
 const rustToolchainManifest = JSON.parse(await readFile(new URL('../src/labs/rust/toolchainManifest.json', import.meta.url), 'utf8'))
 const expectedToolchainChunks = new Map(rustToolchainManifest.assets.flatMap((asset) => asset.chunks.map((chunk) => [`${chunk.sha256.slice(0, 32)}.bin`, chunk])))
 const toolchainDirectory = new URL('rust-toolchain/', ASSETS_DIRECTORY)

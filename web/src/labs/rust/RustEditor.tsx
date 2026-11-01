@@ -26,7 +26,7 @@ class EditorBoundary extends Component<{ children: ReactNode; value: string }, {
     return (
       <div className="lab-editor-fallback" role="alert">
         <p>The editor could not load. Your code is saved in this browser.</p>
-        <button className="lab-button" type="button" onClick={() => window.location.reload()}>Reload the page</button>
+        <button className="secondary sm" type="button" onClick={() => window.location.reload()}>Reload the page</button>
         <pre aria-label="Code (read-only)">{this.props.value}</pre>
       </div>
     )
@@ -58,6 +58,10 @@ type RustEditorProps = {
   value: string
   readOnly?: boolean
   theme: 'hafa-light' | 'hafa-dark'
+  /** 16px on phones and touch screens (so iOS does not zoom), 14px on desktops, as in the workspace. */
+  fontSize?: number
+  /** Whether Cmd/Ctrl+Enter runs here (phones and unsupported browsers cannot run). */
+  canRun?: boolean
   diagnostics: RustDiagnostic[]
   /** Return false to refuse a change; the editor then goes back to `value`. */
   onChange: (value: string) => boolean | void
@@ -75,7 +79,7 @@ function Fallback({ value }: { value: string }) {
   )
 }
 
-export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRun, onReady }: RustEditorProps) {
+export function RustEditor({ value, readOnly, theme, fontSize = 14, canRun = true, diagnostics, onChange, onRun, onReady }: RustEditorProps) {
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoApi.editor.IStandaloneCodeEditor | null>(null)
   const runRef = useRef(onRun)
@@ -160,25 +164,26 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
             options={{
               readOnly,
               fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: 14,
-              lineHeight: 22,
+              fontSize,
+              lineHeight: 1.6,
+              wordWrap: 'on',
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               automaticLayout: true,
               tabSize: 4,
               detectIndentation: false,
               insertSpaces: true,
-              ariaLabel: `Rust code editor for main.rs. Tab indents. Press Escape, then Tab, to leave the editor. Press ${modifier}+Enter to run.`,
+              ariaLabel: `Rust code editor for main.rs. Tab indents. Press Escape, then Tab, to leave the editor.${canRun ? ` Press ${modifier}+Enter to run.` : ''}`,
               accessibilitySupport: 'auto',
-              padding: { top: 12, bottom: 12 },
+              padding: { top: 16, bottom: 16 },
             }}
           />
         </Suspense>
         </EditorBoundary>
       </div>
-      <p className="lab-keyboard-hint" aria-hidden="true">
+      <p className="editor-keyboard-hint" aria-hidden="true">
         <span><kbd>Esc</kbd> then <kbd>Tab</kbd> leaves the editor</span>
-        <span><kbd>{modifier}</kbd>+<kbd>Enter</kbd> runs</span>
+        {canRun && <span><kbd>{modifier}</kbd>+<kbd>Enter</kbd> runs</span>}
       </p>
     </>
   )

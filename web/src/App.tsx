@@ -65,6 +65,7 @@ import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { FloatingDock } from './components/FloatingDock'
 import { LessonBar } from './components/LessonBar'
+import { LabDestinationLinks } from './components/LabDestinationLinks'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { AppBar } from './components/AppBar'
 import { CheckpointMenu, CheckpointPage } from './components/CheckpointMenu'
@@ -102,6 +103,7 @@ import {
 } from './lib/cloudSyncStorage'
 import {
   COLOR_MODE_STORAGE_KEY,
+  THEME_COLORS,
   THEME_STORAGE_KEY,
   loadColorModePreference,
   loadThemePreference,
@@ -156,7 +158,6 @@ type CloudSaveStatus = 'pending' | 'saving' | 'saved' | 'offline' | 'failed' | '
 
 const CLOUD_SAVE_RETRY_DELAYS = [1_500, 3_000, 6_000]
 /** Matches --surface-page so the browser chrome blends with the app. */
-const THEME_COLORS = { light: '#f7f0e5', dark: '#12100e' } as const
 
 export default function App() {
   const initial = useMemo(() => loadInitialLibraryWithSharedProject(), [])
@@ -253,6 +254,9 @@ export default function App() {
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
       if (event.key === null || event.key === LESSON_LINKS_STORAGE_KEY) setLessonLinks(loadLessonLinks())
+      // Theme and Color-safe are shared with the labs, which can change them in another tab.
+      if (event.key === null || event.key === THEME_STORAGE_KEY) setThemePreference(loadThemePreference())
+      if (event.key === null || event.key === COLOR_MODE_STORAGE_KEY) setColorModePreference(loadColorModePreference())
     }
     window.addEventListener('storage', refresh)
     return () => window.removeEventListener('storage', refresh)
@@ -2365,6 +2369,7 @@ export default function App() {
                 <Plus size={14} aria-hidden="true" /> {projectKindDefinition(kind).shortLabel}
               </button>
             ))}
+            <LabDestinationLinks className="compact" />
           </div>
         </div>
         <p className="mobile-home-stats" aria-label="Project summary">

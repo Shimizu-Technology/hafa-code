@@ -1,4 +1,5 @@
-import { Play, Plus, X } from 'lucide-react'
+import { FlaskConical, Play, Plus, X } from 'lucide-react'
+import { LAB_DESTINATIONS, LAB_LINK_SUFFIX } from '../lib/labDestinations'
 
 type WelcomeHeroProps = {
   starterLabel: string
@@ -19,6 +20,13 @@ export function WelcomeHero({ starterLabel, canRunStarter, onDismiss, onNewPytho
         <p className="eyebrow">Hafa adai</p>
         <h2 id="welcome-title">Write code, press Run, see what happens.</h2>
         <p className="welcome-lede">Everything runs in your browser. No setup and no account needed, and your projects stay on this device until you choose to sync or share.</p>
+        {LAB_DESTINATIONS.map((destination) => (
+          <p key={destination.id} className="welcome-lab-note">
+            <FlaskConical size={15} aria-hidden="true" /> Curious about {destination.shortLabel}?{' '}
+            <a href={destination.href}>Try the {destination.title}<span className="sr-only">{LAB_LINK_SUFFIX}</span></a>
+            <span className="welcome-lab-tag" aria-hidden="true">Experimental</span>
+          </p>
+        ))}
       </div>
       <div className="welcome-actions">
         <button className="primary lg" type="button" onClick={onNewPythonProject}>

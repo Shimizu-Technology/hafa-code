@@ -10,9 +10,12 @@ web/src/
   App.css                     App-level styling for the workspace UI
   components/
     AuthControls.tsx          Sign-in button, neutral "checking" state, and Clerk account menu
+    BottomNav.tsx             Phone bottom bar / sideways-phone rail (workspace and labs)
+    DisplaySettings.tsx       Theme and Color-safe controls (workspace settings and labs)
     EditorWorkspace.tsx       File navigation, Monaco editor, and runner/preview composition
     ErrorCoach.tsx            Plain-language error explanation and guide deep link
     LanguageGuide.tsx         Searchable, project-aware syntax reference and practice launcher
+    LabDestinationLinks.tsx   Experimental lab links listed after the languages (leave the workspace)
     LazyLearningSidecar.tsx   Loads the learning sidecar on first open, with a matching skeleton
     LearningSidecar.tsx       Docked Guide/Practice/Coach shell and responsive mobile drawer (lazy chunk)
     MobileWorkspaceNav.tsx    Touch-friendly navigation between mobile workspace sections
@@ -38,6 +41,7 @@ web/src/
     lazyModule.ts             Retryable dynamic-import wrapper for sidecar chunks
     codeRunner.ts             Starter-project and web-preview helpers
     errorCoach.ts             Deterministic runtime/preview error classification and next steps
+    labDestinations.ts        Experimental lab pages (Rust); never project kinds
     languageGuides.ts         Guide topics and complete practice projects for every project kind
     languageRegistry.ts       Supported languages, starters, editor and runner metadata
     practiceLab.ts            Challenge catalog and deterministic source/output checks
@@ -72,10 +76,17 @@ The experimental Rust Lab is a separate page with its own entry and build:
 ```txt
 web/labs/rust/index.html      Lab page entry (built by vite.lab.config.ts)
 web/src/labs/rust/
-  RustLab.tsx                 Page: gate, projects, editor, output, guide, practice
+  main.tsx                    Loads index.css, the workspace App.css, then rustLab.css
+  RustLab.tsx                 Page state: projects, runs, toolchain, phone tabs, learning sidecar
+  LabAppBar.tsx               Workspace app bar: wordmark back link, lab name, settings, project menu
+  LabProjects.tsx             Workspace project sidebar for lab projects
+  LabOutputPanel.tsx / runStatus.ts  Runner header, compiler download, terminal, desktop-only state
+  LabLearning.tsx             Learning sidecar: Rust guide, practice, and error coach
+  LabChallengePanel.tsx       Practice-session panel for the open challenge
+  useLabPreferences.ts        Shares the workspace's theme and color-safe preferences
   RustEditor.tsx / rustMonaco.ts  Lean Monaco with Rust highlighting
   rustLabClient.ts            Toolchain and program worker handles
-  capability.ts               Desktop and cross-origin-isolation checks
+  capability.ts               Run availability: cross-origin isolation, phones and tablets
   diagnostics.ts / errorCoach.ts  rustc JSON diagnostics and coaching
   guide.ts / challenges.ts / starter.ts  Lab content
   storage.ts                  Local projects, import/export
@@ -83,7 +94,10 @@ web/src/labs/rust/
   workers/                    Toolchain, compiler, thread, program, and editor workers
 ```
 
-It does not use `languageRegistry.ts`; see [Rust Lab](RUST_LAB.md).
+It does not use `languageRegistry.ts`. It reuses the workspace stylesheet and presentational
+components, but never `AuthControls`, `contexts/`, `lib/api.ts`, or anything that imports Clerk
+or the language registry (`verify-production-build.mjs` checks the built lab). The workspace
+links to it through `lib/labDestinations.ts`; see [Rust Lab](RUST_LAB.md).
 
 ## Organization Rules
 

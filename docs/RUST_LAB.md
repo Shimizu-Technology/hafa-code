@@ -1,9 +1,42 @@
 # Rust Lab (experimental)
 
 The Rust Lab at `/labs/rust/` compiles and runs small Rust programs entirely in the
-browser. It is a separate page from the Learn workspace, labeled **Experimental**, and
-reached from **Settings → Labs → Rust (experimental)**. Rust is not a Hafa Code project
-kind: it is not in `languageRegistry.ts`, Rails `Project::KINDS`, or cloud sync.
+browser. It is a separate page from the Learn workspace, labeled **Experimental**. Rust is not a
+Hafa Code project kind: it is not in `languageRegistry.ts`, Rails `Project::KINDS`, or cloud sync.
+
+Learners reach it where they already look for languages: a **Rust · Lab** link (flask icon,
+dashed outline) follows Ruby, JS, TS, Python, Java, Go, SQL, and Web in the project sidebar and
+the phone Home tab's New project list, the first-visit welcome mentions it, and
+**Settings → Labs → Rust (experimental)** still links to it. These come from
+`web/src/lib/labDestinations.ts`, a list of lab pages kept apart from the project kinds; a lab
+link opens the page and never creates a workspace project. Screen readers hear
+"Rust Lab (experimental, opens a separate page)".
+
+## Design
+
+The lab is a Hafa Code workspace with an Experimental label. It loads the workspace stylesheet
+(`App.css`: tokens, app bar, panels, buttons, code surfaces, learning sidecar, phone navigation,
+toasts, and dialogs) and the workspace's presentational pieces: `Popover`, `Toast`,
+`FloatingDock`, `BottomNav` (shared with `MobileWorkspaceNav`), `DisplaySettings` (shared with
+`WorkspaceSettings`), `useModalFocus`, `useOverlaySidecar`, `usePhoneLayout`, and the
+preference hooks. `rustLab.css` holds only what the workspace has no equivalent for. None of
+these pull in Clerk, CheerpJ, or the API client; `verify-production-build.mjs` walks the lab's
+scripts and fails the build if any of them do.
+
+- The Hafa Code wordmark in the app bar is the way back to the workspace. The projects panel
+  ends with a **Back to Hafa Code** link, and Settings has one too.
+- A one-line experiment note under the app bar (download size, desktop browser, projects stay
+  in this browser) can be hidden; the choice is remembered in this browser
+  (`hafa-code-rust-lab-intro-dismissed-v1`). The app bar's Experimental badge always shows.
+- Theme (System, Light, Dark) and Color-safe use the workspace's saved preferences, and a
+  change made in the lab carries back to the workspace.
+- Desktop: projects sidebar, editor, and Output (Run or Stop in its header, then program input,
+  the compiler download, rustc's messages, and the program's output). The Rust guide, Practice,
+  and Coach open in the learning sidecar: a column beside the code from 1600px, a drawer below.
+  A compile error or panic shows **Fix this error**, which opens the Coach.
+- Phones: Projects, Code, Output, Guide, and Practice in the bottom navigation, as in the
+  workspace. The Code tab's header is one row, the `main.rs` tab and Run (**Run on a
+  computer** until the learner chooses to try this device), so the editor keeps the screen.
 
 ## What works
 
@@ -113,9 +146,12 @@ loaded and 1.2–1.5 GB while compiling, steady over six compiles. The lab warns
 
 The lab checks for cross-origin isolation, `SharedArrayBuffer`, `Atomics`, WebAssembly
 streaming compilation, and workers. Without them it explains what is missing and downloads
-nothing. Phones, tablets (a coarse primary pointer), and windows narrower than 900px get a
-desktop-only explanation with **Back to Hafa Code**; **Open the lab anyway** is offered because
-the check can misjudge a tablet with a keyboard, and the download still needs consent.
+nothing, but the editor, guide, practice, and export still work. Phones and tablets (a coarse
+primary pointer) get the whole lab for reading and writing Rust; Run is replaced by **Running
+Rust needs a desktop browser**, which explains why, lists what works there, and offers
+**Export this project**. Nothing downloads. **Try running on this device** is offered because the
+check can misjudge a tablet with a keyboard; the download still asks first. A narrow desktop
+window runs normally (the layout fits any width).
 
 Tested: desktop Chrome on macOS. The threads runtime's authors report Chrome works and
 Firefox has had problems; Edge should behave like Chrome. Safari and Firefox are untested.
@@ -185,6 +221,8 @@ Firefox has had problems; Edge should behave like Chrome. Safari and Firefox are
 - `web/src/labs/rust/`: page, editor, client, workers, content, coaching, storage, manifest
 - `web/scripts/rustToolchain.mjs`: pinning, download, and chunking
 - `web/public/_headers`: `/labs/rust/*` and `rustLab*.worker-*.js` rules
-- `web/e2e/rust-lab.spec.ts`: header, gating, and opt-in tests; `@rust-toolchain` tests compile
+- `web/src/lib/labDestinations.ts`, `web/src/components/LabDestinationLinks.tsx`: the entry points
+- `web/e2e/rust-lab.spec.ts`: headers, entry points and the way back, the phone and tablet lab
+  (no download), theme sharing, overflow at the four required sizes, and opt-in; `@rust-toolchain` tests compile
   and run every guide example and challenge solution with the real compiler (set
   `E2E_SKIP_RUST_TOOLCHAIN=1` to skip them offline)

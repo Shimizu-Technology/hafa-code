@@ -907,6 +907,70 @@ textarea {
   right: var(--space-2);
 }
 
+.welcome-lab-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.welcome-lab-note svg { color: var(--status-warning); }
+.welcome-lab-note a { font-weight: 600; text-underline-offset: 0.18em; }
+
+/* ---- Experimental labs in the language pickers: links that leave the workspace ---- */
+
+.lab-destination-link,
+.welcome-lab-tag {
+  display: inline-flex;
+  align-items: center;
+}
+
+.lab-destination-link {
+  grid-column: 1 / -1;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  transition: background-color var(--duration-ui) ease, border-color var(--duration-ui) ease;
+}
+
+.lab-destination-link.compact { min-height: var(--control-sm); font-size: var(--text-xs); }
+.lab-destination-link svg { flex: 0 0 auto; color: var(--status-warning); }
+
+.lab-destination-tag,
+.welcome-lab-tag {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--status-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--status-warning-surface);
+  color: var(--status-warning);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lab-destination-link:hover { border-color: var(--text-muted); background: var(--surface-sunken); }
+}
+
+@media (pointer: coarse) {
+  .lab-destination-link,
+  .lab-destination-link.compact { min-height: var(--control-lg); }
+}
+
 /* ---- Lesson handoff: back to CSG Learn and copy for submission ---- */
 
 .lesson-bar {
@@ -2391,7 +2455,8 @@ textarea {
   button:active:not(:disabled) { transform: none; }
   .output-panel,
   .output-panel.first-success,
-  .floating-dock { transition: none; }
+  .floating-dock,
+  .lab-destination-link { transition: none; }
   .learning-sidecar { animation-name: hafa-fade; }
   .learning-sidecar.learning-sidecar-entered,
   .learning-sidecar-backdrop.learning-sidecar-entered { animation: none; }

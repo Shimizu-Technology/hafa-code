@@ -25,6 +25,25 @@ async function setSource(page: Page, source: string) {
   await page.evaluate((text) => window.__HAFA_RUST_LAB__?.setSource(text), source)
 }
 
+/** "Fix this error" opens the Coach in the learning drawer (below 1600px), as in the workspace. */
+async function openCoach(page: Page, title: RegExp) {
+  await page.getByRole('button', { name: 'Fix this error' }).click()
+  const coach = page.getByRole('dialog', { name: 'Rust learning' }).getByRole('region', { name: title })
+  await expect(coach).toBeVisible()
+  return coach
+}
+
+async function closeLearning(page: Page) {
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Rust learning' })).toBeHidden()
+}
+
+async function startChallenge(page: Page, title: string) {
+  await page.getByRole('navigation', { name: 'Learning tools' }).getByRole('button', { name: 'Practice' }).click()
+  await page.getByRole('dialog', { name: 'Rust learning' }).getByRole('article', { name: title }).getByRole('button', { name: /Start challenge|Continue challenge/ }).click()
+  await expect(page.getByRole('dialog', { name: 'Rust learning' })).toBeHidden()
+}
+
 async function runAndWait(page: Page, pattern: RegExp, timeout = 60_000) {
   await page.getByRole('button', { name: 'Run', exact: true }).click()
   await expect(page.locator('.lab-status')).toContainText(pattern, { timeout })
@@ -47,7 +66,7 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   const toolchainRequests = trackToolchainRequests(page)
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/labs/rust/')
-  await expect(page.getByRole('heading', { name: /Rust Lab/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /Rust Lab/ })).toBeVisible()
   await expect(page.getByText('Experimental', { exact: true })).toBeVisible()
   await expect(page.getByLabel('About this experiment')).toContainText('38.7 MB')
   await page.getByRole('button', { name: 'Run', exact: true }).click()
@@ -61,37 +80,228 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   const savedText = await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.evaluate((text) => navigator.clipboard.writeText(text), `// ${'x'.repeat(200_001)}`)
-  await page.locator('.monaco-editor .view-line').first().click()
+  // A short line, so End is the end of the line even with word wrap on.
+  await page.locator('.monaco-editor .view-line', { hasText: '#[derive(Debug)]' }).click()
   await page.keyboard.press('End')
   await page.keyboard.press('ControlOrMeta+V')
   await expect(page.getByText(/main\.rs is limited to 200 KB/)).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe(savedText)
   await page.keyboard.type('!')
-  const [firstLine, ...rest] = savedText.split('\n')
-  await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe([`${firstLine}!`, ...rest].join('\n'))
+  const lines = savedText.split('\n')
+  const derive = lines.indexOf('#[derive(Debug)]')
+  lines[derive] += '!'
+  await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe(lines.join('\n'))
 
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('.monaco-editor').analyze()
   expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target.join(' ')) }))).toEqual([])
 })
 
-for (const { name, viewport, isMobile } of [
-  { name: 'phone', viewport: { width: 390, height: 844 }, isMobile: true },
-  { name: 'tablet', viewport: { width: 768, height: 1024 }, isMobile: true },
-]) {
-  test.describe(`on a ${name}`, () => {
-    test.use({ viewport, isMobile, hasTouch: isMobile })
+async function expectNoHorizontalOverflow(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
+}
 
-    test('explains that the lab is for desktop browsers without downloading anything', async ({ page }) => {
-      const toolchainRequests = trackToolchainRequests(page)
+async function expectNoAxeViolations(page: Page) {
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('.monaco-editor').analyze()
+  expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target.join(' ')) }))).toEqual([])
+}
+
+const labNav = (page: Page) => page.getByRole('navigation', { name: 'Rust Lab sections' })
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test('opens the lab from the workspace, reads and writes Rust, never downloads the compiler, and goes back', async ({ page }) => {
+    const toolchainRequests = trackToolchainRequests(page)
+    await page.goto('/')
+    await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Home' }).click()
+    await page.locator('.mobile-home-create').getByRole('link', { name: 'Rust Lab (experimental, opens a separate page)' }).click()
+    await expect(page).toHaveURL(/\/labs\/rust\/$/)
+    await expect(page.getByRole('heading', { level: 1, name: /Rust Lab/ })).toBeVisible()
+    await expect(page.locator('.lab-badge')).toHaveText('Experimental')
+
+    // Code tab: the real editor, and Run explains instead of running.
+    await expect(page.locator('.monaco-editor')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+    await page.getByRole('button', { name: 'Run on a computer' }).click()
+    await expect(page.getByRole('heading', { name: 'Running Rust needs a desktop browser' })).toBeVisible()
+    await expect(page.getByText(/Nothing was downloaded/)).toBeVisible()
+    await expect(labNav(page).getByRole('button', { name: 'Output' })).toHaveAttribute('aria-current', 'page')
+    await expectNoHorizontalOverflow(page)
+    await expectNoAxeViolations(page)
+
+    // Guide and Practice open as a full-screen sheet, as in the workspace.
+    await labNav(page).getByRole('button', { name: 'Rust guide' }).click()
+    const learning = page.getByRole('dialog', { name: 'Rust learning' })
+    await expect(learning.getByRole('heading', { name: 'println! and variables' })).toBeVisible()
+    await learning.getByRole('tab', { name: 'Practice' }).click()
+    await learning.getByRole('article', { name: 'Keep the name' }).getByRole('button', { name: /Start challenge/ }).click()
+    await expect(learning).toBeHidden()
+    await expect(page.locator('.lab-challenge-strip')).toContainText('Keep the name')
+    await expectNoHorizontalOverflow(page)
+
+    // Projects tab: rename and switch.
+    await labNav(page).getByRole('button', { name: 'Projects' }).click()
+    await expect(page.getByLabel('Project name').last()).toHaveValue('Challenge: Keep the name')
+    await expectNoHorizontalOverflow(page)
+
+    // Targets are finger-sized.
+    for (const control of await page.locator('.mobile-bottom-nav button, .lab-app-bar button, .lab-app-bar a').all()) {
+      const box = await control.boundingBox()
+      if (box) expect(box.height).toBeGreaterThanOrEqual(44)
+    }
+
+    expect(toolchainRequests).toEqual([])
+    await page.getByRole('link', { name: /Hafa Code: back to your workspace/ }).click()
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('navigation', { name: 'Workspace sections' })).toBeVisible()
+  })
+
+  for (const width of [390, 320]) {
+    test(`keeps the Code header to one row at ${width}px, like the workspace's phone editor`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 700 })
       await page.goto('/labs/rust/')
-      await expect(page.getByRole('heading', { name: 'The Rust Lab is for desktop browsers' })).toBeVisible()
-      await expect(page.getByText(/Nothing was downloaded/)).toBeVisible()
-      await expect(page.getByRole('link', { name: 'Back to Hafa Code' })).toBeVisible()
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-      await page.getByRole('button', { name: 'Open the lab anyway' }).click()
-      await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeVisible()
-      expect(toolchainRequests).toEqual([])
+      await expect(page.locator('.monaco-editor')).toBeVisible()
+      const header = page.locator('.lab-editor-header')
+      const headerBox = (await header.boundingBox())!
+      expect(headerBox.height).toBeLessThanOrEqual(56)
+      // Guide and Practice live in the bottom navigation, not the editor header.
+      await expect(header.getByRole('button')).toHaveCount(1)
+      const run = header.getByRole('button', { name: 'Run on a computer' })
+      const runBox = (await run.boundingBox())!
+      expect(runBox.height).toBeGreaterThanOrEqual(44)
+      expect(runBox.y).toBeGreaterThanOrEqual(headerBox.y)
+      expect(runBox.y + runBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height)
+      // The editor gets the rest of the screen above the navigation.
+      const editorBox = (await page.locator('.lab-editor-surface').boundingBox())!
+      expect(editorBox.height).toBeGreaterThan(700 - 300)
+      await expectNoHorizontalOverflow(page)
     })
+  }
+
+  for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
+    test(`keeps Run labeled on a sideways phone at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport)
+      await page.goto('/labs/rust/')
+      await expect(page.locator('.monaco-editor')).toBeVisible()
+      // The workspace shows its other header buttons as icons here; Run is the lab's only one and keeps its words.
+      const run = page.locator('.lab-editor-header').getByRole('button', { name: 'Run on a computer' })
+      await expect(run).toBeVisible()
+      expect(await run.evaluate((button) => parseFloat(getComputedStyle(button).fontSize))).toBeGreaterThan(10)
+      const box = (await run.boundingBox())!
+      expect(box.width).toBeGreaterThan(120)
+      expect(box.height).toBeGreaterThanOrEqual(44)
+      await expectNoHorizontalOverflow(page)
+    })
+  }
+
+  test('lets a learner choose to run on this device, still asking before the download', async ({ page }) => {
+    const toolchainRequests = trackToolchainRequests(page)
+    await page.goto('/labs/rust/')
+    await labNav(page).getByRole('button', { name: 'Output' }).click()
+    await page.getByRole('button', { name: 'Try running on this device' }).click()
+    await page.getByRole('button', { name: 'Run', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Download and run' })).toBeVisible()
+    expect(toolchainRequests).toEqual([])
+  })
+})
+
+test.describe('on a tablet', () => {
+  test.use({ viewport: { width: 768, height: 1024 }, isMobile: true, hasTouch: true })
+
+  test('shows the lab with the desktop-only run state and no download', async ({ page }) => {
+    const toolchainRequests = trackToolchainRequests(page)
+    await page.goto('/labs/rust/')
+    await expect(page.locator('.monaco-editor')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Running Rust needs a desktop browser' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Export this project' })).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+    expect(toolchainRequests).toEqual([])
+  })
+})
+
+test('the experiment note is one line that stays hidden once dismissed, and the footer sits below the panels', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/labs/rust/')
+  const note = page.getByRole('complementary', { name: 'About this experiment' })
+  await expect(note).toContainText('38.7 MB')
+  // One line of text; the 44px Hide button sets the height.
+  expect((await note.boundingBox())!.height).toBeLessThanOrEqual(56)
+  await note.getByRole('button', { name: 'Hide this note' }).click()
+  await expect(note).toBeHidden()
+  await page.reload()
+  await expect(page.locator('.monaco-editor')).toBeVisible()
+  await expect(note).toBeHidden()
+  await expect(page.locator('.lab-badge')).toHaveText('Experimental')
+  const footer = (await page.locator('.lab-footer').boundingBox())!
+  for (const panel of ['.lab-editor-panel', '.lab-output-panel', '.lab-project-sidebar']) {
+    const box = (await page.locator(panel).boundingBox())!
+    expect(box.y + box.height).toBeLessThanOrEqual(footer.y)
+  }
+  await expectNoHorizontalOverflow(page)
+})
+
+test('is listed with the languages on the desktop workspace and links back', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/')
+  const sidebar = page.locator('.project-sidebar .sidebar-content')
+  const languages = sidebar.locator('.new-project-grid > *')
+  await expect(languages.last()).toHaveAccessibleName('Rust Lab (experimental, opens a separate page)')
+  // Chromium's own name, which (unlike Playwright's) includes CSS text-transform from the tag.
+  const cdp = await page.context().newCDPSession(page)
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree') as { nodes: { role?: { value: string }; name?: { value: string } }[] }
+  const labLinkNames = nodes.filter((node) => node.role?.value === 'link' && /Rust/.test(node.name?.value ?? '')).map((node) => node.name?.value)
+  expect(labLinkNames).toContain('Rust Lab (experimental, opens a separate page)')
+  expect(labLinkNames.filter((name) => /LAB/.test(name ?? ''))).toEqual([])
+  const projectsBefore = await page.locator('.sidebar-content .project-card').count()
+  await languages.last().click()
+  await expect(page).toHaveURL(/\/labs\/rust\/$/)
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: /Hafa Code: back to your workspace/ }).click()
+  await expect(page).toHaveURL(/\/$/)
+  // Visiting the lab did not create a workspace project.
+  await expect(page.locator('.sidebar-content .project-card')).toHaveCount(projectsBefore)
+  await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  await expect(page.getByRole('link', { name: 'Rust (experimental)' })).toHaveAttribute('href', '/labs/rust/')
+})
+
+test('follows the workspace theme and color-safe choice, and carries a change back', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  await page.getByRole('button', { name: 'Dark', exact: true }).click()
+  await page.getByRole('button', { name: 'Color-safe' }).click()
+  await page.goto('/labs/rust/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'colorblind')
+  await expectNoAxeViolations(page)
+  const labPage = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  await page.getByRole('button', { name: 'Lab and display settings' }).click()
+  await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.goto('/')
+  await expect(page.locator('main.app-shell')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+  await page.getByRole('button', { name: 'Dark', exact: true }).click()
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(labPage)
+})
+
+for (const viewport of [
+  { width: 320, height: 640 },
+  { width: 390, height: 844 },
+  { width: 768, height: 1024 },
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1080 },
+]) {
+  test(`has no horizontal overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    await page.goto('/labs/rust/')
+    await expect(page.locator('.monaco-editor')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+    await page.goto('/')
+    await expect(page.locator('.app-bar')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
   })
 }
 
@@ -125,9 +335,10 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await setSource(page, 'fn main() {\n    let s = String::from("hi");\n    let t = s;\n    println!("{} {}", s, t);\n}\n')
     await runAndWait(page, /Did not compile/)
     await expect(page.getByLabel('rustc output')).toContainText('error[E0382]: borrow of moved value: `s`')
-    const coach = page.getByRole('region', { name: /A value was used after it moved/ })
+    const coach = await openCoach(page, /A value was used after it moved/)
     await expect(coach).toContainText('E0382')
     await expect(coach).toContainText('line 4')
+    await closeLearning(page)
 
     // Input is provided before the run.
     await setSource(page, 'use std::io;\nfn main() {\n    let mut name = String::new();\n    io::stdin().read_line(&mut name).unwrap();\n    println!("Hafa adai, {}!", name.trim());\n}\n')
@@ -138,8 +349,9 @@ test.describe('with the real compiler @rust-toolchain', () => {
 
     // A panic is explained.
     await setSource(page, 'fn main() {\n    let v: Vec<i32> = Vec::new();\n    println!("{}", v[3]);\n}\n')
-    await runAndWait(page, /panicked/)
-    await expect(page.getByRole('region', { name: /An index was past the end of a list/ })).toBeVisible()
+    await runAndWait(page, /Panicked/)
+    await openCoach(page, /An index was past the end of a list/)
+    await closeLearning(page)
 
     // Typing and pressing Ctrl/Cmd+Enter at once compiles what was just typed, once.
     await setSource(page, 'fn main() {\n    let x = 5;\n    println!("{x}");\n}\n')
@@ -148,7 +360,8 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await page.keyboard.type('\nx = 6;', { delay: 25 })
     await page.keyboard.press('ControlOrMeta+Enter')
     await expect(page.locator('.lab-status')).toContainText('Did not compile')
-    await expect(page.getByRole('region', { name: /An immutable variable was assigned twice/ })).toContainText('E0384')
+    await expect(await openCoach(page, /An immutable variable was assigned twice/)).toContainText('E0384')
+    await closeLearning(page)
 
     // Stop ends a loop that never finishes.
     // Output printed just before an endless loop is kept after Stop.
@@ -156,35 +369,49 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await page.getByRole('button', { name: 'Run', exact: true }).click()
     await expect(page.locator('.lab-status')).toContainText('Running', { timeout: 30_000 })
     await page.getByRole('button', { name: 'Stop' }).click()
-    await expect(page.locator('.lab-status')).toHaveText('Stopped.')
+    await expect(page.locator('.lab-status')).toHaveText('Stopped')
     await expect(page.locator('.lab-program-output')).toHaveText('started\nstill here\n')
 
     // A runaway allocation stops at the program's memory limit instead of growing to 4 GiB.
     await setSource(page, 'fn main() {\n    let mut blocks: Vec<Vec<u8>> = Vec::new();\n    loop {\n        blocks.push(vec![1u8; 16 * 1024 * 1024]);\n        println!("{} MB", blocks.len() * 16);\n    }\n}\n')
-    await runAndWait(page, /panicked/)
+    await runAndWait(page, /Panicked/)
     await expect(page.locator('.lab-program-output')).toContainText('memory allocation of 16777216 bytes failed')
     const lastReport = Number((await page.locator('.lab-program-output').innerText()).match(/(\d+) MB\n(?![\s\S]*\d+ MB\n)/)?.[1])
     expect(lastReport).toBeGreaterThanOrEqual(400)
     expect(lastReport).toBeLessThan(512)
 
     // A challenge fails with its starter and passes with a correct solution.
-    await page.getByRole('tab', { name: 'Practice' }).click()
-    await page.getByRole('button', { name: /Grow the list safely/ }).click()
-    await page.getByRole('button', { name: 'Start challenge' }).click()
+    await startChallenge(page, 'Grow the list safely')
     await runAndWait(page, /Did not compile/)
     await expect(page.locator('.lab-challenge-result')).toContainText('Not yet')
-    await expect(page.getByRole('region', { name: /A borrow overlaps a change/ })).toContainText('E0502')
+    await expect(await openCoach(page, /A borrow overlaps a change/)).toContainText('E0502')
+    await closeLearning(page)
     await setSource(page, 'fn main() {\n    let mut numbers = vec![4, 8];\n    let first = numbers[0];\n    numbers.push(15);\n    println!("first was {first}");\n    println!("{:?}", numbers);\n}\n')
     await runAndWait(page, /Finished/)
     await expect(page.locator('.lab-challenge-result')).toContainText('Challenge passed')
 
-    // Projects and the downloaded compiler survive a reload.
+    // Projects and the downloaded compiler survive a reload; the compiler starts without downloading again.
     await page.reload()
-    await expect(page.getByLabel('Project', { exact: true })).toHaveValue(/.+/)
+    const requestsAfterReload = trackToolchainRequests(page)
+    await expect(page.locator('#lab-project-title')).toHaveValue('Challenge: Grow the list safely')
     await expect(page.locator('.lab-challenge-strip')).toContainText('Grow the list safely')
-    await expect(page.getByText('The compiler is saved in this browser')).toBeVisible()
+    await expect(page.getByText(/The compiler is saved in this browser/)).toBeVisible()
     await runAndWait(page, /Finished/)
-    await expect(page.getByText(/from this browser/)).toBeVisible()
+    expect(requestsAfterReload).toEqual([])
+
+    // Export, then import the file as a new project.
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'More project actions' }).click()
+    await page.getByRole('button', { name: 'Export project' }).click()
+    const exported = await (await download).path()
+    await page.locator('input[type="file"]').setInputFiles(exported!)
+    await expect(page.locator('.toast')).toContainText('Imported')
+    await expect(page.locator('.sidebar-content .project-card')).toHaveCount(3)
+
+    // Remove download clears the saved compiler.
+    await page.getByRole('button', { name: 'Lab and display settings' }).click()
+    await page.getByRole('button', { name: /Remove download/ }).click()
+    await expect(page.getByRole('button', { name: 'Download compiler' })).toBeVisible()
   })
 
   test('every guide example and challenge solution compiles to the expected output', async ({ page }) => {
@@ -194,14 +421,14 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await page.getByRole('button', { name: 'Download and run' }).click()
     await expect(page.locator('.lab-status')).toContainText('Finished', { timeout: 180_000 })
 
-    await page.getByRole('tab', { name: 'Guide' }).click()
     for (const title of ['println! and variables', 'Ownership and moves', 'Borrowing and references', 'Structs, enums, and match', 'Result and the ? operator']) {
-      const toggle = page.getByRole('button', { name: new RegExp(title.replace(/[?!]/g, '\\$&')) })
-      if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-      await page.getByRole('button', { name: 'Open as a new project' }).click()
+      await page.getByRole('navigation', { name: 'Learning tools' }).getByRole('button', { name: 'Rust guide' }).click()
+      const learning = page.getByRole('dialog', { name: 'Rust learning' })
+      await learning.getByRole('navigation', { name: 'Rust guide topics' }).getByRole('button', { name: title }).click()
+      await learning.getByRole('button', { name: 'Try example' }).click()
+      await expect(learning).toBeHidden()
       await runAndWait(page, /Finished/)
-      await expect(page.locator('.lab-status')).not.toContainText('warning')
-      await page.getByRole('tab', { name: 'Guide' }).click()
+      await expect(page.locator('.lab-run-summary')).not.toContainText('warning')
     }
 
     const solutions: Record<string, string> = {
@@ -211,9 +438,7 @@ test.describe('with the real compiler @rust-toolchain', () => {
       'Add up the valid scores': 'fn parse_score(text: &str) -> Result<u32, String> {\n    text.parse::<u32>().map_err(|error| error.to_string())\n}\n\nfn main() {\n    let mut total = 0;\n    for text in ["10", "abc", "20"] {\n        match parse_score(text) {\n            Ok(score) => total += score,\n            Err(_) => println!("skipped: {text}"),\n        }\n    }\n    println!("total: {total}");\n}\n',
     }
     for (const [title, solution] of Object.entries(solutions)) {
-      await page.getByRole('tab', { name: 'Practice' }).click()
-      await page.getByRole('button', { name: new RegExp(title) }).click()
-      await page.getByRole('button', { name: 'Start challenge' }).click()
+      await startChallenge(page, title)
       await runAndWait(page, /Finished|Did not compile/)
       await expect(page.locator('.lab-challenge-result')).toContainText('Not yet')
       await setSource(page, solution)

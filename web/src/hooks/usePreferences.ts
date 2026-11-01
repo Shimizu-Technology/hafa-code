@@ -5,6 +5,8 @@ export type ColorModePreference = 'default' | 'colorblind'
 
 export const THEME_STORAGE_KEY = 'hafa-code-theme-v1'
 export const COLOR_MODE_STORAGE_KEY = 'hafa-code-color-mode-v1'
+/** The browser and status-bar color for each theme: the page background (--surface-page). */
+export const THEME_COLORS = { light: '#f7f0e5', dark: '#12100e' } as const
 
 function subscribeSystemTheme(callback: () => void) {
   const query = window.matchMedia('(prefers-color-scheme: dark)')

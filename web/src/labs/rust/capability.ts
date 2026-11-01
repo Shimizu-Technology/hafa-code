@@ -6,7 +6,6 @@ export interface LabEnvironment {
   workers: boolean
   /** True when the main pointer is a finger (phones and most tablets). */
   coarsePointer: boolean
-  viewportWidth: number
   deviceMemoryGb: number | null
 }
 
@@ -15,8 +14,6 @@ export type LabReadiness =
   | { status: 'small-device'; reasons: string[] }
   | { status: 'unsupported'; reasons: string[] }
 
-/** The editor, output, and guide need about this much room side by side. */
-export const MIN_DESKTOP_WIDTH = 900
 export const LOW_MEMORY_GB = 4
 
 export function readEnvironment(win: Window & typeof globalThis = window): LabEnvironment {
@@ -29,7 +26,6 @@ export function readEnvironment(win: Window & typeof globalThis = window): LabEn
     // Every browser with SharedArrayBuffer in isolated pages also has module workers.
     workers: typeof win.Worker === 'function',
     coarsePointer: win.matchMedia?.('(pointer: coarse)').matches ?? false,
-    viewportWidth: win.innerWidth,
     deviceMemoryGb: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
   }
 }
@@ -42,14 +38,25 @@ export function assessEnvironment(environment: LabEnvironment): LabReadiness {
   if (!environment.crossOriginIsolated) missing.push('cross-origin isolation for this page')
   if (missing.length) return { status: 'unsupported', reasons: missing }
 
-  const small: string[] = []
-  if (environment.coarsePointer) small.push('This looks like a phone or tablet.')
-  if (environment.viewportWidth < MIN_DESKTOP_WIDTH) small.push(`The window is narrower than ${MIN_DESKTOP_WIDTH}px.`)
-  if (small.length) return { status: 'small-device', reasons: small }
+  // The layout works at any width, so a narrow desktop window can still run; a finger-first
+  // device usually lacks the memory the compiler needs.
+  if (environment.coarsePointer) return { status: 'small-device', reasons: ['This looks like a phone or tablet.'] }
 
   const warnings: string[] = []
   if (environment.deviceMemoryGb !== null && environment.deviceMemoryGb < LOW_MEMORY_GB) {
     warnings.push(`This device reports about ${environment.deviceMemoryGb} GB of memory; the compiler needs roughly 1.5 GB while it works.`)
   }
   return { status: 'ready', warnings }
+}
+
+/**
+ * What the Run control offers. Phones and tablets can read and write Rust but do not run it
+ * (or download the compiler) unless the learner chooses to try; an unsupported browser cannot run.
+ */
+export type RunAvailability = 'available' | 'needs-desktop' | 'unsupported'
+
+export function runAvailability(readiness: LabReadiness, tryOnThisDevice: boolean): RunAvailability {
+  if (readiness.status === 'unsupported') return 'unsupported'
+  if (readiness.status === 'small-device' && !tryOnThisDevice) return 'needs-desktop'
+  return 'available'
 }

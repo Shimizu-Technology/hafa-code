@@ -1,5 +1,7 @@
 import { FlaskConical, Plus, Settings2 } from 'lucide-react'
 import type { ColorModePreference, ThemePreference } from '../hooks/usePreferences'
+import { LAB_DESTINATIONS } from '../lib/labDestinations'
+import { DisplaySettings } from './DisplaySettings'
 import { Popover } from './Popover'
 
 type WorkspaceOption = { id: string; label: string }
@@ -17,12 +19,6 @@ type WorkspaceSettingsProps = {
   onThemeChange: (theme: ThemePreference) => void
   onWorkspaceChange: (workspaceId: string | null) => void
 }
-
-const THEMES: { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
 
 /** App bar settings: which workspace is open and how Hafa Code looks. */
 export function WorkspaceSettings({
@@ -71,38 +67,17 @@ export function WorkspaceSettings({
               </button>
             )}
           </div>
-          <div className="menu-section">
-            <p className="menu-heading" id="theme-heading">Theme</p>
-            <div className="segmented" role="group" aria-labelledby="theme-heading">
-              {THEMES.map((option) => (
-                <button
-                  key={option.value}
-                  className={theme === option.value ? 'active' : ''}
-                  type="button"
-                  aria-pressed={theme === option.value}
-                  onClick={() => onThemeChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className={`menu-toggle${colorMode === 'colorblind' ? ' active' : ''}`}
-              type="button"
-              aria-pressed={colorMode === 'colorblind'}
-              aria-describedby="color-safe-help"
-              onClick={() => onColorModeChange(colorMode === 'colorblind' ? 'default' : 'colorblind')}
-            >
-              Color-safe
-            </button>
-            <small className="menu-help" id="color-safe-help">Blue and orange instead of red and green, with underlined selections.</small>
-          </div>
+          <DisplaySettings colorMode={colorMode} theme={theme} onColorModeChange={onColorModeChange} onThemeChange={onThemeChange} />
           <div className="menu-section">
             <p className="menu-heading">Labs</p>
-            <a className="menu-link" href="/labs/rust/" aria-describedby="rust-lab-help">
-              <FlaskConical size={16} aria-hidden="true" /> Rust (experimental)
-            </a>
-            <small className="menu-help" id="rust-lab-help">Desktop browsers only. Opens a separate page; compiling needs a one-time 39 MB download.</small>
+            {LAB_DESTINATIONS.map((destination) => (
+              <a key={destination.id} className="menu-link" href={destination.href} aria-describedby={`${destination.id}-lab-help`}>
+                <FlaskConical size={16} aria-hidden="true" /> {destination.shortLabel} (experimental)
+              </a>
+            ))}
+            {LAB_DESTINATIONS.map((destination) => (
+              <small key={destination.id} className="menu-help" id={`${destination.id}-lab-help`}>{destination.description}</small>
+            ))}
           </div>
       </>
     </Popover>
