@@ -15,6 +15,7 @@ const RUNNER_HEADERS = {
   sql: '/assets/sqlRunner.worker-*.js',
   python: '/assets/pythonRunner.worker-*.js',
   java: '/assets/javaRunner.worker-*.js',
+  go: '/assets/goRunner.worker-*.js',
 }
 const JAVA_BOOTSTRAP_HEADER = '/javaRunner.bootstrap.js'
 const PYODIDE_RUNTIME_FILES = ['pyodide-lock.json', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip']
@@ -70,6 +71,7 @@ const sqlRunnerPolicy = headers.get(RUNNER_HEADERS.sql)?.get('content-security-p
 const pythonRunnerPolicy = headers.get(RUNNER_HEADERS.python)?.get('content-security-policy')
 const javaRunnerPolicy = headers.get(RUNNER_HEADERS.java)?.get('content-security-policy')
 const javaBootstrapPolicy = headers.get(JAVA_BOOTSTRAP_HEADER)?.get('content-security-policy')
+const goRunnerPolicy = headers.get(RUNNER_HEADERS.go)?.get('content-security-policy')
 
 assert(applicationPolicy, 'Missing application Content-Security-Policy')
 assert(rubyRunnerPolicy, 'Missing Ruby runner worker Content-Security-Policy')
@@ -79,6 +81,7 @@ assert(sqlRunnerPolicy, 'Missing SQL runner worker Content-Security-Policy')
 assert(pythonRunnerPolicy, 'Missing Python runner worker Content-Security-Policy')
 assert(javaRunnerPolicy, 'Missing Java runner worker Content-Security-Policy')
 assert(javaBootstrapPolicy, 'Missing Java bootstrap worker Content-Security-Policy')
+assert(goRunnerPolicy, 'Missing Go runner worker Content-Security-Policy')
 assert.match(
   previewFrame,
   /<iframe\b[^>]*\bsandbox=["']allow-scripts["'][^>]*>/i,
@@ -124,6 +127,12 @@ assert(!pythonRunnerScripts.includes("'unsafe-eval'"), 'Python runner CSP must n
 assert.deepEqual(directiveSources(pythonRunnerPolicy, 'connect-src'), ["'self'"])
 assert(!pythonRunnerPolicy.includes('clerk'), 'Python runner CSP must not inherit application third-party script origins')
 
+const goRunnerScripts = directiveSources(goRunnerPolicy, 'script-src')
+assert.deepEqual(goRunnerScripts, ["'self'", "'wasm-unsafe-eval'"], 'Go runner CSP must permit only same-origin scripts and WebAssembly compilation')
+assert.deepEqual(directiveSources(goRunnerPolicy, 'connect-src'), ["'self'"], 'Go runner CSP must fetch only its same-origin runtime')
+assert.deepEqual(directiveSources(goRunnerPolicy, 'worker-src'), ["'none'"], 'Go runner CSP must block nested workers')
+assert.deepEqual(directiveSources(goRunnerPolicy, 'default-src'), ["'none'"], 'Go runner CSP must deny everything else by default')
+
 const javaRunnerScripts = directiveSources(javaRunnerPolicy, 'script-src')
 assert(javaRunnerScripts.includes("'wasm-unsafe-eval'"), 'Java runner CSP must permit WebAssembly compilation')
 assert(javaRunnerScripts.includes("'unsafe-eval'"), 'Java runner CSP must permit the CheerpJ JavaScript bridge')
@@ -168,6 +177,20 @@ for (const assetName of sqliteRuntimeAssets) {
   assert(!serviceWorker.includes(`/assets/${assetName}`), `SQLite runtime asset ${assetName} must remain lazy and outside the service-worker app shell`)
 }
 console.log(`Verified lazy SQLite runtime assets: ${sqliteRuntimeAssets.sort().join(', ')}`)
+
+// The Go runner's WebAssembly module (type checker + interpreter) is self-hosted,
+// content-addressed, and lazy: only a Go run fetches it.
+const goRuntimeAssets = assetNames.filter((name) => /^hafago-[A-Za-z0-9_-]{8}\.wasm$/.test(name))
+assert.equal(goRuntimeAssets.length, 1, `Expected one content-addressed Go runtime module, found ${goRuntimeAssets.join(', ')}`)
+const goRuntimePath = `/assets/${goRuntimeAssets[0]}`
+assert(!serviceWorker.includes(goRuntimePath), 'The Go runtime must remain lazy and outside the service-worker app shell')
+const goRunnerSource = await readFile(new URL(assetNames.find((name) => /^goRunner\.worker-[^.]+\.js$/.test(name)), ASSETS_DIRECTORY), 'utf8')
+assert(goRunnerSource.includes(goRuntimeAssets[0]), `The Go runner must load ${goRuntimePath}`)
+assert(goRunnerSource.includes('globalThis.Go'), 'The Go runner must bundle wasm_exec.js from the pinned toolchain')
+const goRuntimeBytes = (await readFile(new URL(goRuntimeAssets[0], ASSETS_DIRECTORY))).byteLength
+const GO_RUNTIME_BUDGET_BYTES = 24 * 1024 * 1024
+assert(goRuntimeBytes < GO_RUNTIME_BUDGET_BYTES, `${goRuntimePath} is ${goRuntimeBytes} bytes; keep it under ${GO_RUNTIME_BUDGET_BYTES} (add standard-library packages deliberately)`)
+console.log(`Verified lazy, self-hosted Go runtime ${goRuntimePath}: ${(goRuntimeBytes / 1024 / 1024).toFixed(1)} MiB (budget ${GO_RUNTIME_BUDGET_BYTES / 1024 / 1024} MiB)`)
 
 const pyodideDirectories = await readdir(new URL('pyodide/', ASSETS_DIRECTORY))
 assert.equal(pyodideDirectories.length, 1, `Expected one content-addressed Pyodide directory, found ${pyodideDirectories.join(', ')}`)

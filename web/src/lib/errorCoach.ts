@@ -165,7 +165,10 @@ export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: 
 
   const message = outcome.stderr.trim()
   if (!message) return null
-  const rule = sharedRules[kind]?.find((candidate) => candidate.pattern.test(message))
+  // Explain the error the learner reads first; later messages are often side effects.
+  const rules = sharedRules[kind] ?? []
+  const headline = errorHeadline(kind, message) ?? message
+  const rule = rules.find((candidate) => candidate.pattern.test(headline)) ?? rules.find((candidate) => candidate.pattern.test(message))
   return {
     title: rule?.title ?? `Let’s decode this ${kind === 'web' ? 'browser' : kind} error`,
     explanation: rule?.explanation ?? 'Start with the first error and the first line that points into your own file; later messages are often side effects.',

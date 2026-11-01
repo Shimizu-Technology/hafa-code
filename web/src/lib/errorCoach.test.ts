@@ -40,6 +40,11 @@ describe('contextual error coach', () => {
     expect(advice?.steps).toHaveLength(3)
   })
 
+  it('explains the first Go compiler error when several are reported', () => {
+    const advice = coachRunnerError('go', 'main.go', failure('main.go:5:2: "strings" imported and not used\nmain.go:9:2: declared and not used: total\n'))
+    expect(advice).toMatchObject({ title: 'This import is not used', location: 'main.go · line 5' })
+  })
+
   it('falls back to general Go guidance for an unrecognized message', () => {
     const advice = coachRunnerError('go', 'main.go', failure('panic: something unusual happened\nexit status 2'))
     expect(advice).toMatchObject({ title: 'Let’s decode this go error', guideTopicId: 'go-output-comments', location: 'main.go' })
