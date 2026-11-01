@@ -33,12 +33,13 @@ const basicsTopic: Record<ProjectKind, string> = {
   typescript: 'typescript-output-types',
   python: 'python-output-comments',
   java: 'java-output-comments',
+  go: 'go-output-comments',
   sql: 'sql-select',
   web: 'web-dom-events',
 }
 
 const loopsTopic: Record<Exclude<ProjectKind, 'web'>, string> = {
-  ruby: 'ruby-loops', javascript: 'javascript-loops', typescript: 'typescript-functions', python: 'python-loops', java: 'java-loops', sql: 'sql-filter-sort',
+  ruby: 'ruby-loops', javascript: 'javascript-loops', typescript: 'typescript-functions', python: 'python-loops', java: 'java-loops', go: 'go-loops', sql: 'sql-filter-sort',
 }
 
 const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
@@ -49,6 +50,21 @@ const sharedRules: Partial<Record<ProjectKind, readonly ErrorRule[]>> = {
     { pattern: /NullPointerException/i, title: 'Java found null instead of an object', explanation: 'Code tried to use a method or field on a value that currently points to nothing.', steps: ['Find the first line in your file named by the stack trace.', 'Identify which value before the dot could be `null`.', 'Initialize it or handle the missing-value case.'], topic: 'java-classes-objects' },
     { pattern: /ArrayIndexOutOfBoundsException/i, title: 'The Java array index is outside the array', explanation: 'The requested position is smaller than zero or at least the array length.', steps: ['Inspect the index shown in the message.', 'Remember that the first item is index 0.', 'Keep loop conditions below `array.length`.'], topic: 'java-arrays-arraylist' },
     { pattern: /InputMismatchException/i, title: 'Scanner received a different kind of input', explanation: 'The entered value does not match the type requested by the Scanner method.', steps: ['Check whether the code expects text, an integer, or a decimal.', 'Enter a value in that format.', 'Use the matching Scanner method.'], topic: 'java-scanner-input' },
+  ],
+  go: [
+    { pattern: /declared and not used/i, title: 'Go found a variable you never use', explanation: 'Go refuses to build a program that declares a local variable and never reads it, because that is usually a mistake.', steps: ['Open the line in the message and find the variable name after the colon.', 'Use the variable, or delete the line if you no longer need it.', 'While experimenting, `_ = name` keeps it without printing it.'], topic: 'go-variables-types' },
+    { pattern: /imported and not used/i, title: 'This import is not used', explanation: 'Every imported package must be used somewhere in the file. Go stops the build when one is left over.', steps: ['Find the package named in the message in your import list.', 'Delete that import, or call something from the package.', 'Run again; each file keeps its own import list.'], topic: 'go-output-comments' },
+    { pattern: /is not available in Hafa Code's browser Go runner/i, title: 'That package is not available here', explanation: 'Hafa Code’s browser runner includes a focused set of standard-library packages. Network, file, process, and third-party packages are not part of it.', steps: ['Read the list of available packages in the message.', 'Rewrite the program with one of those packages.', 'Move projects that need other packages to a local Go installation.'], topic: 'go-output-comments' },
+    { pattern: /undefined: /i, title: 'Go cannot find that name', explanation: 'The compiler does not see a variable, function, or type with this name where it is used.', steps: ['Compare spelling and capitalization with the declaration.', 'Declare the name before using it, inside the same function or at package level.', 'Names from another package need the package prefix, such as `strings.ToUpper`.'], topic: 'go-variables-types' },
+    { pattern: /cannot use .+ as .+ value|mismatched types|cannot convert/i, title: 'These Go types do not match', explanation: 'A value is being assigned, passed, or returned where Go expects a different type, and Go never converts types silently.', steps: ['Read the two types named in the message.', 'Check the declaration of the variable, parameter, or result.', 'Convert explicitly, such as `float64(count)` or `strconv.Itoa(n)`, only when that matches your intent.'], topic: 'go-variables-types' },
+    { pattern: /has no field or method/i, title: 'That field or method does not exist', explanation: 'The value’s type does not declare the field or method named after the dot. Go names are case-sensitive.', steps: ['Read the type named in the message.', 'Compare the name after the dot with the struct fields and methods of that type.', 'Check capitalization: `Name` and `name` are different names.'], topic: 'go-structs-methods' },
+    { pattern: /missing return/i, title: 'A function can finish without returning a value', explanation: 'A function that declares results must return on every path. Go found a path that reaches the closing brace without a `return`.', steps: ['Open the function that ends at the reported line.', 'Follow each `if` and `else` branch to its end.', 'Add a final `return` with values of the declared result types.'], topic: 'go-functions-errors' },
+    { pattern: /index out of range|out of bounds|bounds out of range/i, title: 'The index is outside the slice', explanation: 'The program asked for a position that the slice, array, or string does not have. The first item is index 0 and the last is `len(items) - 1`. Hafa Code’s interpreter reports this as “reflect: slice index out of range”.', steps: ['Open the first `main.go` line listed under the panic.', 'Print `len(...)` of the slice and the index just before that line.', 'Keep loop conditions below the length, such as `i < len(items)`.'], topic: 'go-slices-maps' },
+    { pattern: /assignment to entry in nil map/i, title: 'This map was never created', explanation: 'A map declared with `var counts map[string]int` is nil. Reading from it is allowed, but writing to it panics.', steps: ['Find where the map is declared.', 'Create it with `make(map[string]int)` or a literal such as `map[string]int{}`.', 'Run again to confirm the assignment works.'], topic: 'go-slices-maps' },
+    { pattern: /all goroutines are asleep - deadlock/i, title: 'Every goroutine is waiting', explanation: 'Each goroutine is blocked, usually waiting on a channel that nothing will ever send to, receive from, or close. Nothing can continue, so Go stops the program.', steps: ['Find the channel send or receive where main waits.', 'Make sure another goroutine sends the value, or give the channel a buffer.', 'Close a channel before ranging over it, and call `wg.Done()` for every `wg.Add`.'], topic: 'go-goroutines-channels' },
+    { pattern: /nil pointer dereference|on zero Value/i, title: 'Go followed a nil pointer', explanation: 'The code used a field or method through a pointer that does not point to a value yet. Hafa Code’s interpreter may report this as “call of reflect.Value… on zero Value”.', steps: ['Open the first `main.go` line listed under the panic.', 'Find the pointer before the dot and where it should be set.', 'Create the value with `&Type{...}` or check `if p != nil` first.'], topic: 'go-structs-methods' },
+    { pattern: /newer Go built-in/i, title: 'This built-in is not available in Hafa Code yet', explanation: 'The program is valid Go, but Hafa Code’s browser interpreter does not support this built-in function yet.', steps: ['Read the suggestion at the end of the message.', 'Rewrite that line with an `if` comparison or a loop.', 'Run again to reveal any next message.'], topic: 'go-slices-maps' },
+    { pattern: /syntax error:/i, title: 'Go could not read this syntax', explanation: 'A brace, parenthesis, quote, or keyword is missing or out of place near the reported position.', steps: ['Open the reported line and the line above it.', 'Match every `{` with `}` and keep `} else {` on one line.', 'Fix the first message, then run again.'], topic: 'go-conditionals' },
   ],
   python: [
     { pattern: /IndentationError|TabError/i, title: 'Python’s indentation does not line up', explanation: 'Python uses indentation to decide which statements belong together.', steps: ['Open the reported line and compare it with the block above.', 'Use consistent spaces for the whole block.', 'Indent code after a line ending in `:`.'], topic: 'python-conditionals' },
@@ -117,8 +133,8 @@ function errorLocation(message: string, entryPath: string) {
   const pythonLocation = pythonFrameLocation(message)
   if (pythonLocation) return pythonLocation
   const candidates = [
-    /([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?/,
-    /\(([^\s():]+\.(?:java|rb|js|ts|py|sql|html)):(\d+)(?::\d+)?\)/,
+    /([^\s():]+\.(?:java|rb|js|ts|py|go|sql|html)):(\d+)(?::\d+)?/,
+    /\(([^\s():]+\.(?:java|rb|js|ts|py|go|sql|html)):(\d+)(?::\d+)?\)/,
   ]
   for (const pattern of candidates) {
     const match = pattern.exec(message)
@@ -149,7 +165,10 @@ export function coachRunnerError(kind: ProjectKind, entryPath: string, outcome: 
 
   const message = outcome.stderr.trim()
   if (!message) return null
-  const rule = sharedRules[kind]?.find((candidate) => candidate.pattern.test(message))
+  // Explain the error the learner reads first; later messages are often side effects.
+  const rules = sharedRules[kind] ?? []
+  const headline = errorHeadline(kind, message) ?? message
+  const rule = rules.find((candidate) => candidate.pattern.test(headline)) ?? rules.find((candidate) => candidate.pattern.test(message))
   return {
     title: rule?.title ?? `Let’s decode this ${kind === 'web' ? 'browser' : kind} error`,
     explanation: rule?.explanation ?? 'Start with the first error and the first line that points into your own file; later messages are often side effects.',

@@ -20,6 +20,9 @@ npm --prefix web run lint
 echo "-- web tests"
 npm --prefix web test
 
+echo "-- Go content against the Go toolchain"
+npm --prefix web run verify:go-content
+
 echo "-- web build"
 npm --prefix web run build
 

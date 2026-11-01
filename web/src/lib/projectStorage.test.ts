@@ -5,6 +5,8 @@ import {
   createLocalCheckpoint,
   createProject,
   loadCheckpointLibrary,
+  parseImportedProject,
+  projectExportFormat,
   loadProjectLibrary,
   saveCheckpointLibrary,
   saveProjectLibrary,
@@ -77,5 +79,18 @@ describe('project storage failures', () => {
     })
 
     expect(createLocalCheckpoint(createProject('javascript'))).toBeNull()
+  })
+})
+
+describe('Go project portability', () => {
+  test('exports a one-file Go project as source and round-trips a multi-file project as JSON', () => {
+    const project = createProject('go')
+    expect(projectExportFormat(project)).toEqual({ kind: 'source', fileName: 'go-playground.go' })
+
+    const multiFile = { ...project, files: [...project.files, { path: 'helper.go', language: 'go' as const, content: 'package main\n\nfunc helper() {}\n' }] }
+    expect(projectExportFormat(multiFile).kind).toBe('json')
+    const imported = parseImportedProject(JSON.stringify(multiFile))
+    expect(imported).toMatchObject({ kind: 'go', entryPath: 'main.go' })
+    expect(imported.files.map((file) => [file.path, file.language])).toEqual([['main.go', 'go'], ['helper.go', 'go']])
   })
 })

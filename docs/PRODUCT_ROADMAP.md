@@ -1,6 +1,6 @@
 # Hafa Code Product Roadmap
 
-Last reviewed: September 6, 2026
+Last reviewed: November 1, 2026
 
 ## Product direction
 
@@ -43,6 +43,7 @@ Hafa Code currently supports:
 - multi-file TypeScript through the browser compiler API and QuickJS;
 - multi-file Python through self-hosted Pyodide;
 - Java 8 compilation and execution through CheerpJ;
+- Go type checking with `go build` wording and interpretation through a self-hosted WebAssembly worker;
 - SQL through a project-scoped, in-memory official SQLite WebAssembly worker;
 - HTML/CSS/JavaScript through a sandboxed preview;
 - Monaco editing, multiple files, entry-file selection, standard input where supported, stop controls, and bounded execution;
@@ -94,6 +95,20 @@ SQL now ships as a focused SQLite learning workspace.
 - [x] A complete eight-topic guide, fifteen challenges, error coaching, starter data, import/export support, automated browser coverage, and mobile coverage.
 - [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
 
+## Shipped: Go
+
+Go now ships as a focused fundamentals workspace. Leon Shimizu owns its maintenance.
+
+- [x] `.go` files with Go-aware Monaco highlighting and gofmt-style tab indentation.
+- [x] Compiler errors from the Go compiler's parser and `go/types`, matching `go build` for unused variables and imports, missing returns, type mismatches, and syntax errors.
+- [x] Interpretation in a dedicated, self-hosted WebAssembly worker with a fresh instance per run, standard input, Stop, and the shared time and output limits.
+- [x] Panics that point at learner lines, `exit status` reporting, and Go's deadlock error.
+- [x] A curated standard library; no modules, third-party packages, networking, or host files.
+- [x] A complete eight-topic guide, fifteen challenges, error coaching, a starter project, import/export support, automated browser coverage, and mobile coverage.
+- [x] Content verification that runs every guide example and challenge solution through the real `go run` and the Hafa engine.
+- [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
+- [ ] Revisit Yaegi's documented differences from compiled Go (panic wording, interface printing, `errors.As`, some generics) when upstream fixes them.
+
 ## P2: classroom usability
 
 - Add saved review filters plus explicit unread-feedback and language controls when classroom volume justifies them.
@@ -108,7 +123,7 @@ SQL now ships as a focused SQLite learning workspace.
 
 A remote Advanced workspace may eventually provide terminals, packages, Git, language servers, debuggers, and application servers. It must remain an authenticated, opt-in, desktop-focused system with per-user isolation, quotas, lifecycle controls, persistence, monitoring, backups, and explicit project copy-in/copy-back behavior. It must not replace or weaken the browser-local Learn workspace.
 
-Go, C/C++, Perl, real-time collaboration, unrestricted packages, deployments, databases with remote credentials, and AI tutoring are deferred. Revisit them only when a real course need, maintenance owner, runtime/security design, content plan, and device evidence justify the added surface.
+C/C++, Perl, real-time collaboration, unrestricted packages, deployments, databases with remote credentials, and AI tutoring are deferred. Revisit them only when a real course need, maintenance owner, runtime/security design, content plan, and device evidence justify the added surface.
 
 ## Definition of done
 

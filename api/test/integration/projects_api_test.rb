@@ -105,6 +105,38 @@ class ProjectsApiTest < ActionDispatch::IntegrationTest
     assert_equal %w[greeting.ts main.ts], response.parsed_body.dig("project", "files").pluck("path")
   end
 
+  test "creates Go projects and chooses main.go as the default entry" do
+    post "/api/v1/projects",
+      params: {
+        title: "Go Playground",
+        kind: "go",
+        files: [
+          { path: "greeting.go", language: "go", content: "package main\n\nfunc greeting() string { return \"Hafa adai\" }\n" },
+          { path: "main.go", language: "go", content: "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(greeting()) }\n" },
+          { path: "notes.txt", language: "plain", content: "Run with go run ." }
+        ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :created
+    assert_equal "go", response.parsed_body.dig("project", "kind")
+    assert_equal "main.go", response.parsed_body.dig("project", "entry_path")
+    assert_equal %w[greeting.go main.go notes.txt], response.parsed_body.dig("project", "files").pluck("path")
+    assert_equal %w[go go plain], response.parsed_body.dig("project", "files").pluck("language")
+  end
+
+  test "rejects an unknown Go file language" do
+    post "/api/v1/projects",
+      params: {
+        title: "Go Playground",
+        kind: "go",
+        files: [ { path: "main.go", language: "golang", content: "package main\n" } ]
+      }.to_json,
+      headers: @headers
+
+    assert_response :unprocessable_entity
+  end
+
   test "creates SQL projects and chooses main.sql as the default entry" do
     post "/api/v1/projects",
       params: {

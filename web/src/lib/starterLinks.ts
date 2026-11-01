@@ -29,7 +29,7 @@ export const STARTER_LINK_MAX_LENGTH = 64_000
 export const PROJECT_LINK_MAX_LENGTH = 3_000_000
 
 /** Mirrors PROJECT_KINDS in languageRegistry.ts (a unit test keeps them in sync). */
-export const STARTER_KINDS = ['ruby', 'javascript', 'typescript', 'python', 'java', 'sql', 'web'] as const
+export const STARTER_KINDS = ['ruby', 'javascript', 'typescript', 'python', 'java', 'go', 'sql', 'web'] as const
 export type StarterKind = typeof STARTER_KINDS[number]
 
 export interface ReturnOriginOptions {

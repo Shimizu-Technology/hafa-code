@@ -4,6 +4,7 @@ import type { ProjectFile, ProjectFileLanguage, ProjectKind, RunnerLanguage } fr
 export const RUNNER_TIMEOUT_MS = 3_000
 export const RUNNER_STARTUP_TIMEOUT_MS = 30_000
 export const PYTHON_STARTUP_TIMEOUT_MS = 90_000
+export const GO_STARTUP_TIMEOUT_MS = 90_000
 
 function shellArgument(value: string) {
   return /^[a-zA-Z0-9_./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
@@ -30,6 +31,8 @@ interface FileLanguageDefinition {
   starterContent: string
   /** Spaces per indent level in the editor; PEP 8 expects 4 for Python. Defaults to 2. */
   tabSize?: number
+  /** Indent with tab characters, as gofmt does for Go. Defaults to spaces. */
+  indentWithTabs?: boolean
 }
 
 export interface RunnerDefinition {
@@ -94,6 +97,14 @@ export const FILE_LANGUAGE_DEFINITIONS = {
     monacoLanguage: 'java',
     extensions: ['java'],
     starterContent: '// Write Java here\n',
+  },
+  go: {
+    label: 'Go',
+    monacoLanguage: 'go',
+    extensions: ['go'],
+    starterContent: 'package main\n',
+    tabSize: 4,
+    indentWithTabs: true,
   },
   sql: {
     label: 'SQL',
@@ -245,6 +256,31 @@ export const PROJECT_KIND_DEFINITIONS = {
       startupNote: 'The first Java run downloads the browser compiler and may take longer on a mobile connection.',
     },
   },
+  go: {
+    kind: 'go',
+    label: 'Go',
+    shortLabel: 'Go',
+    starterTitle: 'Go Playground',
+    entryPath: 'main.go',
+    starterFiles: [
+      { path: 'main.go', language: 'go', content: 'package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("Hafa adai, Go!")\n\n\tfor line := 1; line <= 3; line++ {\n\t\tfmt.Println("Line", line)\n\t}\n}\n' },
+    ],
+    preferredEntryPaths: ['main.go'],
+    defaultFileLanguage: 'go',
+    fallbackFileLanguage: 'plain',
+    newFileCandidates: ['helper.go', 'greeting.go', 'practice.go'],
+    defaultExtension: 'go',
+    runner: {
+      language: 'go',
+      runLabel: 'Go',
+      // The runner builds every top-level .go file together, like `go run .`.
+      terminalCommand: () => 'go run .',
+      createWorker: () => new Worker(new URL('../workers/goRunner.worker.ts', import.meta.url), { type: 'module' }),
+      startupTimeoutMs: GO_STARTUP_TIMEOUT_MS,
+      startupNote: 'The first Go run downloads a 4 MB browser runtime and may take longer on a mobile connection. Later runs are faster.',
+      firstLoadLabel: 'Downloading Go (first time only)',
+    },
+  },
   sql: {
     kind: 'sql',
     label: 'SQL',
@@ -300,10 +336,16 @@ export function fileLanguageDefinition(language: ProjectFileLanguage): FileLangu
 
 const DEFAULT_TAB_SIZE = 2
 
-/** Indent width for a file in the editor: 4 for Python, 2 for everything else. */
+/** Indent width for a file in the editor: 4 for Python and Go, 2 for everything else. */
 export function editorTabSize(language: ProjectFileLanguage): number {
   const definition: FileLanguageDefinition = FILE_LANGUAGE_DEFINITIONS[language]
   return definition.tabSize ?? DEFAULT_TAB_SIZE
+}
+
+/** Whether the editor indents a file with spaces; Go uses tabs, like gofmt. */
+export function editorInsertsSpaces(language: ProjectFileLanguage): boolean {
+  const definition: FileLanguageDefinition = FILE_LANGUAGE_DEFINITIONS[language]
+  return !definition.indentWithTabs
 }
 
 export function fileLanguageForPath(path: string): ProjectFileLanguage | null {

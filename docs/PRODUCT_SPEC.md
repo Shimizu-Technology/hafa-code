@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a small, open-source coding workspace where students and alumni can write, run, understand, save, and review Ruby, JavaScript, TypeScript, Python, Java, SQL, and HTML/CSS/JavaScript projects without installing a local development environment.
+Create a small, open-source coding workspace where students and alumni can write, run, understand, save, and review Ruby, JavaScript, TypeScript, Python, Java, Go, SQL, and HTML/CSS/JavaScript projects without installing a local development environment.
 
 ## Primary Users
 
@@ -16,7 +16,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Student
 
-- I can open a browser and immediately write Ruby, JavaScript, TypeScript, Python, Java, or SQL.
+- I can open a browser and immediately write Ruby, JavaScript, TypeScript, Python, Java, Go, or SQL.
 - I can press Run and see output/errors.
 - I can understand common errors in plain language and jump to the relevant guide topic.
 - I can create an HTML/CSS/JS page and see it update live.
@@ -74,14 +74,21 @@ Create a small, open-source coding workspace where students and alumni can write
    - warm repeat runs after the first runtime download
    - no packages, build tools, external dependencies, or desktop GUI support
 
-6. SQL data workspace
+6. Go project
+   - `main.go` plus helper `.go` files in `package main`
+   - compiler errors with `go build` wording, stdout/stderr, and line-oriented standard input
+   - runtime panics that point at learner lines and Go's deadlock error
+   - curated standard library; no modules, third-party packages, networking, or host files
+   - lazy self-hosted runtime with warm repeat runs
+
+7. SQL data workspace
    - Project-scoped, in-memory SQLite database in a dedicated worker
    - Explicit `schema.sql`, `seed.sql`, and query entry file
    - Accessible result tables, row/change counts, empty/error states, Stop, and Reset database
    - Session-persistent changes with automatic rebuild after schema/seed edits
    - no remote database, credentials, extensions, OPFS persistence, or host filesystem/network access
 
-7. Web page
+8. Web page
    - HTML editor
    - CSS editor
    - JS editor
@@ -89,7 +96,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Language Guides
 
-- One searchable quick reference for each supported project kind: Ruby, JavaScript, TypeScript, Python, Java, SQL, and HTML/CSS/JS
+- One searchable quick reference for each supported project kind: Ruby, JavaScript, TypeScript, Python, Java, Go, SQL, and HTML/CSS/JS
 - Plain-language explanations, runnable syntax, expected results, and common mistakes
 - A safe **Try example** action that creates a complete practice project and leaves the current project untouched
 - Responsive presentation: a topic index beside the reference on desktop and a full-screen, touch-friendly guide on mobile
@@ -97,7 +104,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Practice Lab
 
-- Fifteen challenges for every supported project kind: five Starter, five Builder, and five Stretch challenges for Ruby, JavaScript, TypeScript, Python, Java, SQL, and HTML/CSS/JS
+- Fifteen challenges for every supported project kind: five Starter, five Builder, and five Stretch challenges for Ruby, JavaScript, TypeScript, Python, Java, Go, SQL, and HTML/CSS/JS
 - Separate private practice projects so a learner's current work is never overwritten
 - Plain-language steps, concept labels, and progressive hints that stay available while coding
 - Deterministic checks for required syntax and runtime output, or HTML/CSS/JS file requirements for Web projects
@@ -106,7 +113,7 @@ Create a small, open-source coding workspace where students and alumni can write
 
 ### Contextual Error Coach
 
-- Deterministic, private explanations for common Ruby, JavaScript, TypeScript, Python, Java, SQL, and Web preview errors
+- Deterministic, private explanations for common Ruby, JavaScript, TypeScript, Python, Java, Go, SQL, and Web preview errors
 - File and line context when the runtime provides it, followed by three focused next steps
 - Direct links into the relevant topic in the project’s language guide
 - No generated fixes or hidden code changes; the original terminal/console error remains visible
@@ -150,9 +157,9 @@ These can come later, but only after the simple learning loop is excellent.
 
 ## Language Expansion
 
-TypeScript and SQL are now supported, focused learning modes. SQL uses a resettable browser database with explicit schema/data files and accessible query results.
+TypeScript, SQL, and Go are now supported, focused learning modes. SQL uses a resettable browser database with explicit schema/data files and accessible query results. Go type-checks like `go build` and runs in a self-hosted browser interpreter; see [Go runtime](GO_RUNTIME.md).
 
-Go, C/C++, Perl, unrestricted package installation, and remote terminals are deferred. Each future language must justify its learner need, runtime cost, security boundary, guide content, practice progression, and school-device behavior before implementation.
+C/C++, Perl, unrestricted package installation, and remote terminals are deferred. Each future language must justify its learner need, runtime cost, security boundary, guide content, practice progression, and school-device behavior before implementation.
 
 ## Recommended Stack
 
@@ -165,6 +172,7 @@ Go, C/C++, Perl, unrestricted package installation, and remote terminals are def
 - TypeScript compiler API followed by QuickJS WASM for TypeScript
 - Pyodide WASM for Python
 - CheerpJ for Java 8
+- `go/types` and Yaegi compiled to WebAssembly for Go
 - Official SQLite WebAssembly for SQL
 - Sandboxed iframe for HTML/CSS/JS
 - PostgreSQL for users, projects, files, forks, and share metadata

@@ -20,7 +20,7 @@ web/src/
     PracticeSessionPanel.tsx  Active challenge instructions, hints, and check results
     ProjectSidebar.tsx        Desktop and mobile project navigation
     ProjectToolbar.tsx        Project metadata, visibility, history, and primary actions
-    RunnerPanel.tsx           Ruby/JavaScript/TypeScript/Python/Java terminal runner UI
+    RunnerPanel.tsx           Ruby/JavaScript/TypeScript/Python/Java/Go terminal runner UI
     SqlRunnerPanel.tsx        Persistent in-memory SQLite controls and accessible result tables
     WebPreview.tsx            Sandboxed HTML/CSS/JS preview UI
     WorkspaceDialogs.tsx      Controlled file, share, organization, action, and confirmation dialogs

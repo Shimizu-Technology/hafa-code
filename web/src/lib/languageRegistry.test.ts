@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { editorInsertsSpaces, editorTabSize } from './languageRegistry'
 import {
   FILE_LANGUAGES,
   PROJECT_KINDS,
   defaultEntryPath,
   inferFileLanguage,
+  GO_STARTUP_TIMEOUT_MS,
   projectKindDefinition,
   starterProject,
 } from './codeRunner'
 
 describe('language registry', () => {
   it('describes every supported project kind in display order', () => {
-    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'sql', 'web'])
-    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'TS', 'Python', 'Java', 'SQL', 'Web'])
+    expect(PROJECT_KINDS).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'go', 'sql', 'web'])
+    expect(PROJECT_KINDS.map((kind) => projectKindDefinition(kind).shortLabel)).toEqual(['Ruby', 'JS', 'TS', 'Python', 'Java', 'Go', 'SQL', 'Web'])
   })
 
   it('keeps runnable and preview-only project capabilities explicit', () => {
@@ -31,6 +33,13 @@ describe('language registry', () => {
     expect(projectKindDefinition('java').runner?.startupTimeoutMs).toBe(120_000)
     expect(projectKindDefinition('java').runner?.executionTimeoutMs).toBe(30_000)
     expect(projectKindDefinition('java').runner?.startupNote).toBe('The first Java run downloads the browser compiler and may take longer on a mobile connection.')
+    expect(projectKindDefinition('go').runner?.language).toBe('go')
+    expect(projectKindDefinition('go').entryPath).toBe('main.go')
+    expect(projectKindDefinition('go').runner?.terminalCommand('main.go')).toBe('go run .')
+    expect(projectKindDefinition('go').runner?.startupTimeoutMs).toBe(GO_STARTUP_TIMEOUT_MS)
+    expect(projectKindDefinition('go').runner?.executionTimeoutMs).toBeUndefined()
+    expect(projectKindDefinition('go').runner?.firstLoadLabel).toBe('Downloading Go (first time only)')
+    expect(projectKindDefinition('go').runner?.prewarm).toBeUndefined()
     expect(projectKindDefinition('sql').runner?.language).toBe('sql')
     expect(projectKindDefinition('sql').runner?.terminalCommand('main.sql')).toBe('sqlite3 :memory: < main.sql')
     expect(projectKindDefinition('web').runner).toBeUndefined()
@@ -55,16 +64,25 @@ describe('language registry', () => {
   })
 
   it('centralizes file extensions while preserving unknown-file fallbacks', () => {
-    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'sql', 'html', 'css', 'json', 'plain'])
+    expect(FILE_LANGUAGES).toEqual(['ruby', 'javascript', 'typescript', 'python', 'java', 'go', 'sql', 'html', 'css', 'json', 'plain'])
     expect(inferFileLanguage('lib/hello.rb', 'javascript')).toBe('ruby')
     expect(inferFileLanguage('src/index.mjs', 'ruby')).toBe('javascript')
     expect(inferFileLanguage('src/main.ts', 'ruby')).toBe('typescript')
     expect(inferFileLanguage('src/main.py', 'ruby')).toBe('python')
     expect(inferFileLanguage('src/Main.java', 'ruby')).toBe('java')
+    expect(inferFileLanguage('greeting.go', 'ruby')).toBe('go')
+    expect(inferFileLanguage('README', 'go')).toBe('plain')
     expect(inferFileLanguage('queries/report.sql', 'ruby')).toBe('sql')
     expect(inferFileLanguage('README', 'ruby')).toBe('ruby')
     expect(inferFileLanguage('README', 'javascript')).toBe('plain')
     expect(inferFileLanguage('README', 'python')).toBe('python')
     expect(inferFileLanguage('README', 'web')).toBe('plain')
+  })
+
+  it('indents Go with tabs like gofmt and keeps spaces elsewhere', () => {
+    expect(editorInsertsSpaces('go')).toBe(false)
+    expect(editorTabSize('go')).toBe(4)
+    expect(editorInsertsSpaces('python')).toBe(true)
+    expect(editorInsertsSpaces('javascript')).toBe(true)
   })
 })

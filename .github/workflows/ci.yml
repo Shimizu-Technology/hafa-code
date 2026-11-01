@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: api
@@ -76,11 +77,19 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: web/runtimes/go/go.mod
+          cache-dependency-path: web/runtimes/go/go.sum
+
       - name: Install dependencies
         run: npm ci
 
       - name: Test
         run: npm test
+
+      - name: Verify Go guide and practice content against the Go toolchain
+        run: npm run verify:go-content
 
       - name: Lint
         run: npm run lint
@@ -92,7 +101,8 @@ jobs:
         run: npm audit --audit-level=high
 
   classroom-e2e:
-    runs-on: ubuntu-latest
+    # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -125,6 +135,11 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: web/runtimes/go/go.mod
+          cache-dependency-path: web/runtimes/go/go.sum
 
       - name: Install web dependencies
         working-directory: web

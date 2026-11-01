@@ -19,6 +19,47 @@ describe('contextual error coach', () => {
     expect(advice?.steps).toHaveLength(3)
   })
 
+  it.each([
+    ['main.go:9:2: declared and not used: x', 'Go found a variable you never use', 'main.go · line 9', 'go-variables-types'],
+    ['main.go:5:2: "strings" imported and not used', 'This import is not used', 'main.go · line 5', 'go-output-comments'],
+    ['helper.go:3:9: undefined: total', 'Go cannot find that name', 'helper.go · line 3', 'go-variables-types'],
+    ['main.go:6:14: cannot use "five" (untyped string constant) as int value in variable declaration', 'These Go types do not match', 'main.go · line 6', 'go-variables-types'],
+    ['main.go:7:1: missing return', 'A function can finish without returning a value', 'main.go · line 7', 'go-functions-errors'],
+    ['main.go:4:8: package "net/http" is not available in Hafa Code\'s browser Go runner (available: fmt)', 'That package is not available here', 'main.go · line 4', 'go-output-comments'],
+    ['main.go:8:6: kai.Nme undefined (type Learner has no field or method Nme)', 'That field or method does not exist', 'main.go · line 8', 'go-structs-methods'],
+    ['main.go:6:18: min is a newer Go built-in that Hafa Code\'s browser interpreter does not support yet; compare the values with an if statement', 'This built-in is not available in Hafa Code yet', 'main.go · line 6', 'go-slices-maps'],
+    ["main.go:5:2: syntax error: unexpected keyword else, expected expression", 'Go could not read this syntax', 'main.go · line 5', 'go-conditionals'],
+    ['panic: reflect: slice index out of range\n\ngoroutine 1 [running]:\nmain.pick()\n\tmain.go:6:9\nmain.main()\n\tmain.go:11:14\nexit status 2', 'The index is outside the slice', 'main.go · line 6', 'go-slices-maps'],
+    ['panic: runtime error: index out of range [3] with length 1', 'The index is outside the slice', 'main.go', 'go-slices-maps'],
+    ['panic: assignment to entry in nil map\n\ngoroutine 1 [running]:\nmain.main()\n\tmain.go:5:2\nexit status 2', 'This map was never created', 'main.go · line 5', 'go-slices-maps'],
+    ['panic: reflect: call of reflect.Value.Field on zero Value\n\ngoroutine 1 [running]:\nmain.main()\n\tmain.go:17:14', 'Go followed a nil pointer', 'main.go · line 17', 'go-structs-methods'],
+    ['fatal error: all goroutines are asleep - deadlock!\nexit status 2', 'Every goroutine is waiting', 'main.go', 'go-goroutines-channels'],
+  ])('explains the Go message %s', (stderr, title, location, topic) => {
+    const advice = coachRunnerError('go', 'main.go', failure(stderr))
+    expect(advice).toMatchObject({ title, location, guideTopicId: topic })
+    expect(advice?.steps).toHaveLength(3)
+  })
+
+  it('explains the first Go compiler error when several are reported', () => {
+    const advice = coachRunnerError('go', 'main.go', failure('main.go:5:2: "strings" imported and not used\nmain.go:9:2: declared and not used: total\n'))
+    expect(advice).toMatchObject({ title: 'This import is not used', location: 'main.go · line 5' })
+  })
+
+  it('does not coach a learner panic that mentions "expected" as a syntax error', () => {
+    const advice = coachRunnerError('go', 'main.go', failure('panic: expected a positive number\n\ngoroutine 1 [running]:\nmain.main()\n\tmain.go:6:3\nexit status 2\n'))
+    expect(advice).toMatchObject({ title: 'Let’s decode this go error', location: 'main.go · line 6', guideTopicId: 'go-output-comments' })
+  })
+
+  it('falls back to general Go guidance for an unrecognized message', () => {
+    const advice = coachRunnerError('go', 'main.go', failure('panic: something unusual happened\nexit status 2'))
+    expect(advice).toMatchObject({ title: 'Let’s decode this go error', guideTopicId: 'go-output-comments', location: 'main.go' })
+  })
+
+  it('leads Go failures with the panic or first compiler message', () => {
+    expect(errorHeadline('go', 'panic: assignment to entry in nil map\n\ngoroutine 1 [running]:\nmain.main()\n\tmain.go:5:2\nexit status 2\n')).toBe('panic: assignment to entry in nil map')
+    expect(errorHeadline('go', 'main.go:9:2: declared and not used: x\nmain.go:10:2: declared and not used: y\n')).toBe('main.go:9:2: declared and not used: x')
+  })
+
   it.each(['python', 'java'] as const)('separates %s startup failure from learner loop advice', (kind) => {
     const advice = coachRunnerError(kind, kind === 'python' ? 'main.py' : 'Main.java', { status: 'timeout', failurePhase: 'startup', stdout: '', stderr: 'The browser runtime took too long to load.', durationMs: 90_000 })
     expect(advice).toMatchObject({ title: 'The browser runtime could not start', location: null })

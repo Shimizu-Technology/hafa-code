@@ -5,6 +5,8 @@ import { ADDITIONAL_STARTER_CHALLENGES } from './practiceChallenges/starter'
 import { ADDITIONAL_BUILDER_CHALLENGES } from './practiceChallenges/builder'
 import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
 import { eventHandlerBody } from './practiceChallenges/javascript'
+import { GO_CHALLENGES } from './practiceChallenges/go'
+import { GO_REFERENCE_SOLUTIONS } from './practiceChallenges/goSolutions'
 import {
   completePracticeChallenge,
   completedPracticeChallengeIds,
@@ -208,6 +210,37 @@ describe('practice challenge catalog', () => {
       } : undefined)
       expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
     })
+  })
+
+  it('gives every Go challenge an unfinished scaffold and a reference solution that meets its checks', () => {
+    expect(GO_CHALLENGES).toHaveLength(15)
+    expect(Object.keys(GO_REFERENCE_SOLUTIONS).sort()).toEqual(GO_CHALLENGES.map((challenge) => challenge.id).sort())
+    GO_CHALLENGES.forEach((challenge) => {
+      const success = { status: 'success' as const, stdout: challenge.expectedOutput!, stderr: '', durationMs: 1 }
+      expect(evaluatePracticeChallenge(challenge, challenge.project.files, success).passed, `${challenge.id} should require learner work`).toBe(false)
+
+      const files = [{ path: 'main.go', language: 'go' as const, content: GO_REFERENCE_SOLUTIONS[challenge.id] }]
+      const result = evaluatePracticeChallenge(challenge, files, success)
+      expect(result.passed, `${challenge.id} should accept its reference solution: ${JSON.stringify(result.checks)}`).toBe(true)
+    })
+  })
+
+  it('keeps checking Go code after a raw string that ends in a backslash', () => {
+    const challenge = practiceChallengeById('go-loop-stops')!
+    const source = 'package main\n\nimport "fmt"\n\nfunc main() {\n\tfolder := `C:\\stops\\`\n\tfmt.Println(folder)\n\tfor stop := 1; stop <= 3; stop++ {\n\t\tfmt.Println("Stop", stop)\n\t}\n}\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.go', language: 'go', content: source }], {
+      status: 'success', stdout: 'Stop 1\nStop 2\nStop 3', stderr: '', durationMs: 1,
+    })
+    expect(result.checks[0]).toMatchObject({ label: 'Use a for loop', passed: true })
+  })
+
+  it('ignores Go syntax that appears only in comments or raw strings', () => {
+    const challenge = practiceChallengeById('go-loop-stops')!
+    const source = 'package main\n\nimport "fmt"\n\nfunc main() {\n\t// for i := 1; i <= 3; i++ {\n\tnote := `for stop := 1; stop <= 3; stop++ {\\`\n\tfmt.Println(note)\n}\n'
+    const result = evaluatePracticeChallenge(challenge, [{ path: 'main.go', language: 'go', content: source }], {
+      status: 'success', stdout: 'Stop 1\nStop 2\nStop 3', stderr: '', durationMs: 1,
+    })
+    expect(result.checks[0]).toMatchObject({ label: 'Use a for loop', passed: false })
   })
 
   it('allows the custom invalid-email Join handler to announce its error', () => {

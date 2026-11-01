@@ -18,6 +18,7 @@ Rails API + React SPA
       │   ├─ TypeScript compiler + QuickJS WASM
       │   ├─ Pyodide Python WASM
       │   ├─ CheerpJ Java runtime
+      │   ├─ go/types + Yaegi Go WebAssembly
       │   └─ SQLite WASM in-memory database
       ├─ HTML preview iframe
       └─ Project storage adapter
@@ -106,6 +107,21 @@ The first release targets Java 8 language and library behavior. It does not
 provide packages, Maven/Gradle, external JARs, desktop GUI support, or a general
 network client. See [Java runtime](JAVA_RUNTIME.md) for the exact boundary.
 
+### Go
+
+Use one self-hosted WebAssembly module, built from `web/runtimes/go` with the Go toolchain pinned in its `go.mod`, inside a dedicated module worker.
+
+- validate paths, the shared file and byte limits, a `.go` entry, top-level `.go` files only, and the absence of `go.mod`, `go.sum`, and `go.work` before loading the runtime
+- report syntax errors from the Go compiler's own parser and type errors from `go/types`, using gc export data for a curated standard-library allowlist embedded at build time, so messages match `go build`
+- interpret programs that pass the check with Yaegi, whose bindings are generated for exactly the same allowlist
+- instantiate a fresh copy of the compiled module for each run, so goroutines, globals, and `os.Exit` end with the run; keep the compiled module warm in the worker
+- route stdout, stderr, and stdin through a `wasm_exec.js` `fs` replacement with no file or directory access
+- report Go's deadlock error when the instance idles with no pending timer or stdin read
+- terminate the worker for Stop or the shared execution deadline
+- keep the runtime out of the service-worker application shell and enforce a module size budget in the production-build check
+
+The build script runs before `dev`, `build`, `test`, and `test:e2e`, so Netlify and CI need Go 1.21+ available. See [Go runtime](GO_RUNTIME.md) for the learner boundary, measured sizes, and the documented differences between Yaegi and compiled Go.
+
 ### SQL
 
 Use the official `@sqlite.org/sqlite-wasm` distribution and its object-oriented API inside a dedicated Web Worker.
@@ -134,7 +150,7 @@ Do not allow same-origin unless there is a specific reason.
 ## Data Model Draft
 
 ```ts
-type ProjectKind = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql' | 'web'
+type ProjectKind = 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'go' | 'sql' | 'web'
 
 type Project = {
   id: string
@@ -151,7 +167,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  language: 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'sql' | 'html' | 'css'
+  language: 'ruby' | 'javascript' | 'typescript' | 'python' | 'java' | 'go' | 'sql' | 'html' | 'css'
   content: string
 }
 ```
