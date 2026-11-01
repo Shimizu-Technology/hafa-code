@@ -20,7 +20,7 @@ const MODULE_DIRECTORY = join(WEB_DIRECTORY, 'runtimes', 'go')
 const DIST_DIRECTORY = join(MODULE_DIRECTORY, 'dist')
 const BUILD_DIRECTORY = join(MODULE_DIRECTORY, '.build')
 const STAMP_PATH = join(DIST_DIRECTORY, 'build-stamp.json')
-const GENERATED = [/^symbols\/zz_.*\.go$/, /^stdexport\/data\//, /^\.build\//, /^dist\//]
+const GENERATED = [/^symbols\/zz_.*\.go$/, /^stdexport\/data\//, /^gcsyntax\//, /^\.build\//, /^dist\//]
 
 const native = process.argv.includes('--native')
 const toolchain = /^toolchain\s+(go\S+)$/m.exec(readFileSync(join(MODULE_DIRECTORY, 'go.mod'), 'utf8'))?.[1]

@@ -6,6 +6,7 @@ import { ADDITIONAL_STRETCH_CHALLENGES } from './practiceChallenges/stretch'
 import { eventHandlerBody } from './practiceChallenges/javascript'
 import { TYPESCRIPT_CHALLENGES } from './practiceChallenges/typescript'
 import { SQL_CHALLENGES } from './practiceChallenges/sql'
+import { GO_CHALLENGES } from './practiceChallenges/go'
 
 export type PracticeDifficulty = 'Starter' | 'Builder' | 'Stretch'
 
@@ -254,6 +255,7 @@ export const PRACTICE_CHALLENGES = Object.freeze([
   ...runtimeChallenges,
   ...webChallenges,
   ...TYPESCRIPT_CHALLENGES,
+  ...GO_CHALLENGES,
   ...SQL_CHALLENGES,
   ...ADDITIONAL_STARTER_CHALLENGES,
   ...ADDITIONAL_BUILDER_CHALLENGES,
@@ -295,8 +297,11 @@ function sourceWithoutComments(file: ProjectFile) {
     ? file.content.replace(/^=begin\b[\s\S]*?(?:^=end\b[^\n]*|$(?![\s\S]))/gm, (comment) => comment.replace(/[^\n]/g, ' '))
     : file.content
   const lineComment = file.language === 'ruby' || file.language === 'python' ? '#' : file.language === 'sql' ? '--' : '//'
-  const hasLineComments = ['ruby', 'python', 'javascript', 'typescript', 'java', 'sql'].includes(file.language)
-  const hasBlockComments = ['javascript', 'typescript', 'java', 'sql', 'css'].includes(file.language)
+  const hasLineComments = ['ruby', 'python', 'javascript', 'typescript', 'java', 'go', 'sql'].includes(file.language)
+  const hasBlockComments = ['javascript', 'typescript', 'java', 'go', 'sql', 'css'].includes(file.language)
+  // Go's backtick strings are raw: a backslash inside them is an ordinary character.
+  const backtickQuotes = ['javascript', 'typescript', 'go'].includes(file.language)
+  const rawBackticks = file.language === 'go'
   let result = ''
   let quote: string | null = null
   let escaped = false
@@ -308,12 +313,12 @@ function sourceWithoutComments(file: ProjectFile) {
     if (quote) {
       result += char
       if (escaped) escaped = false
-      else if (char === '\\') escaped = true
+      else if (char === '\\' && !(rawBackticks && quote === '`')) escaped = true
       else if (char === quote) quote = null
       continue
     }
 
-    if (char === '"' || char === "'" || ((file.language === 'javascript' || file.language === 'typescript') && char === '`')) {
+    if (char === '"' || char === "'" || (backtickQuotes && char === '`')) {
       quote = char
       result += char
       continue

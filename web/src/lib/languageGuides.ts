@@ -36,6 +36,7 @@ const ENTRY_PATHS: Record<Exclude<ProjectKind, 'web'>, string> = {
   typescript: 'main.ts',
   python: 'main.py',
   java: 'Main.java',
+  go: 'main.go',
   sql: 'main.sql',
 }
 
@@ -45,6 +46,7 @@ const FILE_LANGUAGES = {
   typescript: 'typescript',
   python: 'python',
   java: 'java',
+  go: 'go',
   sql: 'sql',
 } as const
 
@@ -867,6 +869,267 @@ function sqlTopic(input: TopicInput) {
   })
 }
 
+const goTopics = [
+  runnableTopic('go', {
+    id: 'go-output-comments',
+    title: 'Output and comments',
+    summary: 'Every Go program starts in `package main` at `func main()`. The `fmt` package prints: `Println` adds spaces and a newline, `Printf` follows a format string.',
+    keywords: ['println', 'print', 'printf', 'fmt', 'comment', 'output', 'package main', 'import'],
+    code: `package main
+
+import "fmt"
+
+func main() {
+	// Go ignores this line.
+	fmt.Println("Hafa adai!")
+	fmt.Print("Same line... ")
+	fmt.Println("finished")
+	fmt.Printf("%s has %d lessons\\n", "Lina", 3)
+}
+`,
+    expectedOutput: 'Hafa adai!\nSame line... finished\nLina has 3 lessons',
+    commonMistake: 'An import you never use stops the build with `imported and not used`. Remove the import or use the package.',
+  }),
+  runnableTopic('go', {
+    id: 'go-variables-types',
+    title: 'Variables, types, and zero values',
+    summary: '`:=` declares and infers a new variable inside a function; `var` names the type. A variable declared without a value starts at its zero value: 0, "", or false.',
+    keywords: ['variable', ':=', 'var', 'int', 'float64', 'string', 'bool', 'zero value', 'type', 'const'],
+    code: `package main
+
+import "fmt"
+
+func main() {
+	var name string = "Mia"
+	lessons := 4
+	score := 9.5
+	ready := true
+	var streak int
+	var village string
+	const island = "Guam"
+
+	fmt.Println(name, "has", lessons, "lessons in", island)
+	fmt.Println(score, ready)
+	fmt.Printf("streak=%d village=%q\\n", streak, village)
+	lessons = lessons + 1
+	fmt.Println("now", lessons)
+}
+`,
+    expectedOutput: 'Mia has 4 lessons in Guam\n9.5 true\nstreak=0 village=""\nnow 5',
+    commonMistake: '`:=` creates a new variable; use `=` to change one that already exists. Go also refuses to build when a variable is declared and never used.',
+  }),
+  runnableTopic('go', {
+    id: 'go-conditionals',
+    title: 'if, else, and switch',
+    summary: 'Conditions need no parentheses, but the braces are required. `switch` runs only the first matching case, so no `break` is needed.',
+    keywords: ['if', 'else', 'switch', 'case', 'default', 'condition', 'comparison', 'boolean'],
+    code: `package main
+
+import "fmt"
+
+func main() {
+	score := 82
+	if score >= 90 {
+		fmt.Println("Excellent")
+	} else if score >= 75 {
+		fmt.Println("Good work")
+	} else {
+		fmt.Println("Keep practicing")
+	}
+
+	if remaining := 100 - score; remaining > 10 {
+		fmt.Println("Points to 100:", remaining)
+	}
+
+	day := "Sat"
+	switch day {
+	case "Sat", "Sun":
+		fmt.Println("Weekend")
+	default:
+		fmt.Println("School day")
+	}
+}
+`,
+    expectedOutput: 'Good work\nPoints to 100: 18\nWeekend',
+    commonMistake: 'Put `else` on the same line as the closing brace: `} else {`. A new line before `else` is a syntax error in Go.',
+  }),
+  runnableTopic('go', {
+    id: 'go-loops',
+    title: 'for loops',
+    summary: '`for` is Go’s only loop. Use the three-part form to count, a condition alone as a while loop, and `range` to walk a slice or map.',
+    keywords: ['for', 'loop', 'range', 'while', 'break', 'continue', 'index', 'repeat'],
+    code: `package main
+
+import "fmt"
+
+func main() {
+	for lap := 1; lap <= 3; lap++ {
+		fmt.Println("Lap", lap)
+	}
+
+	countdown := 3
+	for countdown > 0 {
+		fmt.Println(countdown)
+		countdown--
+	}
+
+	stops := []string{"Hagåtña", "Tamuning"}
+	for index, stop := range stops {
+		fmt.Println(index, stop)
+	}
+}
+`,
+    expectedOutput: 'Lap 1\nLap 2\nLap 3\n3\n2\n1\n0 Hagåtña\n1 Tamuning',
+    commonMistake: 'A `for condition { }` loop must change something its condition depends on; otherwise it runs until Hafa Code stops the program.',
+  }),
+  runnableTopic('go', {
+    id: 'go-slices-maps',
+    title: 'Slices and maps',
+    summary: 'A slice is a growable list: `append` returns the longer slice. A map looks up values by key, and the two-value form tells you whether the key exists.',
+    keywords: ['slice', 'append', 'len', 'map', 'make', 'key', 'delete', 'sort', 'comma ok', 'array'],
+    code: `package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func main() {
+	scores := []int{88, 72, 95}
+	scores = append(scores, 61)
+	fmt.Println(scores, len(scores))
+	fmt.Println(scores[1:3])
+
+	villages := map[string]int{"Dededo": 3, "Yigo": 1}
+	villages["Agat"] = 2
+	villages["Yigo"]++
+	count, found := villages["Inarajan"]
+	fmt.Println(count, found)
+
+	names := make([]string, 0, len(villages))
+	for name := range villages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Println(name, villages[name])
+	}
+}
+`,
+    expectedOutput: '[88 72 95 61] 4\n[72 95]\n0 false\nAgat 2\nDededo 3\nYigo 2',
+    commonMistake: 'Go visits map keys in a random order, so sort the keys when order matters. Writing to a map declared with `var m map[string]int` panics until you create it with `make` or a literal.',
+  }),
+  runnableTopic('go', {
+    id: 'go-functions-errors',
+    title: 'Functions, multiple returns, and errors',
+    summary: 'Functions declare parameter and result types. Go returns an `error` value as the last result instead of throwing exceptions, so callers check `err != nil`.',
+    keywords: ['func', 'function', 'return', 'multiple return', 'error', 'errors.New', 'nil', 'strconv', 'Atoi'],
+    code: `package main
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+)
+
+func split(total, people int) (int, error) {
+	if people == 0 {
+		return 0, errors.New("cannot split between zero people")
+	}
+	return total / people, nil
+}
+
+func main() {
+	share, err := split(12, 4)
+	fmt.Println(share, err)
+
+	_, err = split(12, 0)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	age, err := strconv.Atoi("17")
+	fmt.Println(age+1, err)
+}
+`,
+    expectedOutput: '3 <nil>\nerror: cannot split between zero people\n18 <nil>',
+    commonMistake: 'Every path through a function with results must `return`. Go reports `missing return` when one branch can reach the closing brace.',
+  }),
+  runnableTopic('go', {
+    id: 'go-structs-methods',
+    title: 'Structs and methods',
+    summary: 'A struct groups named fields. A method is a function with a receiver; a pointer receiver such as `(l *Learner)` can change the struct.',
+    keywords: ['struct', 'type', 'field', 'method', 'receiver', 'pointer', '&', 'Sprintf'],
+    code: `package main
+
+import "fmt"
+
+type Learner struct {
+	Name    string
+	Lessons int
+}
+
+func (l Learner) Summary() string {
+	return fmt.Sprintf("%s: %d lessons", l.Name, l.Lessons)
+}
+
+func (l *Learner) Complete() {
+	l.Lessons++
+}
+
+func main() {
+	kai := Learner{Name: "Kai", Lessons: 2}
+	kai.Complete()
+	fmt.Println(kai.Summary())
+	fmt.Printf("%+v\\n", kai)
+}
+`,
+    expectedOutput: 'Kai: 3 lessons\n{Name:Kai Lessons:3}',
+    commonMistake: 'A value receiver such as `(l Learner)` works on a copy, so changes disappear when the method returns. Use a pointer receiver when a method must update the struct.',
+  }),
+  runnableTopic('go', {
+    id: 'go-goroutines-channels',
+    title: 'Goroutines and channels',
+    summary: '`go f()` starts a function running alongside the rest of the program. Channels pass values between goroutines, and a `sync.WaitGroup` waits for them to finish.',
+    keywords: ['goroutine', 'go', 'channel', 'chan', 'WaitGroup', 'sync', 'concurrency', 'close', 'deadlock'],
+    code: `package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func square(n int, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	results <- n * n
+}
+
+func main() {
+	results := make(chan int, 3)
+	var wg sync.WaitGroup
+	for n := 1; n <= 3; n++ {
+		wg.Add(1)
+		go square(n, results, &wg)
+	}
+	wg.Wait()
+	close(results)
+
+	total := 0
+	for value := range results {
+		total += value
+	}
+	fmt.Println("Total:", total)
+
+	done := make(chan string)
+	go func() { done <- "worker finished" }()
+	fmt.Println(<-done)
+}
+`,
+    expectedOutput: 'Total: 14\nworker finished',
+    commonMistake: '`main` does not wait for goroutines by itself. Wait with a `WaitGroup` or a channel receive, and close a channel before ranging over it—otherwise Go stops with “all goroutines are asleep - deadlock!”',
+  }),
+]
+
 const sqlTopics = [
   sqlTopic({
     id: 'sql-select',
@@ -1189,6 +1452,12 @@ export const LANGUAGE_GUIDES = {
     label: 'Java',
     introduction: 'A statically typed, object-oriented language whose structure and syntax provide a strong bridge toward Salesforce Apex.',
     topics: javaTopics,
+  },
+  go: {
+    kind: 'go',
+    label: 'Go',
+    introduction: 'A compiled, statically typed language with small, explicit syntax, errors as values, and goroutines for concurrent work.',
+    topics: goTopics,
   },
   sql: {
     kind: 'sql',

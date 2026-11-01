@@ -4,10 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-go-runtime.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-go-runtime.mjs",
     "build": "tsc -b && vite build && node scripts/verify-production-build.mjs",
     "lint": "eslint .",
+    "pretest": "node scripts/build-go-runtime.mjs",
     "test": "vitest run",
+    "verify:go-content": "node scripts/build-go-runtime.mjs --native && HAFA_VERIFY_GO_CONTENT=1 vitest run src/lib/goContent.test.ts",
     "test:e2e": "playwright test",
     "starter-link": "node scripts/build-starter-link.ts",
     "preview": "vite preview"

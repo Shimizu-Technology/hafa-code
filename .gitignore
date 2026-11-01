@@ -15,6 +15,7 @@ web/runtimes/go/dist/
 web/runtimes/go/.build/
 web/runtimes/go/symbols/zz_*.go
 web/runtimes/go/stdexport/data/
+web/runtimes/go/gcsyntax/
 
 # Env / secrets
 .env

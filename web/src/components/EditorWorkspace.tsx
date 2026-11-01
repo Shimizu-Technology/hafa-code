@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { projectKindDefinition, type ProjectFile, type SavedProject } from '../lib/codeRunner'
-import { editorTabSize, projectKindCanRun } from '../lib/languageRegistry'
+import { editorInsertsSpaces, editorTabSize, projectKindCanRun } from '../lib/languageRegistry'
 import { defineHafaEditorThemes, type HafaEditorTheme } from '../lib/monacoThemes'
 import type { RunnerOutcome } from '../lib/runnerOutcome'
 import type { ErrorCoachContext } from '../lib/errorCoach'
@@ -299,7 +299,7 @@ export function EditorWorkspace({
               lineHeight: 1.6,
               tabSize: editorTabSize(activeFile.language),
               detectIndentation: false,
-              insertSpaces: true,
+              insertSpaces: editorInsertsSpaces(activeFile.language),
               wordWrap: 'on',
               automaticLayout: true,
               scrollBeyondLastLine: false,

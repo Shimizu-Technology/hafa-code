@@ -16,6 +16,7 @@ import 'monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCom
 import 'monaco-editor/esm/vs/editor/standalone/browser/referenceSearch/standaloneReferenceSearch.js'
 import 'monaco-editor/esm/vs/editor/standalone/browser/toggleHighContrast/toggleHighContrast.js'
 import 'monaco-editor/esm/vs/basic-languages/css/css.contribution.js'
+import 'monaco-editor/esm/vs/basic-languages/go/go.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/html/html.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/java/java.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js'

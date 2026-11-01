@@ -1,8 +1,9 @@
 // Command hafagen generates the build inputs that must match the pinned Go
 // toolchain and Yaegi module: Yaegi symbol bindings and gc export data for
-// every package in allowlist.Packages, plus a patched copy of the Yaegi
-// interpreter (see yaegiPatches). Run it with GOOS=js GOARCH=wasm so
-// the bindings and export data describe the browser target.
+// every package in allowlist.Packages, a copy of the Go compiler's syntax
+// parser, and a patched copy of the Yaegi interpreter (see yaegiPatches).
+// Run it with GOOS=js GOARCH=wasm so the bindings and export data describe
+// the browser target.
 package main
 
 import (
@@ -30,6 +31,9 @@ func run() error {
 		return err
 	}
 	if err := writeExportData(filepath.Join("stdexport", "data")); err != nil {
+		return err
+	}
+	if err := writeCompilerSyntax("gcsyntax"); err != nil {
 		return err
 	}
 	return writePatchedModule(".build")
@@ -196,6 +200,44 @@ func sameBltn(a, b bltn) bool {
 	return *(*unsafe.Pointer)(unsafe.Pointer(&a)) == *(*unsafe.Pointer)(unsafe.Pointer(&b))
 }
 `
+
+// writeCompilerSyntax copies the Go compiler's own parser
+// (cmd/compile/internal/syntax) from the pinned toolchain, so syntax errors
+// use exactly the wording `go build` prints. It depends only on the public
+// standard library; Go's BSD license covers the copy.
+func writeCompilerSyntax(dir string) error {
+	command := exec.Command("go", "env", "GOROOT")
+	command.Stderr = os.Stderr
+	goroot, err := command.Output()
+	if err != nil {
+		return fmt.Errorf("locate GOROOT: %w", err)
+	}
+	source := filepath.Join(strings.TrimSpace(string(goroot)), "src", "cmd", "compile", "internal", "syntax")
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(source, name))
+		if err != nil {
+			return err
+		}
+		if bytes.Contains(data, []byte("\"cmd/")) || bytes.Contains(data, []byte("\"internal/")) {
+			return fmt.Errorf("%s now imports a toolchain-internal package", name)
+		}
+		if err := copyFile(filepath.Join(source, name), filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // yaegiPackages are the Yaegi module directories the runner compiles.
 var yaegiPackages = []string{"interp", "internal/unsafe2", "stdlib/generic"}

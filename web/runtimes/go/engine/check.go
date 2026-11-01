@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/Shimizu-Technology/hafa-code/web/runtimes/go/allowlist"
+	syntax "github.com/Shimizu-Technology/hafa-code/web/runtimes/go/gcsyntax"
 	"github.com/Shimizu-Technology/hafa-code/web/runtimes/go/stdexport"
 )
 
@@ -69,6 +70,24 @@ func Check(files []File) []Diagnostic {
 	var diagnostics []Diagnostic
 	add := func(position token.Position, message string) {
 		diagnostics = append(diagnostics, Diagnostic{Path: position.Filename, Line: position.Line, Column: position.Column, Message: message})
+	}
+
+	// The compiler's own parser gives syntax errors the exact `go build`
+	// wording; go/parser below only builds the tree for go/types.
+	// Like the compiler, keep only the first syntax error on each line.
+	for _, source := range sources {
+		lastLine := 0
+		syntax.Parse(syntax.NewFileBase(source.Path), strings.NewReader(source.Content), func(err error) {
+			var syntaxError syntax.Error
+			if !errors.As(err, &syntaxError) || int(syntaxError.Pos.Line()) == lastLine {
+				return
+			}
+			lastLine = int(syntaxError.Pos.Line())
+			add(token.Position{Filename: source.Path, Line: lastLine, Column: int(syntaxError.Pos.Col())}, syntaxError.Msg)
+		}, nil, 0)
+	}
+	if len(diagnostics) > 0 {
+		return finish(diagnostics)
 	}
 
 	var parsed []*ast.File
