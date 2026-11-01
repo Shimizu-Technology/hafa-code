@@ -171,7 +171,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   text-decoration: none;
 }
 
-.lab-back:hover { text-decoration: underline; }
 
 .lab-title {
   display: flex;
@@ -229,7 +228,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   padding-right: var(--space-3);
 }
 
-.lab-button:hover:not(:disabled) { border-color: var(--text-muted); }
 .lab-button:disabled, .lab-select:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .lab-button.primary {
@@ -238,7 +236,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   color: var(--action-primary-ink);
 }
 
-.lab-button.primary:hover:not(:disabled) { background: var(--action-primary-hover); }
 
 .lab-button.icon {
   width: var(--control-md);
@@ -382,7 +379,8 @@ code, kbd, pre { font-family: var(--font-mono); }
   font-weight: 600;
 }
 
-.lab-title-input:hover, .lab-title-input:focus { border-color: var(--border-strong); background: var(--surface-field); }
+
+.lab-title-input:focus { border-color: var(--border-strong); background: var(--surface-field); }
 
 .lab-file-name {
   padding: 2px var(--space-2);
@@ -744,6 +742,13 @@ code, kbd, pre { font-family: var(--font-mono); }
 }
 
 .lab-footer p { margin: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  .lab-back:hover { text-decoration: underline; }
+  .lab-button:hover:not(:disabled) { border-color: var(--text-muted); }
+  .lab-button.primary:hover:not(:disabled) { background: var(--action-primary-hover); }
+  .lab-title-input:hover { border-color: var(--border-strong); background: var(--surface-field); }
+}
 
 @media (max-width: 1100px) {
   .lab-main { grid-template-columns: minmax(0, 1fr); }

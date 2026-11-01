@@ -677,7 +677,9 @@ textarea {
   text-decoration: none;
 }
 
-.menu-link:hover { background: var(--surface-sunken); }
+@media (hover: hover) and (pointer: fine) {
+  .menu-link:hover { background: var(--surface-sunken); }
+}
 
 .menu-toggle {
   justify-content: space-between;
