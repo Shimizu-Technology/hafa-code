@@ -663,6 +663,28 @@ textarea {
 
 .menu-item.danger-quiet { border-color: transparent; }
 
+/* A menu row that navigates to another page (the Labs entry). */
+.menu-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--text-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .menu-link:hover { background: var(--surface-sunken); }
+}
+
+@media (pointer: coarse) {
+  .menu-link { min-height: var(--control-lg); }
+}
+
 .menu-toggle {
   justify-content: space-between;
   width: 100%;
@@ -1272,6 +1294,11 @@ textarea {
 }
 
 .project-card.active small { color: var(--text-muted); }
+
+@media (hover: hover) and (pointer: fine) {
+  /* Hover uses the sunken surface too, where faint text drops below 4.5:1 contrast. */
+  .project-card:hover small { color: var(--text-muted); }
+}
 
 .mobile-project-menu,
 .mobile-home-panel,

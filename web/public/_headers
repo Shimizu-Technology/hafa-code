@@ -29,6 +29,41 @@
 /javaRunner.bootstrap.js
   Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cjrtnc.leaningtech.com; worker-src 'none'; connect-src https://cjrtnc.leaningtech.com https://javafiddle.leaningtech.com;
 
+# Rust Lab (experimental, docs/RUST_LAB.md). Cross-origin isolation is completed only here: /*
+# already sends COOP same-origin, and COEP is added for the lab alone, because the in-browser rustc
+# needs SharedArrayBuffer and COEP site-wide would block Clerk and CheerpJ. Netlify serves one value
+# for a header named by several matching rules (the specific rule's, as for javaRunner.bootstrap.js
+# below), so this CSP replaces the workspace CSP here. COOP is left to /* alone so isolation does
+# not depend on how duplicate headers are combined.
+/labs/rust/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; frame-src 'none';
+
+# Lab workers must carry COEP themselves to share memory with the isolated page.
+/assets/rustLabToolchain.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self';
+
+/assets/rustLabCompiler.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self';
+
+/assets/rustLabBackground.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self';
+
+/assets/rustLabThread.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'none'; connect-src 'self';
+
+/assets/rustLabEditor.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self'; worker-src 'none'; connect-src 'self';
+
+/assets/rustLabProgram.worker-*.js
+  Cross-Origin-Embedder-Policy: require-corp
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'none'; connect-src 'self';
+
 /preview-frame.html
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

@@ -17,6 +17,7 @@ A focused alternative to Replit that removes installation and account friction f
 - A dockable learning sidecar with per-language syntax guides, practice challenges, and contextual error coaching
 - Save, fork, share, and remix beginner-friendly projects
 - Optional Clerk sign-in with Rails-backed cloud projects
+- An experimental Rust Lab at `/labs/rust/` that compiles Rust in desktop browsers (separate page, local projects only)
 
 Hafa Code intentionally stays smaller than a general cloud IDE. It keeps the first learning loop—open, write, run, understand, revise—fast and approachable, while classroom organizations add teacher visibility and feedback without giving teachers edit access to student source.
 
@@ -45,6 +46,7 @@ hafa-code/
 - [FDMS classroom launch readiness and action plan](docs/FDMS_CLASSROOM_LAUNCH_PLAN.md)
 - [Classroom operations and incident runbook](docs/CLASSROOM_OPERATIONS_RUNBOOK.md)
 - [Lesson starter links (CSG Learn → Hafa Code)](docs/LEARN_STARTER_LINKS.md)
+- [Rust Lab (experimental)](docs/RUST_LAB.md)
 
 ## Security Model
 
@@ -58,6 +60,7 @@ Run untrusted code in the browser, not on Rails.
 - Go is type-checked with `go/types` and interpreted by Yaegi in one self-hosted WebAssembly module inside a dedicated worker, downloaded only when Go is first run.
 - SQL runs in an in-memory SQLite database inside a dedicated worker, with explicit schema/seed files and an accessible results table.
 - HTML/CSS/JS preview runs in a sandboxed iframe.
+- The experimental Rust Lab compiles with rustc in WebAssembly workers on its own cross-origin-isolated page; the compiler (38.7 MB) downloads only after the learner agrees, and the compiled program runs in a separate worker.
 - Rails stores users, project metadata, and source files only.
 
 Java is intentionally a focused practice environment rather than a full desktop JDK. It supports `Main.java`, helper classes in the default package, compiler diagnostics, standard input, stdout/stderr, and stop/time limits. Maven, Gradle, third-party dependencies, packages, GUI apps, and arbitrary network access are not part of the first release. See [Java runtime](docs/JAVA_RUNTIME.md) and [third-party notices](THIRD_PARTY_NOTICES.md).

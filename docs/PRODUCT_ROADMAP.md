@@ -109,6 +109,14 @@ Go now ships as a focused fundamentals workspace. Leon Shimizu owns its maintena
 - [ ] Record first-run and warm-run measurements on the actual FDMS devices and network before treating local development measurements as representative.
 - [ ] Revisit Yaegi's documented differences from compiled Go (panic wording, interface printing, `errors.As`, some generics) when upstream fixes them.
 
+## Experimental: Rust Lab
+
+A separate, clearly labeled Rust Lab (`/labs/rust/`) lets desktop learners try Rust with a
+one-time 38.7 MB compiler download, a short guide, five challenges, and error coaching for
+ownership and borrowing errors. It is local-only and is not a project kind. Promotion to a
+full language depends on the graduation criteria in [Rust Lab](RUST_LAB.md): a maintainable
+toolchain, school-device measurements, cross-browser stability, and a course need.
+
 ## P2: classroom usability
 
 - Add saved review filters plus explicit unread-feedback and language controls when classroom volume justifies them.

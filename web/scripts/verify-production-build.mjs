@@ -263,6 +263,77 @@ for (const chunk of sidecarChunks) {
 }
 console.log(`Verified Clerk (${clerkChunks[0]}) and the learning tools (${sidecarChunks.join(', ')}) load lazily; only the learning tools are precached`)
 
+// Rust Lab (experimental, docs/RUST_LAB.md): a separate cross-origin-isolated page. COEP and its
+// strict CSP apply to /labs/rust/ and the lab's workers only; the workspace keeps its headers.
+const RUST_LAB_PAGE_RULE = '/labs/rust/*'
+const RUST_LAB_WORKERS = {
+  rustLabToolchain: { workerSrc: ["'self'"] },
+  rustLabCompiler: { workerSrc: ["'self'"] },
+  rustLabBackground: { workerSrc: ["'self'"] },
+  rustLabThread: { workerSrc: ["'none'"] },
+  rustLabProgram: { workerSrc: ["'none'"] },
+  rustLabEditor: { workerSrc: ["'none'"], scriptSrc: ["'self'"] },
+}
+const rustLabPageRule = headers.get(RUST_LAB_PAGE_RULE)
+assert(rustLabPageRule, 'Missing the Rust Lab header rule')
+assert.equal(rustLabPageRule.get('cross-origin-embedder-policy'), 'require-corp', 'The Rust Lab page must be cross-origin isolated (COEP)')
+assert.equal(headers.get('/*').get('cross-origin-opener-policy'), 'same-origin', 'The Rust Lab page needs COOP same-origin from the site-wide rule')
+for (const [pattern, values] of headers) {
+  // Isolation must not depend on how the host combines a header named by two matching rules.
+  if (pattern !== '/*') assert(!values.has('cross-origin-opener-policy'), `COOP must only be set once, by /*; ${pattern} repeats it`)
+}
+const rustLabPolicy = rustLabPageRule.get('content-security-policy')
+assert(rustLabPolicy, 'Missing the Rust Lab Content-Security-Policy')
+assert.deepEqual(directiveSources(rustLabPolicy, 'script-src'), ["'self'", "'wasm-unsafe-eval'"], 'Rust Lab scripts must come from this origin only')
+assert.deepEqual(directiveSources(rustLabPolicy, 'connect-src'), ["'self'"], 'The Rust Lab must not connect to any other origin')
+assert.deepEqual(directiveSources(rustLabPolicy, 'worker-src'), ["'self'"], 'Rust Lab workers must come from this origin (no blob: workers)')
+assert.deepEqual(directiveSources(rustLabPolicy, 'frame-ancestors'), ["'none'"], 'The Rust Lab must not be framed')
+for (const [pattern, values] of headers) {
+  if (!values.has('cross-origin-embedder-policy')) continue
+  assert(pattern === RUST_LAB_PAGE_RULE || /^\/assets\/rustLab[A-Za-z]+\.worker-\*\.js$/.test(pattern), `Only the Rust Lab may send COEP; found it on ${pattern}`)
+}
+assert(!headers.get('/*').has('cross-origin-embedder-policy'), 'The workspace must not be cross-origin isolated; COEP would block Clerk and CheerpJ')
+
+for (const [workerName, { workerSrc, scriptSrc = ["'self'", "'wasm-unsafe-eval'"] }] of Object.entries(RUST_LAB_WORKERS)) {
+  const headerPath = `/assets/${workerName}.worker-*.js`
+  const rule = headers.get(headerPath)
+  assert(rule, `Missing the ${workerName} worker header rule`)
+  assert.equal(rule.get('cross-origin-embedder-policy'), 'require-corp', `${workerName} must send COEP to share memory with the lab page`)
+  const policy = rule.get('content-security-policy')
+  assert.deepEqual(directiveSources(policy, 'script-src'), scriptSrc, `${workerName} CSP script-src`)
+  assert.deepEqual(directiveSources(policy, 'connect-src'), ["'self'"], `${workerName} CSP connect-src`)
+  assert.deepEqual(directiveSources(policy, 'worker-src'), workerSrc, `${workerName} CSP worker-src`)
+  const workerAssets = assetNames.filter((name) => new RegExp(`^${workerName}\\.worker-[^.]+\\.js$`).test(name))
+  assert.equal(workerAssets.length, 1, `Expected one ${workerName} worker asset, found ${workerAssets.length}`)
+  assert(wildcardPathMatches(headerPath, `/assets/${workerAssets[0]}`), `${workerAssets[0]} is not covered by ${headerPath}`)
+  assert(!serviceWorker.includes(workerAssets[0]), `${workerAssets[0]} must stay out of the service-worker app shell`)
+}
+
+const rustLabHtml = await readFile(new URL('labs/rust/index.html', DIST_DIRECTORY), 'utf8')
+const rustLabEntry = rustLabHtml.match(/<script type="module" crossorigin src="\/assets\/(rustLab-[^"]+\.js)"/)?.[1]
+assert(rustLabEntry, 'Expected the Rust Lab entry script in labs/rust/index.html')
+assert(!indexHtml.includes('rustLab'), 'The workspace page must not load or preload Rust Lab code')
+assert(!serviceWorker.includes('/assets/rustLab') && !serviceWorker.includes('/labs/rust'), 'The Rust Lab must stay out of the offline app shell')
+assert(serviceWorker.includes("url.pathname.startsWith('/labs/')"), 'The service worker must not intercept Rust Lab pages (it would cache them as the workspace)')
+
+const rustToolchainManifest = JSON.parse(await readFile(new URL('../src/labs/rust/toolchainManifest.json', import.meta.url), 'utf8'))
+const expectedToolchainChunks = new Map(rustToolchainManifest.assets.flatMap((asset) => asset.chunks.map((chunk) => [`${chunk.sha256.slice(0, 32)}.bin`, chunk])))
+const toolchainDirectory = new URL('rust-toolchain/', ASSETS_DIRECTORY)
+const toolchainNames = (await readdir(toolchainDirectory)).sort()
+assert.deepEqual(toolchainNames, [...expectedToolchainChunks.keys()].sort(), 'The Rust toolchain chunks must match src/labs/rust/toolchainManifest.json')
+let toolchainBytes = 0
+for (const name of toolchainNames) {
+  const bytes = await readFile(new URL(name, toolchainDirectory))
+  const chunk = expectedToolchainChunks.get(name)
+  assert.equal(bytes.length, chunk.bytes, `${name} has the wrong size`)
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), chunk.sha256, `${name} does not match its pinned SHA-256`)
+  assert(bytes.length <= 5_000_000, `${name} is larger than Netlify's edge-cached file size`)
+  assert(!serviceWorker.includes(name), `${name} must not be precached`)
+  toolchainBytes += bytes.length
+}
+const rustToolchainFiles = new Set(toolchainNames.map((name) => `/assets/rust-toolchain/${name}`))
+console.log(`Verified the Rust Lab: COEP only on ${RUST_LAB_PAGE_RULE} and its ${Object.keys(RUST_LAB_WORKERS).length} workers; ${toolchainNames.length} pinned toolchain chunks (${(toolchainBytes / 1_000_000).toFixed(1)} MB)`)
+
 // Long-term caching (rules generated by immutableAssetHeaders() in vite.config.ts): content-
 // addressed files are immutable for a year; everything a deploy changes in place (the HTML,
 // the service worker, the manifest, public files) revalidates.
@@ -271,6 +342,7 @@ const VITE_HASHED_ASSET = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/
 const VERSIONED_FONT = /^\/fonts\/[a-z0-9-]+-\d+\.\d+\.\d+\.woff2$/
 const isContentAddressed = (filePath) => VITE_HASHED_ASSET.test(filePath)
   || filePath.startsWith(pyodidePath)
+  || rustToolchainFiles.has(filePath)
   || VERSIONED_FONT.test(filePath)
 
 function cacheControlFor(filePath) {

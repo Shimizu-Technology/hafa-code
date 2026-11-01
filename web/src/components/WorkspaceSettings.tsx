@@ -1,4 +1,4 @@
-import { Plus, Settings2 } from 'lucide-react'
+import { FlaskConical, Plus, Settings2 } from 'lucide-react'
 import type { ColorModePreference, ThemePreference } from '../hooks/usePreferences'
 import { Popover } from './Popover'
 
@@ -96,6 +96,13 @@ export function WorkspaceSettings({
               Color-safe
             </button>
             <small className="menu-help" id="color-safe-help">Blue and orange instead of red and green, with underlined selections.</small>
+          </div>
+          <div className="menu-section">
+            <p className="menu-heading">Labs</p>
+            <a className="menu-link" href="/labs/rust/" aria-describedby="rust-lab-help">
+              <FlaskConical size={16} aria-hidden="true" /> Rust (experimental)
+            </a>
+            <small className="menu-help" id="rust-lab-help">Desktop browsers only. Opens a separate page; compiling needs a one-time 39 MB download.</small>
           </div>
       </>
     </Popover>
