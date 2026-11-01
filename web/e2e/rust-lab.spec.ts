@@ -156,6 +156,28 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('navigation', { name: 'Workspace sections' })).toBeVisible()
   })
 
+  for (const width of [390, 320]) {
+    test(`keeps the Code header to one row at ${width}px, like the workspace's phone editor`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 700 })
+      await page.goto('/labs/rust/')
+      await expect(page.locator('.monaco-editor')).toBeVisible()
+      const header = page.locator('.lab-editor-header')
+      const headerBox = (await header.boundingBox())!
+      expect(headerBox.height).toBeLessThanOrEqual(56)
+      // Guide and Practice live in the bottom navigation, not the editor header.
+      await expect(header.getByRole('button')).toHaveCount(1)
+      const run = header.getByRole('button', { name: 'Run on a computer' })
+      const runBox = (await run.boundingBox())!
+      expect(runBox.height).toBeGreaterThanOrEqual(44)
+      expect(runBox.y).toBeGreaterThanOrEqual(headerBox.y)
+      expect(runBox.y + runBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height)
+      // The editor gets the rest of the screen above the navigation.
+      const editorBox = (await page.locator('.lab-editor-surface').boundingBox())!
+      expect(editorBox.height).toBeGreaterThan(700 - 300)
+      await expectNoHorizontalOverflow(page)
+    })
+  }
+
   test('lets a learner choose to run on this device, still asking before the download', async ({ page }) => {
     const toolchainRequests = trackToolchainRequests(page)
     await page.goto('/labs/rust/')
@@ -179,6 +201,26 @@ test.describe('on a tablet', () => {
     await expectNoHorizontalOverflow(page)
     expect(toolchainRequests).toEqual([])
   })
+})
+
+test('the experiment note is one line that stays hidden once dismissed, and the footer sits below the panels', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/labs/rust/')
+  const note = page.getByRole('complementary', { name: 'About this experiment' })
+  await expect(note).toContainText('38.7 MB')
+  expect((await note.boundingBox())!.height).toBeLessThanOrEqual(48)
+  await note.getByRole('button', { name: 'Hide this note' }).click()
+  await expect(note).toBeHidden()
+  await page.reload()
+  await expect(page.locator('.monaco-editor')).toBeVisible()
+  await expect(note).toBeHidden()
+  await expect(page.locator('.lab-badge')).toHaveText('Experimental')
+  const footer = (await page.locator('.lab-footer').boundingBox())!
+  for (const panel of ['.lab-editor-panel', '.lab-output-panel', '.lab-project-sidebar']) {
+    const box = (await page.locator(panel).boundingBox())!
+    expect(box.y + box.height).toBeLessThanOrEqual(footer.y)
+  }
+  await expectNoHorizontalOverflow(page)
 })
 
 test('is listed with the languages on the desktop workspace and links back', async ({ page }) => {
@@ -222,9 +264,11 @@ test('follows the workspace theme and color-safe choice, and carries a change ba
 })
 
 for (const viewport of [
+  { width: 320, height: 640 },
   { width: 390, height: 844 },
   { width: 768, height: 1024 },
   { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
   { width: 2560, height: 1080 },
 ]) {
   test(`has no horizontal overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {

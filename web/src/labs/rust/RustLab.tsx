@@ -31,6 +31,25 @@ import { useLabPreferences } from './useLabPreferences'
 
 type PhoneTab = 'projects' | 'code' | 'output'
 
+/** The experiment note is hidden once the learner dismisses it, per browser, like the workspace welcome. */
+export const INTRO_DISMISSED_KEY = 'hafa-code-rust-lab-intro-dismissed-v1'
+
+function introDismissed() {
+  try {
+    return localStorage.getItem(INTRO_DISMISSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function rememberIntroDismissed() {
+  try {
+    localStorage.setItem(INTRO_DISMISSED_KEY, 'true')
+  } catch {
+    // Storage may be blocked; the note stays hidden for this visit.
+  }
+}
+
 function downloadText(fileName: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
   const anchor = document.createElement('a')
@@ -90,6 +109,7 @@ export function RustLab() {
   const [learningTab, setLearningTab] = useState<LabLearningTab>('guide')
   const [topicId, setTopicId] = useState<RustGuideTopicId>('variables')
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [introVisible, setIntroVisible] = useState(() => !introDismissed())
   const [toolchainStatus, setToolchainStatus] = useState<ToolchainStatus>({ kind: 'idle' })
   const [cacheState, setCacheState] = useState<ToolchainCacheState>('none')
   const [phase, setPhase] = useState<RunPhase>('idle')
@@ -338,6 +358,13 @@ export function RustLab() {
     setNotice('Removed the saved compiler from this browser.')
   }
 
+  const dismissIntro = () => {
+    setIntroVisible(false)
+    rememberIntroDismissed()
+    // The note held focus; keep keyboard users in the page rather than on <body>.
+    window.setTimeout(() => document.querySelector<HTMLElement>('.lab-app-bar .lab-wordmark')?.focus(), 0)
+  }
+
   const openLearning = (tab: LabLearningTab) => {
     setLearningTab(tab)
     setLearningOpen(true)
@@ -421,7 +448,7 @@ export function RustLab() {
   }
 
   const editorTheme = preferences.resolvedTheme === 'dark' ? 'hafa-dark' : 'hafa-light'
-  const runLabel = availability === 'available' ? 'Run' : 'Run on a computer'
+  const runLabel = availability === 'available' ? 'Run Rust' : 'Run on a computer'
   const learningVisible = learningOpen && !overlayLearning
   const challengeResult = report?.challenge && activeChallenge && report.challenge.id === activeChallenge.id
     ? { passed: report.challenge.passed, compiled: Boolean(report.program) }
@@ -459,13 +486,18 @@ export function RustLab() {
       />
       <input ref={importInputRef} className="sr-only" type="file" accept=".json,.rs,application/json" tabIndex={-1} aria-hidden="true" onChange={(event) => void onImport(event.target.files?.[0])} />
 
-      <aside className="lab-intro" aria-label="About this experiment">
-        <FlaskConical size={16} aria-hidden="true" />
-        <p>
-          <strong>Experimental.</strong> Rust compiles inside your browser after a one-time {formatMegabytes(TOOLCHAIN_DOWNLOAD_BYTES)} download,
-          on a desktop browser (Chrome or Edge work best). Projects are saved only in this browser, so export anything you want to keep.
-        </p>
-      </aside>
+      {introVisible && (
+        <aside className="lab-intro" aria-label="About this experiment">
+          <FlaskConical size={16} aria-hidden="true" />
+          <p>
+            <strong>Experimental.</strong> Rust runs in Chrome or Edge on a computer after a one-time {formatMegabytes(TOOLCHAIN_DOWNLOAD_BYTES)} download.
+            Projects stay in this browser, so export anything you want to keep.
+          </p>
+          <button className="ghost icon-button lab-intro-dismiss" type="button" aria-label="Hide this note" title="Hide this note" onClick={dismissIntro}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </aside>
+      )}
 
       {saveFailed && (
         <p className="status-banner lab-save-warning" role="alert">
@@ -502,19 +534,14 @@ export function RustLab() {
             <div className="workspace">
               <section className="panel editor-panel lab-editor-panel" aria-labelledby="lab-editor-heading">
                 <h2 id="lab-editor-heading" className="sr-only">Editor</h2>
-                <div className="editor-header">
+                {/* Phones: one row, the file tab and Run. Guide and Practice are in the bottom navigation. */}
+                <div className="editor-header lab-editor-header">
                   <div className="file-tabs">
                     <div className="file-tab-list">
                       <span className="lab-file-tab">main.rs <span className="entry-dot">Rust 2021</span></span>
                     </div>
-                    <button className="secondary mobile-editor-guide-button" type="button" onClick={() => openLearning('guide')} aria-label="Open the Rust guide">
-                      <BookOpen size={16} aria-hidden="true" /> Guide
-                    </button>
                   </div>
                   <div className="mobile-code-runbar">
-                    <button className="secondary" type="button" onClick={() => openLearning('practice')} aria-label="Open Rust practice challenges">
-                      <Dumbbell size={16} aria-hidden="true" /> Practice
-                    </button>
                     <button className={availability === 'available' ? 'primary' : 'secondary'} type="button" disabled={busy} onClick={() => void run()}>
                       {availability === 'available' ? <Play size={16} aria-hidden="true" /> : <Laptop size={16} aria-hidden="true" />} {runLabel}
                     </button>

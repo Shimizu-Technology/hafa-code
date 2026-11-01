@@ -1,4 +1,4 @@
-import { Dumbbell, FolderOpen, Import, Plus } from 'lucide-react'
+import { ArrowLeft, Dumbbell, FolderOpen, Import, Plus } from 'lucide-react'
 import { challengeById } from './challenges'
 import { MAX_PROJECTS, type RustLabProject } from './storage'
 
@@ -93,6 +93,9 @@ export function LabProjects({ projects, activeProjectId, busy, projectsOpen, onS
         <p className="sidebar-note">Saved only in this browser, up to {MAX_PROJECTS}. Export a project to keep it.</p>
         {controls}
       </div>
+      <a className="lab-back-link" href="/">
+        <ArrowLeft size={15} aria-hidden="true" /> Back to Hafa Code
+      </a>
     </aside>
   )
 }

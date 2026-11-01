@@ -23,8 +23,11 @@ preference hooks. `rustLab.css` holds only what the workspace has no equivalent 
 these pull in Clerk, CheerpJ, or the API client; `verify-production-build.mjs` walks the lab's
 scripts and fails the build if any of them do.
 
-- The Hafa Code wordmark in the app bar is the way back to the workspace; Settings also has
-  **Back to Hafa Code**.
+- The Hafa Code wordmark in the app bar is the way back to the workspace. The projects panel
+  ends with a **Back to Hafa Code** link, and Settings has one too.
+- A one-line experiment note under the app bar (download size, desktop browser, projects stay
+  in this browser) can be hidden; the choice is remembered in this browser
+  (`hafa-code-rust-lab-intro-dismissed-v1`). The app bar's Experimental badge always shows.
 - Theme (System, Light, Dark) and Color-safe use the workspace's saved preferences, and a
   change made in the lab carries back to the workspace.
 - Desktop: projects sidebar, editor, and Output (Run or Stop in its header, then program input,
@@ -32,7 +35,8 @@ scripts and fails the build if any of them do.
   and Coach open in the learning sidecar: a column beside the code from 1600px, a drawer below.
   A compile error or panic shows **Fix this error**, which opens the Coach.
 - Phones: Projects, Code, Output, Guide, and Practice in the bottom navigation, as in the
-  workspace.
+  workspace. The Code tab's header is one row, the `main.rs` tab and Run (**Run on a
+  computer** until the learner chooses to try this device), so the editor keeps the screen.
 
 ## What works
 

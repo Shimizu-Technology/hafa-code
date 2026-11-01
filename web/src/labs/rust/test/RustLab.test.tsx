@@ -64,7 +64,7 @@ vi.mock('../RustEditor', () => ({
   ),
 }))
 
-const { RustLab } = await import('../RustLab')
+const { INTRO_DISMISSED_KEY, RustLab } = await import('../RustLab')
 
 /** The Output panel's Run button (the phone Code tab has its own, hidden by CSS on larger screens). */
 const runButton = () => within(screen.getByRole('region', { name: 'Output' })).getByRole('button', { name: /^Run$/ })
@@ -116,6 +116,39 @@ describe('Rust Lab page', () => {
     await userEvent.click(runButton())
     expect(screen.getByRole('button', { name: /Download and run/ })).toBeTruthy()
     expect(harness.loads).toBe(0)
+  })
+
+  it('keeps the phone Code header to the file tab and Run; Guide and Practice live in the bottom navigation', () => {
+    harness.readiness = { status: 'small-device', reasons: ['This looks like a phone or tablet.'] }
+    const { unmount } = render(<RustLab />)
+    const editor = screen.getByRole('region', { name: 'Editor' })
+    expect(within(editor).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Run on a computer'])
+    const nav = screen.getByRole('navigation', { name: 'Rust Lab sections' })
+    expect(within(nav).getByRole('button', { name: 'Rust guide' })).toBeTruthy()
+    expect(within(nav).getByRole('button', { name: 'Rust practice' })).toBeTruthy()
+    unmount()
+
+    harness.readiness = { status: 'ready', warnings: [] }
+    render(<RustLab />)
+    expect(within(screen.getByRole('region', { name: 'Editor' })).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Run Rust'])
+  })
+
+  it('lets a learner hide the experiment note, and remembers that in this browser', async () => {
+    try {
+      const { unmount } = render(<RustLab />)
+      const note = screen.getByRole('complementary', { name: 'About this experiment' })
+      expect(note.textContent).toMatch(/one-time 38\.7 MB download/)
+      await userEvent.click(within(note).getByRole('button', { name: 'Hide this note' }))
+      expect(screen.queryByRole('complementary', { name: 'About this experiment' })).toBeNull()
+      expect(localStorage.getItem(INTRO_DISMISSED_KEY)).toBe('true')
+      unmount()
+      render(<RustLab />)
+      expect(screen.queryByRole('complementary', { name: 'About this experiment' })).toBeNull()
+      // The app bar keeps the Experimental label.
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Experimental')
+    } finally {
+      localStorage.removeItem(INTRO_DISMISSED_KEY)
+    }
   })
 
   it('asks before downloading the measured compiler, then compiles and runs', async () => {
