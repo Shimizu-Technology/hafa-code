@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fixtures from './rustcDiagnostics.fixture.json'
-import { assessEnvironment, type LabEnvironment } from '../capability'
+import { assessEnvironment, runAvailability, type LabEnvironment } from '../capability'
 import { RUST_CHALLENGES, outputMatches } from '../challenges'
 import { PROGRAM_MEMORY_LIMIT_BYTES, rustcArguments } from '../compileOptions'
 import { parseDiagnostics } from '../diagnostics'
@@ -184,7 +184,7 @@ describe('Rust Lab projects', () => {
 describe('Rust Lab device check', () => {
   const desktop: LabEnvironment = {
     crossOriginIsolated: true, sharedArrayBuffer: true, atomics: true, webAssembly: true, workers: true,
-    coarsePointer: false, viewportWidth: 1280, deviceMemoryGb: 8,
+    coarsePointer: false, deviceMemoryGb: 8,
   }
 
   it('allows an isolated desktop browser', () => {
@@ -198,14 +198,19 @@ describe('Rust Lab device check', () => {
     })
   })
 
-  it.each([
-    [{ coarsePointer: true, viewportWidth: 390 }, 2],
-    [{ coarsePointer: true, viewportWidth: 1024 }, 1],
-    [{ viewportWidth: 768 }, 1],
-  ])('explains that phones, tablets, and narrow windows are not supported (%o)', (overrides, count) => {
-    const result = assessEnvironment({ ...desktop, ...overrides })
-    expect(result.status).toBe('small-device')
-    expect(result.status === 'small-device' && result.reasons).toHaveLength(count)
+  it('treats phones and tablets as devices that read and write Rust but do not run it', () => {
+    expect(assessEnvironment({ ...desktop, coarsePointer: true })).toEqual({ status: 'small-device', reasons: ['This looks like a phone or tablet.'] })
+  })
+
+  it('offers Run only where the compiler can work, unless a tablet learner chooses to try', () => {
+    const ready = assessEnvironment(desktop)
+    const phone = assessEnvironment({ ...desktop, coarsePointer: true })
+    const unsupported = assessEnvironment({ ...desktop, crossOriginIsolated: false })
+    expect(runAvailability(ready, false)).toBe('available')
+    expect(runAvailability(phone, false)).toBe('needs-desktop')
+    expect(runAvailability(phone, true)).toBe('available')
+    expect(runAvailability(unsupported, false)).toBe('unsupported')
+    expect(runAvailability(unsupported, true)).toBe('unsupported')
   })
 
   it('warns about low memory', () => {
