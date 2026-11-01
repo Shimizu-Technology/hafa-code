@@ -305,3 +305,21 @@ test('light and dark themes keep every mobile workspace destination readable', a
     await closeSettings(page)
   }
 })
+
+test('a hovered project card keeps its date readable in both themes', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openPersona(page, 'student')
+  // A second project, so one card in the list is not the active one.
+  await page.locator('.sidebar-content').getByRole('button', { name: 'Python', exact: true }).click()
+  await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
+  const inactive = page.locator('.sidebar-content .project-card:not(.active)').first()
+  for (const theme of ['Light', 'Dark'] as const) {
+    await setDisplay(page, theme, false)
+    await closeSettings(page)
+    await inactive.hover()
+    // Wait for the hover background to finish its transition before measuring contrast.
+    await expect(inactive).toHaveCSS('background-color', theme === 'Dark' ? 'rgb(34, 29, 25)' : 'rgb(243, 234, 220)')
+    const results = await new AxeBuilder({ page }).include('.sidebar-content .project-card:not(.active)').withTags(['wcag2aa']).analyze()
+    expect(usefulViolations(results.violations)).toEqual([])
+  }
+})

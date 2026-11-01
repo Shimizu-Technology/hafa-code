@@ -1291,6 +1291,11 @@ textarea {
 
 .project-card.active small { color: var(--text-muted); }
 
+@media (hover: hover) and (pointer: fine) {
+  /* Hover uses the sunken surface too, where faint text drops below 4.5:1 contrast. */
+  .project-card:hover small { color: var(--text-muted); }
+}
+
 .mobile-project-menu,
 .mobile-home-panel,
 .mobile-code-runbar,
