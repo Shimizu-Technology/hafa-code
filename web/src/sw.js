@@ -28,6 +28,9 @@ function shouldHandleRequest(request, url) {
   if (url.pathname.startsWith('/@')) return false
   if (url.pathname.startsWith('/src/')) return false
   if (url.pathname.startsWith('/node_modules/')) return false
+  // The Rust Lab is a separate cross-origin-isolated page with its own toolchain cache.
+  if (url.pathname.startsWith('/labs/')) return false
+  if (url.pathname.startsWith('/assets/rust-toolchain/')) return false
   return true
 }
 
