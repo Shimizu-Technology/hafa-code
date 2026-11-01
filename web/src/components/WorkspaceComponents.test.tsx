@@ -447,3 +447,29 @@ describe('workspace presentation components', () => {
     expect(onCloseProjectCopy).toHaveBeenCalledOnce()
   })
 })
+
+describe('Labs entry', () => {
+  it('links to the experimental Rust Lab from settings, outside the Learn workspace', async () => {
+    const { WorkspaceSettings } = await import('./WorkspaceSettings')
+    render(
+      <WorkspaceSettings
+        activeWorkspaceId={null}
+        canCreateOrganization={false}
+        colorMode="default"
+        theme="system"
+        workspaceDescription="Personal projects"
+        workspaceIsSettling={false}
+        workspaces={[{ id: 'personal', label: 'Personal' }]}
+        onColorModeChange={() => {}}
+        onCreateOrganization={() => {}}
+        onThemeChange={() => {}}
+        onWorkspaceChange={() => {}}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace and display settings' }))
+    const link = screen.getByRole('link', { name: 'Rust (experimental)' })
+    expect(link.getAttribute('href')).toBe('/labs/rust/')
+    expect(link.getAttribute('aria-describedby')).toBe('rust-lab-help')
+    expect(screen.getByText(/Desktop browsers only/)).toBeTruthy()
+  })
+})

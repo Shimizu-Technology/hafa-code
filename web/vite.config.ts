@@ -312,7 +312,15 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
   },
   optimizeDeps: {
-    include: ['typescript'],
+    // The Rust Lab's worker dependencies are not found by the HTML scan; pre-bundling them up
+    // front keeps the dev server from reloading the lab in the middle of its first run.
+    include: [
+      'typescript',
+      '@bjorn3/browser_wasi_shim',
+      '@oligami/browser_wasi_shim-threads',
+      'brotli-dec-wasm/web',
+      'monaco-editor/esm/vs/editor/editor.worker.js',
+    ],
     exclude: [
       '@jitl/quickjs-wasmfile-release-sync',
       '@ruby/3.3-wasm-wasi',
