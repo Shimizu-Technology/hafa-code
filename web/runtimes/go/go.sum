@@ -1,0 +1,4 @@
+github.com/traefik/yaegi v0.16.1 h1:f1De3DVJqIDKmnasUF6MwmWv1dSEEat0wcpXhD2On3E=
+github.com/traefik/yaegi v0.16.1/go.mod h1:4eVhbPb3LnD2VigQjhYbEJ69vDRFdT2HQNrXx8eEwUY=
+github.com/traefik/yaegi v0.16.2-0.20260209085605-fcb76d1ece0c h1:htRmijmYfl6o44qr+narOX1invzz9J9FnAqCqH7ARio=
+github.com/traefik/yaegi v0.16.2-0.20260209085605-fcb76d1ece0c/go.mod h1:4eVhbPb3LnD2VigQjhYbEJ69vDRFdT2HQNrXx8eEwUY=

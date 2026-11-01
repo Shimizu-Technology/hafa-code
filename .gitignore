@@ -10,6 +10,12 @@ web/dist-clerk-e2e/
 web/playwright-report/
 web/test-results/
 
+# Go runtime build output (web/scripts/build-go-runtime.mjs)
+web/runtimes/go/dist/
+web/runtimes/go/.build/
+web/runtimes/go/symbols/zz_*.go
+web/runtimes/go/stdexport/data/
+
 # Env / secrets
 .env
 .env.*
