@@ -39,6 +39,9 @@ The Go runtime is lazy and is not part of the service-worker application shell. 
 | Embedded export data | 468 KB raw |
 | Local development, first run (localhost, cold worker) | about 0.4 s to the starter's output |
 | Local development, warm runs | about 70–90 ms |
+| Netlify deploy preview, transfer | 3.6 MB with brotli (4.2 MB gzip), served as `application/wasm`, immutable |
+| Netlify deploy preview, first run (desktop Chrome, fast connection, empty cache) | about 2.5 s to the starter's output |
+| Netlify deploy preview, warm runs | about 50 ms |
 | Full-stdlib Yaegi build, for comparison | 37 MB raw; about 7 MB gzip |
 
 Generating Yaegi bindings only for the allowlist, instead of using Yaegi's full standard library, cut the module from 37 MB to about 17 MB. The production-build check fails if the module grows past 24 MiB, so adding packages stays a deliberate decision. Local timings are regression baselines; they do not predict school-device or school-network performance, which still needs to be measured on FDMS hardware.
