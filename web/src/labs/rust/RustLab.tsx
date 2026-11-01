@@ -240,7 +240,8 @@ export function RustLab() {
   const readiness = useMemo(() => assessEnvironment(readEnvironment()), [])
   const [continueAnyway, setContinueAnyway] = useState(false)
   const [state, setState] = useState<RustLabState>(() => loadState())
-  const [saveFailed] = useState(() => !saveState(loadState()))
+  // Checked on every save: storage can fill up (it is shared with the workspace) after the page opens.
+  const [saveFailed, setSaveFailed] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [tab, setTab] = useState<SideTab>('output')
   const [openTopic, setOpenTopic] = useState<RustGuideTopicId | null>('variables')
@@ -262,7 +263,9 @@ export function RustLab() {
   const busy = phase === 'loading' || phase === 'compiling' || phase === 'running'
 
   useEffect(() => {
-    saveState(state)
+    // Writing to localStorage is the external system here; its result is only known afterwards.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSaveFailed(!saveState(state))
   }, [state])
 
   useEffect(() => {

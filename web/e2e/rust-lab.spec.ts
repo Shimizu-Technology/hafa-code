@@ -9,7 +9,7 @@ const TOOLCHAIN_PATH = '/assets/rust-toolchain/'
 
 declare global {
   interface Window {
-    __HAFA_RUST_LAB__?: { setSource: (source: string) => void; editor: () => { appendText: (text: string) => void; getText: () => string } | null }
+    __HAFA_RUST_LAB__?: { setSource: (source: string) => void; editor: () => { getText: () => string } | null }
   }
 }
 
@@ -55,12 +55,20 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   await expect(page.getByText(/One-time download of 38\.7 MB/)).toBeVisible()
   expect(toolchainRequests).toEqual([])
 
-  // An edit past the 200 KB limit is refused and the real editor goes back to the saved text.
+  // An edit past the 200 KB limit is refused: the real editor goes back to the saved text and
+  // keeps the cursor where the learner was typing.
   await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_RUST_LAB__?.editor()))).toBe(true)
   const savedText = await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())
-  await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.appendText(`// ${'x'.repeat(200_001)}`))
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.evaluate((text) => navigator.clipboard.writeText(text), `// ${'x'.repeat(200_001)}`)
+  await page.locator('.monaco-editor .view-line').first().click()
+  await page.keyboard.press('End')
+  await page.keyboard.press('ControlOrMeta+V')
   await expect(page.getByText(/main\.rs is limited to 200 KB/)).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe(savedText)
+  await page.keyboard.type('!')
+  const [firstLine, ...rest] = savedText.split('\n')
+  await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe([`${firstLine}!`, ...rest].join('\n'))
 
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('.monaco-editor').analyze()
   expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target.join(' ')) }))).toEqual([])
@@ -137,6 +145,14 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await page.getByRole('button', { name: 'Stop' }).click()
     await expect(page.locator('.lab-status')).toHaveText('Stopped.')
     await expect(page.locator('.lab-program-output')).toHaveText('started\nstill here\n')
+
+    // A runaway allocation stops at the program's memory limit instead of growing to 4 GiB.
+    await setSource(page, 'fn main() {\n    let mut blocks: Vec<Vec<u8>> = Vec::new();\n    loop {\n        blocks.push(vec![1u8; 16 * 1024 * 1024]);\n        println!("{} MB", blocks.len() * 16);\n    }\n}\n')
+    await runAndWait(page, /panicked/)
+    await expect(page.locator('.lab-program-output')).toContainText('memory allocation of 16777216 bytes failed')
+    const lastReport = Number((await page.locator('.lab-program-output').innerText()).match(/(\d+) MB\n(?![\s\S]*\d+ MB\n)/)?.[1])
+    expect(lastReport).toBeGreaterThanOrEqual(400)
+    expect(lastReport).toBeLessThan(512)
 
     // A challenge fails with its starter and passes with a correct solution.
     await page.getByRole('tab', { name: 'Practice' }).click()

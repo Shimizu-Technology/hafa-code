@@ -51,8 +51,6 @@ function applyMarkers(monaco: Monaco, editor: MonacoApi.editor.IStandaloneCodeEd
 
 export interface RustEditorHandle {
   focusLine: (line: number, column?: number) => void
-  /** Appends text as a single editor edit, as a paste would (used by the e2e hook). */
-  appendText: (text: string) => void
   getText: () => string
 }
 
@@ -85,13 +83,28 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
   const valueRef = useRef(value)
   useEffect(() => { valueRef.current = value }, [value])
 
-  const handleChange = (next: string | undefined) => {
+  const handleChange = (next: string | undefined, event?: MonacoApi.editor.IModelContentChangedEvent) => {
     if (onChange(next ?? '') !== false) return
+    // The refused change's ranges are in the accepted text's coordinates: put the cursor (or the
+    // selection the change replaced) back there, so typing continues where the learner was.
+    const selections = event?.changes.map(({ range }) => ({
+      selectionStartLineNumber: range.startLineNumber,
+      selectionStartColumn: range.startColumn,
+      positionLineNumber: range.endLineNumber,
+      positionColumn: range.endColumn,
+    }))
     // A controlled value that did not change is not pushed back into Monaco, so restore it here
     // (after this change event finishes) to keep the editor, Run, and storage on the same text.
     queueMicrotask(() => {
-      const model = editorRef.current?.getModel()
-      if (model && model.getValue() !== valueRef.current) model.setValue(valueRef.current)
+      const editor = editorRef.current
+      const model = editor?.getModel()
+      if (!editor || !model || model.getValue() === valueRef.current) return
+      const scrollTop = editor.getScrollTop()
+      model.setValue(valueRef.current)
+      if (selections?.length) editor.setSelections(selections)
+      editor.setScrollTop(scrollTop)
+      const position = editor.getPosition()
+      if (position) editor.revealPositionInCenterIfOutsideViewport(position)
     })
   }
 
@@ -125,12 +138,6 @@ export function RustEditor({ value, readOnly, theme, diagnostics, onChange, onRu
         editor.revealLineInCenter(line)
         editor.setPosition({ lineNumber: line, column })
         editor.focus()
-      },
-      appendText(text) {
-        const model = editor.getModel()
-        if (!model) return
-        const end = model.getFullModelRange().getEndPosition()
-        editor.executeEdits('append', [{ range: { startLineNumber: end.lineNumber, startColumn: end.column, endLineNumber: end.lineNumber, endColumn: end.column }, text }])
       },
       getText: () => editor.getValue(),
     })

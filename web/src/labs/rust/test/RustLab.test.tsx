@@ -154,6 +154,23 @@ describe('Rust Lab page', () => {
     expect((screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement).value).toBe('fn main() {}')
   })
 
+  it('warns as soon as a save fails after the page opened, and clears the warning when saving works again', async () => {
+    render(<RustLab />)
+    expect(screen.queryByText(/not saving Rust Lab projects/)).toBeNull()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+    })
+    try {
+      fireEvent.change(screen.getByRole('textbox', { name: 'Rust code' }), { target: { value: 'fn main() { println!("1"); }' } })
+      expect(await screen.findByText(/not saving Rust Lab projects/)).toBeTruthy()
+    } finally {
+      setItem.mockRestore()
+    }
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rust code' }), { target: { value: 'fn main() { println!("2"); }' } })
+    await waitFor(() => expect(screen.queryByText(/not saving Rust Lab projects/)).toBeNull())
+    expect(JSON.parse(localStorage.getItem(RUST_LAB_STORAGE_KEY)!).projects[0].source).toBe('fn main() { println!("2"); }')
+  })
+
   it('keeps the last version that fits when an edit makes main.rs too large', async () => {
     render(<RustLab />)
     const editor = screen.getByRole('textbox', { name: 'Rust code' }) as HTMLTextAreaElement

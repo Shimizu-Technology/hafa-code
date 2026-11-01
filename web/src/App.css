@@ -681,6 +681,10 @@ textarea {
   .menu-link:hover { background: var(--surface-sunken); }
 }
 
+@media (pointer: coarse) {
+  .menu-link { min-height: var(--control-lg); }
+}
+
 .menu-toggle {
   justify-content: space-between;
   width: 100%;

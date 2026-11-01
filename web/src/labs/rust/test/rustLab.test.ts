@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fixtures from './rustcDiagnostics.fixture.json'
 import { assessEnvironment, type LabEnvironment } from '../capability'
 import { RUST_CHALLENGES, outputMatches } from '../challenges'
-import { rustcArguments } from '../compileOptions'
+import { PROGRAM_MEMORY_LIMIT_BYTES, rustcArguments } from '../compileOptions'
 import { parseDiagnostics } from '../diagnostics'
 import { coachCompileError, coachPanic } from '../errorCoach'
 import { RUST_GUIDE } from '../guide'
@@ -235,6 +235,11 @@ describe('Rust Lab toolchain pinning', () => {
     const args = rustcArguments()
     expect(args).toEqual(expect.arrayContaining(['/main.rs', '--edition', '2021', '--target', 'wasm32-wasip1', '--error-format', 'json']))
     expect(args.join(' ')).toContain('--sysroot /sysroot')
+  })
+
+  it('caps the memory a program can grow to', () => {
+    expect(rustcArguments()).toContain('-Clink-arg=--max-memory=536870912')
+    expect(PROGRAM_MEMORY_LIMIT_BYTES % 65536).toBe(0)
   })
 })
 

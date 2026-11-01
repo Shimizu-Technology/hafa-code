@@ -101,7 +101,7 @@ servers never see the code.
 - the lab's CSP replaces the workspace CSP on `/labs/rust/` (Netlify serves one value per header name, as production shows for `/javaRunner.bootstrap.js`)
 - the lab page and workers allow same-origin scripts and connections only (plus WebAssembly); worker creation is limited to this origin, with no `blob:` workers
 - toolchain chunks are pinned by SHA-256 at build time and verified again in the browser before use
-- the compiled program runs in its own worker with in-memory WASI stdin/stdout/stderr, no filesystem, network, or API bridge, a 256 KB output limit, and a 10-second time limit
+- the compiled program runs in its own worker with in-memory WASI stdin/stdout/stderr, no filesystem, network, or API bridge, a 256 KB output limit, a 512 MiB memory limit, and a 10-second time limit
 - the service worker ignores `/labs/` and the toolchain files
 
 See [Rust Lab](RUST_LAB.md).

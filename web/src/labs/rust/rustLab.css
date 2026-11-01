@@ -760,6 +760,19 @@ code, kbd, pre { font-family: var(--font-mono); }
   .lab-header-actions { margin-left: 0; }
 }
 
+/* A touch screen gets here only through "Open the lab anyway"; keep its targets finger-sized. */
+@media (pointer: coarse) {
+  .lab-button,
+  .lab-select,
+  .lab-title-input,
+  .lab-link-button,
+  .lab-stdin summary {
+    min-height: var(--control-lg);
+  }
+
+  .lab-button.icon { width: var(--control-lg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

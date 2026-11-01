@@ -15,7 +15,8 @@ kind: it is not in `languageRegistry.ts`, Rails `Project::KINDS`, or cloud sync.
   clickable error list and editor markers
 - Error coaching for E0382, E0499, E0502, E0308, and E0384, general help for other codes
   (with a link to rustc's error index), and coaching for common panics
-- Stop at any time, a 10-second run limit, and a 90-second compile limit
+- Stop at any time, a 10-second run limit, a 512 MiB memory limit for the program (a runaway
+  allocation ends with Rust's "memory allocation … failed" message), and a 90-second compile limit
 - Five guide topics (println! and variables; ownership and moves; borrowing and references;
   structs, enums, and match; Result and `?`), each with a complete example program
 - Five practice challenges checked against expected output, with progress kept locally
@@ -134,7 +135,9 @@ Firefox has had problems; Edge should behave like Chrome. Safari and Firefox are
   The lab workers allow same-origin scripts and connections; only the toolchain, compiler, and
   background workers may start workers, and only from this origin (no `blob:` workers).
 - The compiled program runs in a separate worker with WASI's in-memory stdin/stdout/stderr and
-  no filesystem, network, or Hafa API access. Stop and the time limit terminate that worker.
+  no filesystem, network, or Hafa API access. Stop and the time limit terminate that worker, and
+  the program is linked with a 512 MiB memory maximum (`--max-memory`) so it cannot grow to
+  WebAssembly's 4 GiB on top of the compiler's memory.
 - The service worker ignores `/labs/` and `/assets/rust-toolchain/`, so the lab cannot replace the
   workspace's cached page and its files are not precached for every visitor.
 
