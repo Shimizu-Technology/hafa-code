@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { FolderOpen, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react'
+import { LabDestinationLinks } from './LabDestinationLinks'
 import { PROJECT_KINDS, projectKindDefinition, type ProjectKind, type SavedProject } from '../lib/codeRunner'
 import { formatCheckpointTime, kindLabels, projectOwnerLabel } from '../lib/workspace'
 
@@ -77,6 +78,7 @@ export function ProjectSidebar({
             <Plus size={14} /> {projectKindDefinition(kind).shortLabel}
           </button>
         ))}
+        <LabDestinationLinks className="compact" />
       </div>
       {searchable && (
         <div className="project-search" role="search">

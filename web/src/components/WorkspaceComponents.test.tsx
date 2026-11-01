@@ -470,6 +470,6 @@ describe('Labs entry', () => {
     const link = screen.getByRole('link', { name: 'Rust (experimental)' })
     expect(link.getAttribute('href')).toBe('/labs/rust/')
     expect(link.getAttribute('aria-describedby')).toBe('rust-lab-help')
-    expect(screen.getByText(/Desktop browsers only/)).toBeTruthy()
+    expect(screen.getByText(/running it needs a desktop browser/)).toBeTruthy()
   })
 })

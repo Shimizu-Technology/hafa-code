@@ -1,6 +1,7 @@
 import { Code2, FolderOpen, Globe, History, House, Terminal } from 'lucide-react'
 import type { ProjectKind } from '../lib/codeRunner'
 import type { MobileTab } from '../lib/workspace'
+import { BottomNav } from './BottomNav'
 
 type MobileWorkspaceNavProps = {
   activeTab: MobileTab
@@ -11,27 +12,21 @@ type MobileWorkspaceNavProps = {
 /** Keeps the five primary workspace destinations reachable on small screens. */
 export function MobileWorkspaceNav({ activeTab, projectKind, onChange }: MobileWorkspaceNavProps) {
   return (
-    <nav className="mobile-bottom-nav" aria-label="Workspace sections">
-      <button className={activeTab === 'home' ? 'active' : ''} aria-current={activeTab === 'home' ? 'page' : undefined} type="button" onClick={() => onChange('home')}>
-        <House size={18} aria-hidden="true" />
-        <span>Home</span>
-      </button>
-      <button className={activeTab === 'projects' ? 'active' : ''} aria-current={activeTab === 'projects' ? 'page' : undefined} type="button" onClick={() => onChange('projects')}>
-        <FolderOpen size={18} aria-hidden="true" />
-        <span>Projects</span>
-      </button>
-      <button className={activeTab === 'code' ? 'active' : ''} aria-current={activeTab === 'code' ? 'page' : undefined} type="button" onClick={() => onChange('code')}>
-        <Code2 size={18} aria-hidden="true" />
-        <span>Code</span>
-      </button>
-      <button className={activeTab === 'output' ? 'active' : ''} aria-current={activeTab === 'output' ? 'page' : undefined} type="button" onClick={() => onChange('output')}>
-        {projectKind === 'web' ? <Globe size={18} aria-hidden="true" /> : <Terminal size={18} aria-hidden="true" />}
-        <span>{projectKind === 'web' ? 'Preview' : 'Output'}</span>
-      </button>
-      <button className={activeTab === 'history' ? 'active' : ''} aria-current={activeTab === 'history' ? 'page' : undefined} type="button" onClick={() => onChange('history')}>
-        <History size={18} aria-hidden="true" />
-        <span>History</span>
-      </button>
-    </nav>
+    <BottomNav
+      label="Workspace sections"
+      onSelect={onChange}
+      items={[
+        { id: 'home', label: 'Home', icon: House, current: activeTab === 'home' },
+        { id: 'projects', label: 'Projects', icon: FolderOpen, current: activeTab === 'projects' },
+        { id: 'code', label: 'Code', icon: Code2, current: activeTab === 'code' },
+        {
+          id: 'output',
+          label: projectKind === 'web' ? 'Preview' : 'Output',
+          icon: projectKind === 'web' ? Globe : Terminal,
+          current: activeTab === 'output',
+        },
+        { id: 'history', label: 'History', icon: History, current: activeTab === 'history' },
+      ]}
+    />
   )
 }
