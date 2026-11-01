@@ -24,6 +24,8 @@ describe('experimental lab destinations', () => {
     expect(link.getAttribute('href')).toBe('/labs/rust/')
     expect(link.className).toBe('lab-destination-link compact')
     expect(link.getAttribute('title')).toMatch(/running it needs a desktop browser/)
+    // The visible tag is uppercased by CSS; Chromium would name the link "Rust LAB" from it.
+    expect(link.querySelector('.lab-destination-tag')?.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('lists the Rust Lab after the language buttons in the project sidebar without adding a project', () => {

@@ -443,7 +443,8 @@
   }
   .lab-editor-header > .file-tabs { flex: 1 1 0; min-width: 0; min-height: 52px; border-bottom: 0; }
   .lab-editor-header > .mobile-code-runbar { flex: 0 0 auto; padding: 0 var(--space-2) 0 0; border-bottom: 0; }
-  .lab-editor-header > .mobile-code-runbar button { flex: 0 0 auto; padding: 0 var(--space-4); white-space: nowrap; }
+  /* Run keeps its label, even sideways, where the workspace shows its other header buttons as icons. */
+  .rust-lab .lab-editor-header > .mobile-code-runbar > button { flex: 0 0 auto; gap: var(--space-2); width: auto; padding: 0 var(--space-4); font-size: var(--text-sm); white-space: nowrap; }
 
   /* Code tab: Monaco fills the space between the header and the navigation. */
   .mobile-tab-code .lab-editor-panel > .lab-editor-surface { flex: 1 1 0; min-height: 160px; height: auto; }

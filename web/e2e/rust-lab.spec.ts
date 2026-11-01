@@ -178,6 +178,22 @@ test.describe('on a phone', () => {
     })
   }
 
+  for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
+    test(`keeps Run labeled on a sideways phone at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport)
+      await page.goto('/labs/rust/')
+      await expect(page.locator('.monaco-editor')).toBeVisible()
+      // The workspace shows its other header buttons as icons here; Run is the lab's only one and keeps its words.
+      const run = page.locator('.lab-editor-header').getByRole('button', { name: 'Run on a computer' })
+      await expect(run).toBeVisible()
+      expect(await run.evaluate((button) => parseFloat(getComputedStyle(button).fontSize))).toBeGreaterThan(10)
+      const box = (await run.boundingBox())!
+      expect(box.width).toBeGreaterThan(120)
+      expect(box.height).toBeGreaterThanOrEqual(44)
+      await expectNoHorizontalOverflow(page)
+    })
+  }
+
   test('lets a learner choose to run on this device, still asking before the download', async ({ page }) => {
     const toolchainRequests = trackToolchainRequests(page)
     await page.goto('/labs/rust/')
@@ -230,6 +246,12 @@ test('is listed with the languages on the desktop workspace and links back', asy
   const sidebar = page.locator('.project-sidebar .sidebar-content')
   const languages = sidebar.locator('.new-project-grid > *')
   await expect(languages.last()).toHaveAccessibleName('Rust Lab (experimental, opens a separate page)')
+  // Chromium's own name, which (unlike Playwright's) includes CSS text-transform from the tag.
+  const cdp = await page.context().newCDPSession(page)
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree') as { nodes: { role?: { value: string }; name?: { value: string } }[] }
+  const labLinkNames = nodes.filter((node) => node.role?.value === 'link' && /Rust/.test(node.name?.value ?? '')).map((node) => node.name?.value)
+  expect(labLinkNames).toContain('Rust Lab (experimental, opens a separate page)')
+  expect(labLinkNames.filter((name) => /LAB/.test(name ?? ''))).toEqual([])
   const projectsBefore = await page.locator('.sidebar-content .project-card').count()
   await languages.last().click()
   await expect(page).toHaveURL(/\/labs\/rust\/$/)

@@ -330,6 +330,7 @@ for (const pending = [rustLabEntry]; pending.length;) {
   }
 }
 const workspaceEntry = indexHtml.match(/<script type="module" crossorigin src="\/assets\/([^"]+\.js)"/)?.[1]
+assert(workspaceEntry, 'Could not find the workspace entry script in index.html to keep it out of the Rust Lab')
 for (const file of rustLabGraph) {
   assert(file !== workspaceEntry && !/^(ClerkBridge|javaRunner|LearningSidecar|practiceLab)[-.]/.test(file), `The Rust Lab must not load ${file}`)
   const source = await readFile(new URL(file, ASSETS_DIRECTORY), 'utf8')

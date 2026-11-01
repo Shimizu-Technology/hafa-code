@@ -18,8 +18,9 @@ export function LabDestinationLinks({ className = '' }: { className?: string }) 
         >
           <FlaskConical size={14} aria-hidden="true" />
           <span>{destination.shortLabel}</span>
-          <span className="lab-destination-tag">Lab</span>
-          <span className="sr-only">{LAB_LINK_SUFFIX}</span>
+          {/* The tag is uppercased by CSS, which browsers keep in the accessible name ("LAB"). */}
+          <span className="lab-destination-tag" aria-hidden="true">Lab</span>
+          <span className="sr-only"> Lab{LAB_LINK_SUFFIX}</span>
         </a>
       ))}
     </>
