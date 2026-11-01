@@ -97,7 +97,8 @@ The Rust Lab at `/labs/rust/` compiles and runs Rust in browser workers; Rails a
 servers never see the code.
 
 - COEP `require-corp` is sent only for `/labs/rust/*` and the six `rustLab*.worker-*.js` assets; the workspace keeps its headers so Clerk and CheerpJ continue to load
-- COOP comes only from the site-wide rule, because a repeated COOP value would be invalid after Netlify joins matching rules
+- COOP comes only from the site-wide rule, so isolation does not depend on how the host combines a header named by two matching rules
+- the lab's CSP replaces the workspace CSP on `/labs/rust/` (Netlify serves one value per header name, as production shows for `/javaRunner.bootstrap.js`)
 - the lab page and workers allow same-origin scripts and connections only (plus WebAssembly); worker creation is limited to this origin, with no `blob:` workers
 - toolchain chunks are pinned by SHA-256 at build time and verified again in the browser before use
 - the compiled program runs in its own worker with in-memory WASI stdin/stdout/stderr, no filesystem, network, or API bridge, a 256 KB output limit, and a 10-second time limit

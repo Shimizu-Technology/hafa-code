@@ -53,7 +53,8 @@ export function parseDiagnostics(stderr: string): ParsedDiagnostics {
       code: raw.code?.code ?? null,
       rendered,
       spans: (raw.spans ?? [])
-        .filter((span) => typeof span.line_start === 'number' && (!span.file_name || span.file_name.endsWith('main.rs')))
+        // rustc uses line 0 for problems that are not at a place in the file (a missing main, for example).
+        .filter((span) => typeof span.line_start === 'number' && span.line_start > 0 && (!span.file_name || span.file_name.endsWith('main.rs')))
         .map((span) => ({
           line: span.line_start!,
           column: span.column_start ?? 1,

@@ -279,7 +279,7 @@ assert(rustLabPageRule, 'Missing the Rust Lab header rule')
 assert.equal(rustLabPageRule.get('cross-origin-embedder-policy'), 'require-corp', 'The Rust Lab page must be cross-origin isolated (COEP)')
 assert.equal(headers.get('/*').get('cross-origin-opener-policy'), 'same-origin', 'The Rust Lab page needs COOP same-origin from the site-wide rule')
 for (const [pattern, values] of headers) {
-  // Netlify joins one header named by several matching rules; a doubled COOP value is invalid.
+  // Isolation must not depend on how the host combines a header named by two matching rules.
   if (pattern !== '/*') assert(!values.has('cross-origin-opener-policy'), `COOP must only be set once, by /*; ${pattern} repeats it`)
 }
 const rustLabPolicy = rustLabPageRule.get('content-security-policy')

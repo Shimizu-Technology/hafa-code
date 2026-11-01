@@ -57,6 +57,13 @@ describe('rustc diagnostics', () => {
     expect(parsed.rendered).toContain('panicked')
   })
 
+  it('does not point at line 0 for errors that are not at a place in the file', () => {
+    const line = JSON.stringify({ $message_type: 'diagnostic', message: '`main` function not found in crate `main`', code: { code: 'E0601' }, level: 'error', spans: [{ file_name: '/main.rs', line_start: 0, line_end: 0, column_start: 1, column_end: 1, is_primary: true, label: null }], rendered: 'error[E0601]: `main` function not found in crate `main`\n' })
+    const parsed = parseDiagnostics(line)
+    expect(parsed.diagnostics[0].spans).toEqual([])
+    expect(coachCompileError(parsed.diagnostics)).toMatchObject({ code: 'E0601', location: null })
+  })
+
   it('gives general help for an error code without a coach entry', () => {
     const coaching = coachCompileError([{ level: 'error', message: 'cannot find value `x` in this scope', code: 'E0425', rendered: '', spans: [{ line: 3, column: 5, endLine: 3, endColumn: 6, label: 'not found in this scope', primary: true }] }])
     expect(coaching).toMatchObject({ code: 'E0425', title: 'Cannot find value `x` in this scope', location: 'line 3', topic: null })

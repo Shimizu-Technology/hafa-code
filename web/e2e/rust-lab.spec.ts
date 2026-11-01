@@ -113,6 +113,15 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await runAndWait(page, /panicked/)
     await expect(page.getByRole('region', { name: /An index was past the end of a list/ })).toBeVisible()
 
+    // Typing and pressing Ctrl/Cmd+Enter at once compiles what was just typed, once.
+    await setSource(page, 'fn main() {\n    let x = 5;\n    println!("{x}");\n}\n')
+    await page.locator('.monaco-editor .view-line').nth(1).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('\nx = 6;', { delay: 25 })
+    await page.keyboard.press('ControlOrMeta+Enter')
+    await expect(page.locator('.lab-status')).toContainText('Did not compile')
+    await expect(page.getByRole('region', { name: /An immutable variable was assigned twice/ })).toContainText('E0384')
+
     // Stop ends a loop that never finishes.
     await setSource(page, 'fn main() {\n    let mut n: u64 = 0;\n    loop { n = n.wrapping_add(1); }\n}\n')
     await page.getByRole('button', { name: 'Run', exact: true }).click()

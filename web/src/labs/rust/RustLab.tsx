@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, BookOpen, Check, Download, Dumbbell, FlaskConical, Play, Plus, Square, TerminalSquare, Trash2, Upload } from 'lucide-react'
 import { assessEnvironment, readEnvironment, type LabReadiness } from './capability'
 import { RUST_CHALLENGES, challengeById, outputMatches, type RustChallenge } from './challenges'
@@ -64,7 +64,8 @@ function useResolvedTheme() {
       window.removeEventListener('storage', update)
     }
   }, [])
-  useEffect(() => {
+  // Before paint, so a dark-theme visitor never sees a light first frame.
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
     try {
       if (localStorage.getItem('hafa-code-color-mode-v1') === 'colorblind') document.documentElement.dataset.colorMode = 'colorblind'
@@ -251,6 +252,7 @@ export function RustLab() {
   const [report, setReport] = useState<RunReport | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const toolchainRef = useRef<RustToolchain | null>(null)
+  const runningRef = useRef(false)
   const programRef = useRef<RunningProgram | null>(null)
   const editorRef = useRef<RustEditorHandle | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
@@ -332,8 +334,22 @@ export function RustLab() {
     }
   }, [])
 
-  const run = useCallback(async (consented = false) => {
-    if (busy) return
+  /**
+   * Compile and run. `source` comes straight from the editor for keyboard runs, which can
+   * arrive before React has re-rendered with the last keystroke.
+   */
+  const run = async (consented = false, source = project.source) => {
+    // A ref, not `busy`: two runs started in the same tick would both see a stale `busy`.
+    if (runningRef.current) return
+    runningRef.current = true
+    try {
+      await runOnce(consented, source)
+    } finally {
+      runningRef.current = false
+    }
+  }
+
+  const runOnce = async (consented: boolean, source: string) => {
     setTab('output')
     const toolchain = toolchainRef.current
     if (!toolchain?.loaded || toolchainStatus.kind !== 'ready') {
@@ -350,7 +366,6 @@ export function RustLab() {
         return
       }
     }
-    const source = project.source
     const challenge = activeChallenge
     setOutput([])
     setReport(null)
@@ -418,7 +433,7 @@ export function RustLab() {
     })
     setPhase('idle')
     setAnnouncement(result.stopped ? 'Stopped.' : result.timedOut ? 'Stopped after the time limit.' : result.panicked ? 'The program panicked.' : challenge ? (passed ? 'Challenge passed.' : 'Challenge not passed yet.') : 'Finished.')
-  }, [activeChallenge, appendOutput, busy, cacheState, loadToolchain, project.source, project.stdin, toolchainStatus.kind])
+  }
 
   const stop = useCallback(() => {
     if (phase === 'running') programRef.current?.stop()
@@ -433,10 +448,11 @@ export function RustLab() {
   }, [phase])
 
   const runRef = useRef(run)
-  useEffect(() => { runRef.current = run }, [run])
+  useEffect(() => { runRef.current = run })
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      // The editor handles its own Ctrl/Cmd+Enter (with its current text) and marks the event handled.
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.defaultPrevented) {
         event.preventDefault()
         void runRef.current()
       }
@@ -597,7 +613,7 @@ export function RustLab() {
               theme={editorTheme}
               diagnostics={report?.diagnostics?.diagnostics ?? []}
               onChange={(source) => updateProject({ source })}
-              onRun={() => void run()}
+              onRun={(source) => void run(false, source)}
               onReady={(handle) => { editorRef.current = handle }}
             />
           </div>

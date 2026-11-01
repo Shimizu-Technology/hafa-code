@@ -121,10 +121,12 @@ Firefox has had problems; Edge should behave like Chrome. Safari and Firefox are
   server do not compile or run anything.
 - COEP (`require-corp`) is sent only for `/labs/rust/*` and the six `rustLab*.worker-*.js`
   files. The workspace keeps its existing headers: COEP site-wide would block Clerk and CheerpJ.
-  COOP comes from the site-wide rule only, because Netlify joins a header named by two
-  matching rules and `same-origin, same-origin` is not a valid COOP value.
+  COOP comes from the site-wide rule only, so isolation does not depend on how the host
+  combines a header that two matching rules both name.
 - The lab page's CSP allows only same-origin scripts, workers, and connections, plus
-  WebAssembly compilation. Netlify also applies the `/*` CSP, so the browser enforces both.
+  WebAssembly compilation. Where two matching rules name the same header, Netlify serves the
+  specific rule's value (production does this for `/javaRunner.bootstrap.js`), so this CSP
+  replaces the workspace CSP on the lab page; the build verifier checks both rules.
   The lab workers allow same-origin scripts and connections; only the toolchain, compiler, and
   background workers may start workers, and only from this origin (no `blob:` workers).
 - The compiled program runs in a separate worker with WASI's in-memory stdin/stdout/stderr and

@@ -416,6 +416,28 @@ code, kbd, pre { font-family: var(--font-mono); }
   background: var(--surface-code);
 }
 
+.lab-editor { display: flex; flex-direction: column; }
+.lab-editor-surface { flex: 1 1 auto; min-height: 0; }
+
+.lab-keyboard-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-top: 1px solid var(--border-code);
+  color: var(--text-on-code-muted);
+  font-size: var(--text-xs);
+}
+
+.lab-keyboard-hint kbd {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-code);
+  border-radius: 4px;
+  background: var(--surface-code-raised);
+  color: var(--text-on-code);
+}
+
 .lab-editor-fallback {
   height: 100%;
   padding: var(--space-3) var(--space-4);
