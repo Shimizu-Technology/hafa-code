@@ -10,6 +10,9 @@ export const RUN_TIMEOUT_MS = 10_000
 export const OUTPUT_LIMIT_BYTES = 256 * 1024
 const OUTPUT_POLL_MS = 50
 
+/** The message for work cut short by dispose(): Stop, Cancel, or a newer load. */
+export const STOPPED_MESSAGE = 'The compiler was stopped.'
+
 export class ToolchainError extends Error {
   readonly integrity: boolean
 
@@ -27,6 +30,8 @@ export class ToolchainError extends Error {
 export class RustToolchain {
   private worker: Worker | null = null
   private nextId = 1
+  /** The load in progress, so dispose() can settle it instead of leaving its caller waiting. */
+  private pendingLoad: { worker: Worker; reject: (error: Error) => void } | null = null
   private pending = new Map<number, { resolve: (result: CompileResult) => void; reject: (error: Error) => void; timer: number }>()
 
   load(onProgress: (progress: ToolchainProgress) => void): Promise<{ fromCache: boolean; durationMs: number }> {
@@ -34,12 +39,19 @@ export class RustToolchain {
     const worker = new Worker(new URL('./workers/rustLabToolchain.worker.ts', import.meta.url), { type: 'module', name: 'Rust Lab toolchain' })
     this.worker = worker
     return new Promise((resolve, reject) => {
+      this.pendingLoad = { worker, reject }
+      const settleLoad = () => {
+        if (this.pendingLoad?.worker === worker) this.pendingLoad = null
+      }
       worker.onmessage = (event: MessageEvent<ToolchainResponse>) => {
         const message = event.data
         if (message.type === 'progress') onProgress(message)
-        else if (message.type === 'ready') resolve({ fromCache: message.fromCache, durationMs: message.durationMs })
-        else if (message.type === 'failed') {
+        else if (message.type === 'ready') {
+          settleLoad()
+          resolve({ fromCache: message.fromCache, durationMs: message.durationMs })
+        } else if (message.type === 'failed') {
           const error = new ToolchainError(message.message, message.integrity)
+          settleLoad()
           reject(error)
           this.rejectPending(error)
         } else if (message.type === 'compiled') {
@@ -52,6 +64,7 @@ export class RustToolchain {
       }
       worker.onerror = (event) => {
         const error = new ToolchainError(event.message || 'The Rust toolchain worker stopped unexpectedly.')
+        settleLoad()
         reject(error)
         this.rejectPending(error)
       }
@@ -79,7 +92,10 @@ export class RustToolchain {
   dispose() {
     this.worker?.terminate()
     this.worker = null
-    this.rejectPending(new ToolchainError('The compiler was stopped.'))
+    const load = this.pendingLoad
+    this.pendingLoad = null
+    load?.reject(new ToolchainError(STOPPED_MESSAGE))
+    this.rejectPending(new ToolchainError(STOPPED_MESSAGE))
   }
 
   private send(request: ToolchainRequest) {

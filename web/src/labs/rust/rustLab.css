@@ -766,7 +766,8 @@ code, kbd, pre { font-family: var(--font-mono); }
   .lab-select,
   .lab-title-input,
   .lab-link-button,
-  .lab-stdin summary {
+  .lab-stdin summary,
+  .lab-challenge-body summary {
     min-height: var(--control-lg);
   }
 

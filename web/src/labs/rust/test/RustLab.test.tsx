@@ -12,6 +12,8 @@ const harness = vi.hoisted(() => ({
   compileResult: { wasm: new ArrayBuffer(8) as ArrayBuffer | null, diagnostics: '', durationMs: 420, crashed: false },
   programOutput: 'Hafa adai, Ana!\n',
   removed: 0,
+  /** When true, a load waits until dispose() stops it, like a slow download. */
+  holdLoads: false,
 }))
 
 vi.mock('../capability', async (importOriginal) => ({
@@ -30,14 +32,21 @@ vi.mock('../rustLabClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../rustLabClient')>()
   class FakeToolchain {
     loaded = false
+    private stopLoad: ((error: Error) => void) | null = null
     async load(onProgress: (progress: { phase: 'downloading'; loadedBytes: number; totalBytes: number }) => void) {
       harness.loads += 1
       onProgress({ phase: 'downloading', loadedBytes: 1_000_000, totalBytes: 38_700_000 })
+      if (harness.holdLoads) await new Promise((_resolve, reject) => { this.stopLoad = reject })
       this.loaded = true
       return { fromCache: false, durationMs: 1234 }
     }
     async compile() { return { ...harness.compileResult } }
-    dispose() { this.loaded = false }
+    // Like RustToolchain.dispose(): a load in progress is settled as stopped.
+    dispose() {
+      this.loaded = false
+      this.stopLoad?.(new actual.ToolchainError(actual.STOPPED_MESSAGE))
+      this.stopLoad = null
+    }
   }
   return {
     ...actual,
@@ -66,6 +75,7 @@ beforeEach(() => {
   harness.removed = 0
   harness.compileResult = { wasm: new ArrayBuffer(8), diagnostics: '', durationMs: 420, crashed: false }
   harness.programOutput = 'Hafa adai, Ana!\n'
+  harness.holdLoads = false
 })
 
 describe('Rust Lab page', () => {
@@ -105,6 +115,22 @@ describe('Rust Lab page', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Run$/ }))
     expect(await screen.findByText(/compiled in 0\.4 s/)).toBeTruthy()
     expect(harness.loads).toBe(1)
+  })
+
+  it.each(['Stop', 'Cancel'])('lets a learner run again after %s ends the compiler download', async (button) => {
+    harness.holdLoads = true
+    render(<RustLab />)
+    await userEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Download and run/ }))
+    expect(await screen.findByText(/Downloading the compiler/)).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: button }))
+    expect(await screen.findByRole('button', { name: /Download compiler/ })).toBeTruthy()
+
+    harness.holdLoads = false
+    await userEvent.click(screen.getByRole('button', { name: /^Run$/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Download and run/ }))
+    expect(await screen.findByText(/compiled in 0\.4 s/)).toBeTruthy()
+    expect(harness.loads).toBe(2)
   })
 
   it('starts a saved compiler without asking again and can remove it', async () => {

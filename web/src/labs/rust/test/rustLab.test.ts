@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import fixtures from './rustcDiagnostics.fixture.json'
 import { assessEnvironment, type LabEnvironment } from '../capability'
 import { RUST_CHALLENGES, outputMatches } from '../challenges'
@@ -12,6 +12,7 @@ import {
 import { TOOLCHAIN, TOOLCHAIN_DOWNLOAD_BYTES, chunkUrl, formatMegabytes } from '../toolchain'
 import { OutputReader, OutputWriter, createOutputBuffer } from '../programOutput'
 import { readTar } from '../workers/tar'
+import { RustToolchain, STOPPED_MESSAGE } from '../rustLabClient'
 import { CHUNK_BYTES, PINNED_FILES, TOOLCHAIN_ASSET_DIRECTORY, chunkFileName } from '../../../../scripts/rustToolchain.mjs'
 
 const fixture = fixtures as Record<string, { source: string; stderr: string }>
@@ -327,5 +328,45 @@ describe('toolchain archive reader', () => {
     const archive = new Uint8Array(1024)
     archive.set(header('libcore.rlib', 4096))
     await expect(readTar(streamOf(archive, 512), () => {})).rejects.toThrow('ended early')
+  })
+})
+
+describe('toolchain client', () => {
+  class FakeWorker {
+    static created: FakeWorker[] = []
+    onmessage: ((event: MessageEvent) => void) | null = null
+    onerror: ((event: ErrorEvent) => void) | null = null
+    terminated = false
+    constructor() { FakeWorker.created.push(this) }
+    postMessage() {}
+    terminate() { this.terminated = true }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    FakeWorker.created = []
+  })
+
+  it('settles a load that dispose() stops, so the caller is not left waiting', async () => {
+    vi.stubGlobal('Worker', FakeWorker)
+    const toolchain = new RustToolchain()
+    const loading = toolchain.load(() => {})
+    toolchain.dispose()
+    await expect(loading).rejects.toThrow(STOPPED_MESSAGE)
+    expect(FakeWorker.created[0].terminated).toBe(true)
+  })
+
+  it('stops an older load without touching the newer one', async () => {
+    vi.stubGlobal('Worker', FakeWorker)
+    const toolchain = new RustToolchain()
+    const first = toolchain.load(() => {})
+    const second = toolchain.load(() => {})
+    await expect(first).rejects.toThrow(STOPPED_MESSAGE)
+    const [older, newer] = FakeWorker.created
+    expect(older.terminated).toBe(true)
+    expect(newer.terminated).toBe(false)
+    newer.onmessage?.({ data: { type: 'ready', fromCache: true, durationMs: 5 } } as MessageEvent)
+    await expect(second).resolves.toEqual({ fromCache: true, durationMs: 5 })
+    expect(toolchain.loaded).toBe(true)
   })
 })

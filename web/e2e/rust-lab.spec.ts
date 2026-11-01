@@ -102,6 +102,19 @@ test.describe('with the real compiler @rust-toolchain', () => {
   test('compiles, runs, coaches errors, stops loops, and checks challenges', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/labs/rust/')
+
+    // Stop during the download ends it, and Run asks again instead of doing nothing.
+    await page.route(`**${TOOLCHAIN_PATH}*`, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await route.continue().catch(() => {})
+    })
+    await page.getByRole('button', { name: 'Run', exact: true }).click()
+    await page.getByRole('button', { name: 'Download and run' }).click()
+    await expect(page.getByText('Downloading the compiler…')).toBeVisible()
+    await page.getByRole('button', { name: 'Stop' }).click()
+    await expect(page.getByRole('button', { name: 'Download compiler' })).toBeVisible()
+    await page.unroute(`**${TOOLCHAIN_PATH}*`)
+
     await page.getByRole('button', { name: 'Run', exact: true }).click()
     await page.getByRole('button', { name: 'Download and run' }).click()
     await expect(page.locator('.lab-status')).toContainText('Finished', { timeout: 180_000 })

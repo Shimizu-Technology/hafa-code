@@ -6,7 +6,7 @@ import { parseDiagnostics, primarySpan, type ParsedDiagnostics } from './diagnos
 import { coachCompileError, coachPanic, type RustCoaching } from './errorCoach'
 import { RUST_GUIDE, guideTopic, type RustGuideTopicId } from './guide'
 import { RustEditor, type RustEditorHandle } from './RustEditor'
-import { RustToolchain, ToolchainError, runProgram, type ProgramResult, type RunningProgram, type ToolchainProgress } from './rustLabClient'
+import { RustToolchain, STOPPED_MESSAGE, ToolchainError, runProgram, type ProgramResult, type RunningProgram, type ToolchainProgress } from './rustLabClient'
 import {
   MAX_IMPORT_FILE_BYTES, MAX_INPUT_BYTES, MAX_PROJECTS, MAX_SOURCE_BYTES, ProjectImportError, byteLength, cleanTitle, createProject, exportFileName, exportProject, importProject, loadState, saveState,
   type RustLabProject, type RustLabState,
@@ -326,11 +326,13 @@ export function RustLab() {
       setCacheState('complete')
       return true
     } catch (error) {
-      toolchain.dispose()
+      // A stopped load was already disposed; disposing again could end a newer load on this instance.
+      const stopped = error instanceof ToolchainError && error.message === STOPPED_MESSAGE
+      if (!stopped) toolchain.dispose()
       const message = error instanceof ToolchainError && error.integrity
         ? `${error.message} Try again later; if this keeps happening, the lab's files may be out of date.`
         : error instanceof Error ? error.message : String(error)
-      setToolchainStatus(message === 'The compiler was stopped.' ? { kind: 'idle' } : { kind: 'failed', message })
+      setToolchainStatus(stopped ? { kind: 'idle' } : { kind: 'failed', message })
       void toolchainCacheState().then(setCacheState)
       return false
     }
@@ -379,7 +381,7 @@ export function RustLab() {
     } catch (error) {
       toolchainRef.current?.dispose()
       setToolchainStatus({ kind: 'idle' })
-      const stopped = error instanceof Error && error.message === 'The compiler was stopped.'
+      const stopped = error instanceof Error && error.message === STOPPED_MESSAGE
       appendOutput('system', stopped ? 'Compiling stopped. The compiler restarts on the next run.' : (error instanceof Error ? error.message : String(error)))
       setReport({ kind: stopped ? 'stopped' : 'compiler-crashed', diagnostics: null, coaching: null, program: null, compileMs: null, challenge: null })
       setPhase('idle')
