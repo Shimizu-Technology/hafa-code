@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
+import { GO_CHALLENGES } from '../src/lib/practiceChallenges/go'
+import { GO_REFERENCE_SOLUTIONS } from '../src/lib/practiceChallenges/goSolutions'
 
 async function openGoProject(page: Page) {
   await page.addInitScript(() => {
@@ -96,6 +98,30 @@ test('Go exposes its guide and practice catalog and checks a challenge end to en
     await expect(page.getByRole('progressbar', { name: `0 of 5 ${tier} challenges complete` })).toBeVisible()
   }
   await expect(page.locator('.practice-language-tabs').getByRole('button', { name: 'Go', exact: true })).toHaveAttribute('aria-current', 'page')
+
+  // Start challenges from each tier: the scaffold fails the check, the reference solution passes.
+  const challengeIds = ['go-slice-stops', 'go-filter-scores', 'go-transfer-errors']
+  for (const [index, id] of challengeIds.entries()) {
+    const challenge = GO_CHALLENGES.find((candidate) => candidate.id === id)!
+    if (index > 0) {
+      await page.locator('.guide-toolbar-button').click()
+      await page.getByRole('tab', { name: 'Practice' }).click()
+    }
+    await page.locator(`[data-practice-challenge-id="${id}"]`).getByRole('button', { name: /Start challenge/ }).click()
+    await expect(page.getByLabel('Project name')).toHaveValue(challenge.project.title)
+
+    await page.getByRole('button', { name: 'Check my work' }).click()
+    await expect(page.getByText('Almost there — keep going')).toBeVisible({ timeout: 60_000 })
+
+    await page.locator('.monaco-editor .view-lines').click()
+    await setCode(page, GO_REFERENCE_SOLUTIONS[id])
+    await page.getByRole('button', { name: 'Check my work' }).click()
+    await expect(page.getByText('Challenge complete')).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('.terminal')).toContainText(challenge.expectedOutput!.split('\n')[0])
+  }
+  await page.locator('.guide-toolbar-button').click()
+  await page.getByRole('tab', { name: 'Practice' }).click()
+  await expect(page.getByText('3 of 15 complete')).toBeVisible()
 })
 
 test('Go stays usable without horizontal overflow on a phone viewport', async ({ page }) => {
@@ -115,4 +141,17 @@ test('Go stays usable without horizontal overflow on a phone viewport', async ({
   await expect(page.locator('.terminal')).toContainText('Hafa adai, Go!', { timeout: 60_000 })
   await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 720 }, { width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    if (viewport.width < 768) await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Output' }).click()
+    const run = page.getByRole('button', { name: 'Run again' })
+    await expect(run).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { message: `No horizontal overflow at ${viewport.width}×${viewport.height}` }).toBe(true)
+  }
+
+  // Keyboard: the Run control is reachable and activates with Enter.
+  await page.getByRole('button', { name: 'Run again' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success', { timeout: 30_000 })
 })
