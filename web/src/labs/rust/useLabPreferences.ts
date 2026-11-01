@@ -31,8 +31,9 @@ export function useLabPreferences() {
   // Another tab (the workspace) changed a preference.
   useEffect(() => {
     const update = (event: StorageEvent) => {
-      if (event.key === THEME_STORAGE_KEY) setThemeState(loadThemePreference())
-      if (event.key === COLOR_MODE_STORAGE_KEY) setColorModeState(loadColorModePreference())
+      // A null key means another tab cleared storage.
+      if (event.key === null || event.key === THEME_STORAGE_KEY) setThemeState(loadThemePreference())
+      if (event.key === null || event.key === COLOR_MODE_STORAGE_KEY) setColorModeState(loadColorModePreference())
     }
     window.addEventListener('storage', update)
     return () => window.removeEventListener('storage', update)

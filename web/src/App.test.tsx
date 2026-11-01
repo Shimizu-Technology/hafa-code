@@ -123,6 +123,26 @@ describe('App language guide practice projects', () => {
     vi.restoreAllMocks()
   })
 
+  it('follows a Theme or Color-safe change made in the Rust Lab in another tab, and a cleared storage', () => {
+    render(<App />)
+    const shell = document.querySelector('main.app-shell')!
+    expect(shell.getAttribute('data-theme')).toBe('light')
+
+    localStorage.setItem('hafa-code-theme-v1', 'dark')
+    localStorage.setItem('hafa-code-color-mode-v1', 'colorblind')
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hafa-code-theme-v1', newValue: 'dark' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hafa-code-color-mode-v1', newValue: 'colorblind' }))
+    })
+    expect(shell.getAttribute('data-theme')).toBe('dark')
+    expect(shell.getAttribute('data-color-mode')).toBe('colorblind')
+
+    localStorage.clear()
+    act(() => { window.dispatchEvent(new StorageEvent('storage', { key: null })) })
+    expect(shell.getAttribute('data-theme')).toBe('light')
+    expect(shell.getAttribute('data-color-mode')).toBe('default')
+  })
+
   it('opens a complete example in a new private project without changing the original', async () => {
     const user = userEvent.setup()
     render(<App />)

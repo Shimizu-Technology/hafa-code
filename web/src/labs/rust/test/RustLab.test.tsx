@@ -194,6 +194,29 @@ describe('Rust Lab page', () => {
     expect(saved.projects[0]).toMatchObject({ title: 'Challenge: Keep the name', challengeId: 'rust-ownership' })
   })
 
+  it('uses the workspace Theme and Color-safe preferences and follows changes from another tab', () => {
+    localStorage.setItem('hafa-code-theme-v1', 'dark')
+    render(<RustLab />)
+    const root = document.documentElement
+    expect(root.dataset.theme).toBe('dark')
+    expect(root.dataset.colorMode).toBe('default')
+
+    localStorage.setItem('hafa-code-theme-v1', 'light')
+    localStorage.setItem('hafa-code-color-mode-v1', 'colorblind')
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hafa-code-theme-v1', newValue: 'light' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hafa-code-color-mode-v1', newValue: 'colorblind' }))
+    })
+    expect(root.dataset.theme).toBe('light')
+    expect(root.dataset.colorMode).toBe('colorblind')
+
+    localStorage.setItem('hafa-code-theme-v1', 'dark')
+    localStorage.removeItem('hafa-code-color-mode-v1')
+    act(() => { window.dispatchEvent(new StorageEvent('storage', { key: null })) })
+    expect(root.dataset.theme).toBe('dark')
+    expect(root.dataset.colorMode).toBe('default')
+  })
+
   it('keeps edits in this browser across reloads', async () => {
     const first = render(<RustLab />)
     const editor = screen.getByRole('textbox', { name: 'Rust code' })

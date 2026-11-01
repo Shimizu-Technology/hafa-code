@@ -254,6 +254,9 @@ export default function App() {
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
       if (event.key === null || event.key === LESSON_LINKS_STORAGE_KEY) setLessonLinks(loadLessonLinks())
+      // Theme and Color-safe are shared with the labs, which can change them in another tab.
+      if (event.key === null || event.key === THEME_STORAGE_KEY) setThemePreference(loadThemePreference())
+      if (event.key === null || event.key === COLOR_MODE_STORAGE_KEY) setColorModePreference(loadColorModePreference())
     }
     window.addEventListener('storage', refresh)
     return () => window.removeEventListener('storage', refresh)
