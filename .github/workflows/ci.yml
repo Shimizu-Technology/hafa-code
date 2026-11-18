@@ -98,7 +98,7 @@ jobs:
         run: npm run build
 
       - name: Dependency security audit
-        run: npm audit --audit-level=high
+        run: node scripts/audit-guards.mjs && node scripts/audit-check.mjs .
 
   classroom-e2e:
     # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
