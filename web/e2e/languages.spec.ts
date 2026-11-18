@@ -2,8 +2,13 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function openStudent(page: Page) {
   const session = page.waitForResponse((response) => response.url().endsWith('/api/v1/sessions') && response.request().method() === 'POST')
+  // Session creation precedes the initial cloud-project load. Finish fixture
+  // hydration before creating/running a project, so a late load cannot reset it.
+  const projects = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/projects' && response.request().method() === 'GET')
   await page.goto('/?e2e_user=student')
   expect((await session).status()).toBe(200)
+  expect((await projects).status()).toBe(200)
+  await expect(page.getByText('Saved to cloud + local backup', { exact: true })).toHaveCount(1)
 }
 
 test('TypeScript runs a typed multi-file project and explains compiler errors', async ({ page }) => {

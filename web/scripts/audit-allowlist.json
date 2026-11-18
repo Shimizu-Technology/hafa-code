@@ -5,7 +5,7 @@
     "project": ".",
     "via": "Vite / ESLint / translation CLI trusted project-file discovery",
     "reason": "No patched release exists as of 2026-11-18 (latest 4.0.7). This transitive dependency matches repository-controlled glob patterns in development/build tools. Application source does not import it or accept user-supplied globs; it is not used by the deployed static app. Keep development servers private. Remove when a compatible patched release exists.",
-    "reviewBy": "2026-12-18",
+    "reviewBy": "2027-01-31",
     "isDirect": false,
     "nodes": [
       "node_modules/picomatch"
@@ -24,6 +24,19 @@
       "vite",
       "vitest"
     ],
-    "devOnly": true
+    "devOnly": true,
+    "reviewedConsumerNodes": [
+      "node_modules/@typescript-eslint/eslint-plugin",
+      "node_modules/@typescript-eslint/parser",
+      "node_modules/@typescript-eslint/type-utils",
+      "node_modules/@typescript-eslint/typescript-estree",
+      "node_modules/@typescript-eslint/utils",
+      "node_modules/@vitejs/plugin-react",
+      "node_modules/fdir",
+      "node_modules/tinyglobby",
+      "node_modules/typescript-eslint",
+      "node_modules/vite",
+      "node_modules/vitest"
+    ]
   }
 ]

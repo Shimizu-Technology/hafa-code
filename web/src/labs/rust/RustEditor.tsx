@@ -163,6 +163,9 @@ export function RustEditor({ value, readOnly, theme, fontSize = 14, canRun = tru
             onMount={handleMount}
             options={{
               readOnly,
+              // Keep edits synchronous with the immediate Run shortcut. Chromium
+              // EditContext can deliver composition text after the key command.
+              editContext: false,
               fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
               fontSize,
               lineHeight: 1.6,
