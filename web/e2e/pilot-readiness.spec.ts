@@ -94,9 +94,11 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
         const close = next.getByRole('button', { name: 'Close workspace backup' })
         if (await close.isVisible()) await close.click()
         await next.goto(starterPath())
+        // Copying code replaces the notice with its clipboard result. Verify
+        // the reopen outcome before performing that separate action.
+        await expect(next.getByText('Welcome back. Your saved work on “Own readiness fixture” is open.', { exact: true })).toBeVisible()
         await showCode(next)
         await copyFallback(next, editedSource)
-        await expect(next.getByText('Welcome back. Your saved work on “Own readiness fixture” is open.', { exact: true })).toBeVisible()
         await expect(next.getByRole('region', { name: 'Lesson' }).getByRole('link')).toHaveAttribute('href', lessonUrl)
         const restoredFile = await backup(next)
         const roundTrip = JSON.parse(await readFile(restoredFile, 'utf8'))

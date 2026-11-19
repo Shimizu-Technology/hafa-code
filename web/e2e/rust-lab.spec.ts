@@ -82,12 +82,25 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_RUST_LAB__?.editor()))).toBe(true)
   const savedText = await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())
   const oversizedSource = `// ${'x'.repeat(200_001)}`
-  if (browserName === 'chromium') await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.evaluate((text) => navigator.clipboard.writeText(text), oversizedSource)
+  if (browserName === 'chromium') {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.evaluate((text) => navigator.clipboard.writeText(text), oversizedSource)
+  }
   // A short line, so End is the end of the line even with word wrap on.
   await page.locator('.monaco-editor .view-line', { hasText: '#[derive(Debug)]' }).click()
   await page.keyboard.press('End')
-  await page.keyboard.press('ControlOrMeta+V')
+  if (browserName === 'chromium') {
+    await page.keyboard.press('ControlOrMeta+V')
+  } else {
+    // WebKit cannot grant clipboard-write permission without a native gesture.
+    // Simulate only the clipboard transport; Monaco still handles the paste,
+    // rejects the oversized model change, and restores the learner's caret.
+    await page.locator('.monaco-editor textarea.inputarea').evaluate((input, text) => {
+      const clipboardData = new DataTransfer()
+      clipboardData.setData('text/plain', text)
+      input.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }))
+    }, oversizedSource)
+  }
   await expect(page.getByText(/main\.rs is limited to 200 KB/)).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())).toBe(savedText)
   await page.keyboard.type('!')
