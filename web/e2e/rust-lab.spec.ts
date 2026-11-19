@@ -23,6 +23,9 @@ function trackToolchainRequests(page: Page) {
 
 async function setSource(page: Page, source: string) {
   await page.evaluate((text) => window.__HAFA_RUST_LAB__?.setSource(text), source)
+  // The fixture updates React first; wait for the real Monaco model before
+  // sending keyboard events into it. This does not delay Run after typing.
+  await expect.poll(() => page.evaluate(() => window.__HAFA_RUST_LAB__?.editor()?.getText())).toBe(source)
 }
 
 /** "Fix this error" opens the Coach in the learning drawer (below 1600px), as in the workspace. */
@@ -357,7 +360,10 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await setSource(page, 'fn main() {\n    let x = 5;\n    println!("{x}");\n}\n')
     await page.locator('.monaco-editor .view-line').nth(1).click()
     await page.keyboard.press('End')
-    await page.keyboard.type('\nx = 6;', { delay: 25 })
+    // Enter is an editor command (newline + indentation), not text inserted
+    // through EditContext. Match how a learner actually starts the next line.
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('x = 6;', { delay: 25 })
     await page.keyboard.press('ControlOrMeta+Enter')
     await expect(page.locator('.lab-status')).toContainText('Did not compile')
     await expect(await openCoach(page, /An immutable variable was assigned twice/)).toContainText('E0384')
