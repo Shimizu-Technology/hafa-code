@@ -7,6 +7,7 @@ vendor/bundle/
 dist/
 web/dist/
 web/dist-clerk-e2e/
+web/dist-rust-e2e/
 web/playwright-report/
 web/test-results/
 

@@ -1,5 +1,24 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test as base, type Page } from '@playwright/test'
+
+// WebKit's ephemeral contexts intentionally discard Cache Storage on reload.
+// Exercise this file in fresh, disposable normal profiles, one browser at a
+// time. Overriding every context avoids keeping the runner's browser alongside
+// a second browser just for the saved-compiler case. Chromium keeps its fixture.
+// https://github.com/microsoft/playwright/issues/41618
+const test = process.env.E2E_BROWSER === 'webkit' ? base.extend({
+  context: async ({ playwright, baseURL, viewport, isMobile, hasTouch, userAgent, deviceScaleFactor }, run) => {
+    const context = await playwright.webkit.launchPersistentContext('', {
+      baseURL, viewport, isMobile, hasTouch, userAgent, deviceScaleFactor,
+    })
+    try {
+      await run(context)
+    } finally {
+      await context.close()
+    }
+  },
+  page: async ({ context }, run) => { await run(context.pages()[0]) },
+}) : base
 
 // The experimental Rust Lab (docs/RUST_LAB.md). Tests tagged @rust-toolchain download the
 // pinned 38.7 MB compiler through the dev server; set E2E_SKIP_RUST_TOOLCHAIN=1 to skip them

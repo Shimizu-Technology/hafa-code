@@ -133,6 +133,11 @@ test('toasts sit bottom-right without covering controls and leave on their own',
   await page.locator('.sidebar-content').getByRole('button', { name: 'JS', exact: true }).click()
   const toast = page.locator('.floating-dock .toast')
   await expect(toast).toHaveAttribute('data-tone', 'success')
+  // Visibility precedes the dock's collision-avoidance transition. Measure its
+  // settled placement, rather than whichever animation frame this engine sees.
+  await toast.evaluate(async (node) => {
+    await Promise.all(node.parentElement!.getAnimations({ subtree: true }).map((animation) => animation.finished))
+  })
   const box = (await toast.boundingBox())!
   expect(box.x + box.width).toBeGreaterThan(1440 - 40)
   // Bottom-right, lifted only as far as needed to clear the output footer and page footer.
