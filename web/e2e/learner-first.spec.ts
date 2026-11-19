@@ -135,9 +135,11 @@ test('toasts sit bottom-right without covering controls and leave on their own',
   await expect(toast).toHaveAttribute('data-tone', 'success')
   // Visibility precedes the dock's collision-avoidance transition. Measure its
   // settled placement, rather than whichever animation frame this engine sees.
-  await toast.evaluate(async (node) => {
-    await Promise.all(node.parentElement!.getAnimations({ subtree: true }).map((animation) => animation.finished))
-  })
+  // Poll current animations: a new placement cancels/replaces the old transition
+  // (whose finished promise rejects), so a captured promise list can race it.
+  await expect.poll(() => toast.evaluate((node) => node.parentElement!
+    .getAnimations({ subtree: true })
+    .filter((animation) => animation.playState === 'running' || animation.pending).length)).toBe(0)
   const box = (await toast.boundingBox())!
   expect(box.x + box.width).toBeGreaterThan(1440 - 40)
   // Bottom-right, lifted only as far as needed to clear the output footer and page footer.

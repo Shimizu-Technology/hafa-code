@@ -18,7 +18,13 @@ const toolchainPath = [
 ].filter(Boolean).join(':')
 
 const browserName = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium'
-const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : { ...devices['Desktop Chrome'], channel: process.env.CI ? undefined : 'chromium' }
+const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : {
+  ...devices['Desktop Chrome'],
+  // The Windows UA in Desktop Chrome makes Monaco bind Ctrl+A on a Mac,
+  // while Playwright's ControlOrMeta sends Cmd+A. Keep the native platform UA.
+  ...(process.platform === 'darwin' ? { userAgent: undefined } : {}),
+  channel: process.env.CI ? undefined : 'chromium',
+}
 
 export default defineConfig({
   testDir: './e2e',
