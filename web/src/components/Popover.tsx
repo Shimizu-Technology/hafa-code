@@ -85,7 +85,12 @@ export function Popover({
         aria-controls={open ? panelId : undefined}
         aria-label={triggerLabel}
         title={title}
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => {
+          // Safari does not focus buttons on pointer activation. Keep Escape
+          // and focus restoration anchored to the disclosure trigger there too.
+          event.currentTarget.focus()
+          setOpen((current) => !current)
+        }}
       >
         {trigger}
       </button>

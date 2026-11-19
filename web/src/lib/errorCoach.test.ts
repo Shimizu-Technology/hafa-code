@@ -118,3 +118,10 @@ describe('contextual error coach', () => {
     expect(errorHeadline('python', '  \n')).toBeNull()
   })
 })
+
+it('explains Python input limitations without treating Safari as a Python failure', () => {
+  const advice = coachRunnerError('python', 'main.py', failure('RuntimeError: Interactive input requires a browser with WebAssembly JSPI support.'))
+  expect(advice?.title).toBe('This browser cannot ask for input')
+  expect(advice?.explanation).toContain('Safari can still run Python')
+  expect(advice?.steps.join(' ')).toContain('replace input() with a sample value')
+})

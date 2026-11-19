@@ -65,7 +65,7 @@ test('only the Rust Lab page is cross-origin isolated', async ({ page, request }
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(false)
 })
 
-test('the lab asks before downloading the compiler and shows its size', async ({ page }) => {
+test('the lab asks before downloading the compiler and shows its size', async ({ page, browserName }) => {
   const toolchainRequests = trackToolchainRequests(page)
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/labs/rust/')
@@ -81,8 +81,9 @@ test('the lab asks before downloading the compiler and shows its size', async ({
   // keeps the cursor where the learner was typing.
   await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_RUST_LAB__?.editor()))).toBe(true)
   const savedText = await page.evaluate(() => window.__HAFA_RUST_LAB__!.editor()!.getText())
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.evaluate((text) => navigator.clipboard.writeText(text), `// ${'x'.repeat(200_001)}`)
+  const oversizedSource = `// ${'x'.repeat(200_001)}`
+  if (browserName === 'chromium') await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.evaluate((text) => navigator.clipboard.writeText(text), oversizedSource)
   // A short line, so End is the end of the line even with word wrap on.
   await page.locator('.monaco-editor .view-line', { hasText: '#[derive(Debug)]' }).click()
   await page.keyboard.press('End')
@@ -243,18 +244,21 @@ test('the experiment note is one line that stays hidden once dismissed, and the 
   await expectNoHorizontalOverflow(page)
 })
 
-test('is listed with the languages on the desktop workspace and links back', async ({ page }) => {
+test('is listed with the languages on the desktop workspace and links back', async ({ page, browserName }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/')
   const sidebar = page.locator('.project-sidebar .sidebar-content')
   const languages = sidebar.locator('.new-project-grid > *')
   await expect(languages.last()).toHaveAccessibleName('Rust Lab (experimental, opens a separate page)')
   // Chromium's own name, which (unlike Playwright's) includes CSS text-transform from the tag.
-  const cdp = await page.context().newCDPSession(page)
-  const { nodes } = await cdp.send('Accessibility.getFullAXTree') as { nodes: { role?: { value: string }; name?: { value: string } }[] }
-  const labLinkNames = nodes.filter((node) => node.role?.value === 'link' && /Rust/.test(node.name?.value ?? '')).map((node) => node.name?.value)
-  expect(labLinkNames).toContain('Rust Lab (experimental, opens a separate page)')
-  expect(labLinkNames.filter((name) => /LAB/.test(name ?? ''))).toEqual([])
+  if (browserName === 'chromium') {
+    const cdp = await page.context().newCDPSession(page)
+    const { nodes } = await cdp.send('Accessibility.getFullAXTree') as { nodes: { role?: { value: string }; name?: { value: string } }[] }
+    const labLinkNames = nodes.filter((node) => node.role?.value === 'link' && /Rust/.test(node.name?.value ?? '')).map((node) => node.name?.value)
+    expect(labLinkNames).toContain('Rust Lab (experimental, opens a separate page)')
+    expect(labLinkNames.filter((name) => /LAB/.test(name ?? ''))).toEqual([])
+    await cdp.detach()
+  }
   const projectsBefore = await page.locator('.sidebar-content .project-card').count()
   await languages.last().click()
   await expect(page).toHaveURL(/\/labs\/rust\/$/)
@@ -453,3 +457,31 @@ test.describe('with the real compiler @rust-toolchain', () => {
     }
   })
 })
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`phone navigation keeps contrast during selection in ${colorScheme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ colorScheme })
+    await page.goto('/labs/rust/')
+    await expect(labNav(page).getByRole('button', { name: 'Output' })).toBeVisible()
+    const minimumContrast = await page.evaluate(async () => {
+      const button = [...document.querySelectorAll<HTMLButtonElement>('.mobile-bottom-nav button')].find(b => b.textContent?.includes('Output'))!
+      const rgb = (color: string) => color.match(/[\d.]+/g)!.map(Number)
+      const luminance = (color: number[]) => color.slice(0, 3).map(c => { const s = c / 255; return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4 }).reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0)
+      const track = rgb(getComputedStyle(button.parentElement!).backgroundColor)
+      button.click()
+      let minimum = Infinity
+      for (let i = 0; i < 15; i++) {
+        await new Promise(requestAnimationFrame)
+        const style = getComputedStyle(button)
+        const fg = luminance(rgb(style.color))
+        const bg = rgb(style.backgroundColor)
+        const alpha = bg[3] ?? 1
+        const back = luminance(bg.map((c, i) => c * alpha + track[i] * (1 - alpha)))
+        minimum = Math.min(minimum, (Math.max(fg, back) + .05) / (Math.min(fg, back) + .05))
+      }
+      return minimum
+    })
+    expect(minimumContrast).toBeGreaterThanOrEqual(4.5)
+  })
+}

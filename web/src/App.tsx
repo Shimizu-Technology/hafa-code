@@ -2416,7 +2416,7 @@ export default function App() {
               onRestore={() => { void restoreProject() }}
             />
 
-            {lessonReturn && <LessonBar key={project.id} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
+            {lessonReturn && <LessonBar key={`lesson:${project.id}`} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
 
             {mobileTab === 'history' && (
               <CheckpointPage
@@ -2428,7 +2428,7 @@ export default function App() {
             )}
 
             {canAccessProjectFeedback && (
-              <ProjectFeedback key={project.id} projectId={project.id} files={project.files} currentUserId={user?.id} />
+              <ProjectFeedback key={`feedback:${project.id}`} projectId={project.id} files={project.files} currentUserId={user?.id} />
             )}
 
             {currentPracticeChallengeId && !currentPracticeChallenge && practiceLabState !== 'ready' && (

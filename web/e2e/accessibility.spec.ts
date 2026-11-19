@@ -1,3 +1,4 @@
+import { tabToNextControl } from './keyboard'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -119,8 +120,8 @@ test('project, file, history, sharing, and classroom controls work from the keyb
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog', { name: 'Share a copy of this project?' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Close share dialog' })).toBeFocused()
-  await page.keyboard.press('Tab')
-  await page.keyboard.press('Tab')
+  await tabToNextControl(page)
+  await tabToNextControl(page)
   await expect(page.getByRole('button', { name: 'Create share link' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog', { name: 'Copy project link' })).toBeVisible()

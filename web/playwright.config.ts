@@ -16,6 +16,9 @@ const toolchainPath = [
   process.env.PATH,
 ].filter(Boolean).join(':')
 
+const browserName = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium'
+const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : { ...devices['Desktop Chrome'], channel: 'chromium' }
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -31,14 +34,14 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: browserName,
       testIgnore: /deferred-sign-in\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...desktop },
     },
     {
-      name: 'chromium-clerk-build',
+      name: `${browserName}-clerk-build`,
       testMatch: /deferred-sign-in\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: clerkWebUrl },
+      use: { ...desktop, baseURL: clerkWebUrl },
     },
   ],
   webServer: [

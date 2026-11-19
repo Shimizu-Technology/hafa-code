@@ -1,3 +1,4 @@
+import { tabToNextControl } from './keyboard'
 import { expect, test, type Page } from '@playwright/test'
 
 async function openPython(page: Page) {
@@ -60,8 +61,8 @@ test('keyboard focus is visible with the focus-ring token', async ({ page }) => 
   await openPython(page)
   const share = page.locator('.app-bar').getByRole('button', { name: 'Share' })
   await share.focus()
-  await page.keyboard.press('Shift+Tab')
-  await page.keyboard.press('Tab')
+  await tabToNextControl(page, true)
+  await tabToNextControl(page)
   await expect(share).toBeFocused()
   await expect(share).toHaveCSS('outline-style', 'solid')
   await expect(share).toHaveCSS('outline-width', '2px')

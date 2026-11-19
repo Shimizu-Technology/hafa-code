@@ -1,3 +1,4 @@
+import { tabToNextControl } from './keyboard'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { buildStarterLink } from '../src/lib/starterLinks'
@@ -217,7 +218,7 @@ test('first visit, workspace, and dialogs have no serious accessibility findings
     })
     order.push(label)
     if (/Skip the editor/.test(label)) break
-    await page.keyboard.press('Tab')
+    await tabToNextControl(page)
   }
   const position = (pattern: RegExp) => order.findIndex((label) => pattern.test(label))
   expect(position(/^Skip to code editor/)).toBe(0)

@@ -234,3 +234,45 @@ test('SQL results remain usable without page overflow on a phone viewport', asyn
   await expect(page.getByRole('button', { name: 'Reset database' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
+
+test('Python input accepts an answer or explains the Safari alternative', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/?lang=python')
+  await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_E2E_EDITOR__))).toBe(true)
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__!.setValue('name = input("Your name: ")\nprint("Hafa adai, " + name)\n'))).toBe(true)
+  await page.getByRole('button', { name: 'Run Python' }).click()
+  const supportsInput = await page.evaluate(() => typeof (WebAssembly as unknown as { Suspending?: unknown }).Suspending === 'function')
+  if (!supportsInput) {
+    await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'error', { timeout: 90_000 })
+    await page.getByRole('button', { name: 'Fix this error' }).click()
+    await expect(page.getByText('This browser cannot ask for input', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Safari can still run Python programs/)).toBeVisible()
+    await expect(page.getByText(/replace input\(\) with a sample value/)).toBeVisible()
+  } else {
+    const answer = page.getByRole('textbox', { name: 'Program input' })
+    await expect(answer).toBeVisible({ timeout: 90_000 })
+    await answer.fill('Lina')
+    await page.getByRole('button', { name: 'Submit program input' }).click()
+    await expect(page.locator('.terminal')).toContainText('Hafa adai, Lina')
+    await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'success')
+  }
+})
+
+test('a browser without JSPI explains how to continue the Python lesson', async ({ page }) => {
+  test.setTimeout(120_000)
+  let legacyWorker = false
+  await page.route('**/src/workers/pythonRunner.worker.ts*', async route => {
+    legacyWorker = true
+    const response = await route.fetch()
+    await route.fulfill({ response, body: 'WebAssembly.Suspending = undefined; WebAssembly.promising = undefined;\n' + await response.text() })
+  })
+  await page.goto('/?lang=python')
+  await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_E2E_EDITOR__))).toBe(true)
+  expect(await page.evaluate(() => window.__HAFA_E2E_EDITOR__!.setValue('name = input("Your name: ")\nprint(name)\n'))).toBe(true)
+  await page.getByRole('button', { name: 'Run Python' }).click()
+  await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'error', { timeout: 90_000 })
+  expect(legacyWorker).toBe(true)
+  await page.getByRole('button', { name: 'Fix this error' }).click()
+  await expect(page.getByText('This browser cannot ask for input', { exact: true })).toBeVisible()
+  await expect(page.getByText(/replace input\(\) with a sample value/)).toBeVisible()
+})

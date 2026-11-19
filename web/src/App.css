@@ -608,6 +608,9 @@ textarea {
 
 /* ---- Popovers and menus ---- */
 
+/* An open menu must sit above persistent notices, including on short phones. */
+.app-bar:has(.popover[data-open]) { z-index: 70; }
+
 .popover { position: relative; }
 
 .popover-panel {
@@ -5056,6 +5059,10 @@ textarea {
     font-size: var(--text-xs);
     font-weight: 600;
   }
+
+  /* Selection reverses ink and surface. Cross-fading both loses contrast
+     halfway through the swap; keep the colors immediate. */
+  .mobile-bottom-nav button { transition: transform var(--duration-press) var(--ease-out); }
 
   .mobile-bottom-nav button.active {
     background: var(--text-on-code);

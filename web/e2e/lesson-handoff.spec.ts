@@ -1,3 +1,4 @@
+import { tabToNextControl } from './keyboard'
 import { expect, test, type Page } from '@playwright/test'
 import { buildStarterLink } from '../src/lib/starterLinks'
 
@@ -26,9 +27,16 @@ async function openLesson(page: Page, extraQuery = '') {
   await page.locator('.monaco-editor').first().waitFor()
 }
 
-test('starter link with a return: run, copy for Learn, and go back to the lesson', async ({ page, context }) => {
+test('starter link with a return: run, copy for Learn, and go back to the lesson', async ({ page, context, browserName }) => {
   test.setTimeout(120_000)
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  if (browserName === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  else await page.addInitScript(() => {
+    // WebKit cannot grant clipboard permissions in automation. Exercise the
+    // successful app transport deterministically; denied-copy has its own test.
+    let copied = ''
+    Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async (text: string) => { copied = text } })
+    Object.defineProperty(navigator.clipboard, 'readText', { configurable: true, value: async () => copied })
+  })
   await stubLearn(page)
   await page.setViewportSize({ width: 1280, height: 800 })
   await openLesson(page)
@@ -80,6 +88,8 @@ test('reopening the lesson link after editing keeps the work and offers Start ov
 })
 
 test('a signed-in learner keeps the lesson bar after the project syncs and reloads', async ({ page }) => {
+  const keyWarnings: string[] = []
+  page.on('console', message => { if (message.text().includes('same key')) keyWarnings.push(message.text()) })
   await page.setViewportSize({ width: 1280, height: 800 })
   const session = page.waitForResponse((response) => response.url().endsWith('/api/v1/sessions') && response.request().method() === 'POST')
   await openLesson(page, '&e2e_user=student')
@@ -101,6 +111,7 @@ test('a signed-in learner keeps the lesson bar after the project syncs and reloa
   await openLesson(page, '&e2e_user=student')
   await expect(page.locator('.monaco-editor .view-lines')).toContainText('synced work')
   await expect(page.getByText('Welcome back. Your saved work on “Expense summary project” is open.')).toBeVisible()
+  expect(keyWarnings).toEqual([])
 })
 
 test('a disallowed return URL is ignored without a message', async ({ page }) => {
@@ -133,8 +144,15 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }
   })
 }
 
-test('keyboard only: reach Copy code for Learn and Back to your lesson', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+test('keyboard only: reach Copy code for Learn and Back to your lesson', async ({ page, context, browserName }) => {
+  if (browserName === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  else await page.addInitScript(() => {
+    // WebKit cannot grant clipboard permissions in automation. Exercise the
+    // successful app transport deterministically; denied-copy has its own test.
+    let copied = ''
+    Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async (text: string) => { copied = text } })
+    Object.defineProperty(navigator.clipboard, 'readText', { configurable: true, value: async () => copied })
+  })
   await stubLearn(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -146,16 +164,30 @@ test('keyboard only: reach Copy code for Learn and Back to your lesson', async (
   await page.getByLabel('Project name').focus()
   let reachedBack = false
   for (let index = 0; index < 40 && !reachedBack; index += 1) {
-    await page.keyboard.press('Tab')
+    await tabToNextControl(page)
     reachedBack = await back.evaluate((element) => element === document.activeElement)
   }
   expect(reachedBack).toBe(true)
   await expect(back).toHaveCSS('outline-style', 'solid')
-  await page.keyboard.press('Tab')
+  await tabToNextControl(page)
   await expect(copy).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByText('Code copied. Paste it into the lesson’s submission box.')).toBeVisible()
   await back.focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(LESSON_URL)
+})
+
+test('denied clipboard gives complete selectable code and keeps keyboard focus', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async () => { throw new Error('QA clipboard denied') } }))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openLesson(page)
+  const copy = page.getByRole('region', { name: 'Lesson' }).getByRole('button', { name: /Copy (code )?for Learn/ })
+  await copy.click()
+  const dialog = page.getByRole('dialog', { name: 'Copy your code' })
+  await expect(dialog.getByLabel('Code to copy')).toHaveValue(STARTER)
+  await dialog.getByRole('button', { name: 'Select all code' }).click()
+  expect(await dialog.getByLabel('Code to copy').evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe(STARTER.length)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
 })
