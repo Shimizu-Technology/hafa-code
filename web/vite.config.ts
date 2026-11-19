@@ -316,6 +316,9 @@ export default defineConfig({
     // front keeps the dev server from reloading the lab in the middle of its first run.
     include: [
       'typescript',
+      // Discover this lazy worker dependency before a first run. Late
+      // optimization reloads the workspace and discards its query result.
+      '@sqlite.org/sqlite-wasm',
       '@bjorn3/browser_wasi_shim',
       '@oligami/browser_wasi_shim-threads',
       'brotli-dec-wasm/web',

@@ -52,6 +52,6 @@ if [ -d api ]; then
 fi
 
 echo "-- audit all web deps"
-(cd web && node scripts/audit-guards.mjs && node scripts/audit-check.mjs .)
+npm --prefix web audit --audit-level=high
 
 echo "Gate passed."

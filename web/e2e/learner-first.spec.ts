@@ -5,8 +5,6 @@ async function openPython(page: Page) {
   await page.goto('/?e2e_user=student&lang=python')
   expect((await session).status()).toBe(200)
   await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
-  const codeTab = page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Code', exact: true })
-  if (await codeTab.isVisible()) await codeTab.click()
   await page.locator('.monaco-editor').first().waitFor()
 }
 
@@ -36,9 +34,7 @@ test('the editor starts high and Run is the only visible primary action', async 
     // measurement was a race (it lost more often once the editor began loading lazily).
     await page.goto('/?lang=python')
     await expect(page.getByLabel('Project name')).toHaveValue(/^Python Playground/)
-    const codeTab = page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Code', exact: true })
-  if (await codeTab.isVisible()) await codeTab.click()
-  await page.locator('.monaco-editor').first().waitFor()
+    await page.locator('.monaco-editor').first().waitFor()
     const editor = await page.locator('.editor-panel .monaco-editor').boundingBox()
     expect(editor!.y, `editor top at ${viewport.width}`).toBeLessThanOrEqual(200)
     const primaries = page.locator('button.primary:visible')

@@ -357,8 +357,7 @@ test.describe('with the real compiler @rust-toolchain', () => {
     await setSource(page, 'fn main() {\n    let x = 5;\n    println!("{x}");\n}\n')
     await page.locator('.monaco-editor .view-line').nth(1).click()
     await page.keyboard.press('End')
-    // Commit the complete edit as one input event before the immediate Run hotkey.
-    await page.keyboard.insertText('\nx = 6;')
+    await page.keyboard.type('\nx = 6;', { delay: 25 })
     await page.keyboard.press('ControlOrMeta+Enter')
     await expect(page.locator('.lab-status')).toContainText('Did not compile')
     await expect(await openCoach(page, /An immutable variable was assigned twice/)).toContainText('E0384')

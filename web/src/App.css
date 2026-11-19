@@ -4981,7 +4981,7 @@ textarea {
    * Code tab: the editor fills exactly the height left under the app bar, lesson bar,
    * notices, and editor header, so its last lines never hide behind the navigation.
    */
-  .app-shell.mobile-tab-code { display: flex; flex-direction: column; height: 100dvh; min-height: 100dvh; --editor-height: auto; }
+  .app-shell.mobile-tab-code { display: flex; flex-direction: column; min-height: 100dvh; --editor-height: auto; }
   .mobile-tab-code .coding-stage,
   .mobile-tab-code .layout-grid,
   .mobile-tab-code .main-workspace,

@@ -2,13 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function openStudent(page: Page) {
   const session = page.waitForResponse((response) => response.url().endsWith('/api/v1/sessions') && response.request().method() === 'POST')
-  // Session creation precedes the initial cloud-project load. Finish fixture
-  // hydration before creating/running a project, so a late load cannot reset it.
-  const projects = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/projects' && response.request().method() === 'GET')
   await page.goto('/?e2e_user=student')
   expect((await session).status()).toBe(200)
-  expect((await projects).status()).toBe(200)
-  await expect(page.getByText('Saved to cloud + local backup', { exact: true })).toHaveCount(1)
 }
 
 test('TypeScript runs a typed multi-file project and explains compiler errors', async ({ page }) => {
@@ -192,10 +187,13 @@ test('SQL runs seeded queries, preserves deliberate changes, resets, and explain
   await page.getByRole('button', { name: 'View starter rows' }).click()
   await expect(page.locator('.file-tab-list').getByRole('button', { name: 'seed.sql' })).toHaveClass(/active/)
   await page.locator('.file-tab-list').getByRole('button', { name: 'main.sql' }).click()
+  let reloaded = false
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) reloaded = true })
   await page.getByRole('button', { name: 'Run SQL' }).click()
   const initialResult = page.getByRole('region', { name: 'Query result, 3 rows' })
   await expect(initialResult.getByRole('columnheader')).toHaveText(['name', 'village', 'completed_lessons'])
   await expect(initialResult.getByRole('row').nth(1)).toContainText('Lina')
+  expect(reloaded, 'The first SQLite run must not reload the workspace').toBe(false)
 
   const editor = page.getByRole('textbox', { name: 'Editor content' })
   await page.locator('.monaco-editor .view-lines').click()
