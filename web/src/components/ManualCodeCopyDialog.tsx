@@ -2,8 +2,8 @@ import { useRef } from 'react'
 import { useModalFocus } from '../hooks/useModalFocus'
 
 /** Plain text stays selectable when an in-app browser denies clipboard access. */
-export function ManualCodeCopyDialog({ text, onClose }: { text: string; onClose: () => void }) {
-  const dialogRef = useModalFocus<HTMLElement>(true, onClose)
+export function ManualCodeCopyDialog({ text, returnFocusTo, onClose }: { text: string; returnFocusTo: HTMLElement; onClose: () => void }) {
+  const dialogRef = useModalFocus<HTMLElement>(true, onClose, returnFocusTo)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const selectCode = () => {
     const textarea = textRef.current

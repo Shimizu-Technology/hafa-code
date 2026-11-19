@@ -1011,6 +1011,24 @@ describe('App language guide practice projects', () => {
       expect(screen.queryByRole('dialog', { name: 'Copy your code' })).toBeNull()
     })
 
+    it('returns to the Copy button when focus moves during a pending clipboard request', async () => {
+      const user = userEvent.setup()
+      let rejectCopy!: (error: Error) => void
+      const writeText = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectCopy = reject }))
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      window.history.replaceState(null, '', lessonLink())
+      render(<App />)
+      const copy = screen.getByRole('button', { name: /Copy code for Learn/ })
+      await user.click(copy)
+      expect(writeText).toHaveBeenCalledOnce()
+      await user.click(screen.getByLabelText('Project name'))
+      expect(document.activeElement).toBe(screen.getByLabelText('Project name'))
+      await act(async () => rejectCopy(new Error('denied after focus moved')))
+      expect(await screen.findByRole('dialog', { name: 'Copy your code' })).toBeTruthy()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(document.activeElement).toBe(copy))
+    })
+
     it('keeps the lesson bar after a reload and only on the project that came from the lesson', async () => {
       const user = userEvent.setup()
       window.history.replaceState(null, '', lessonLink())

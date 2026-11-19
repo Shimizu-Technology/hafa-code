@@ -192,3 +192,35 @@ test('denied clipboard gives complete selectable code and keeps keyboard focus',
   await expect(dialog).toBeHidden()
   await expect(copy).toBeFocused()
 })
+
+for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+  test(`delayed clipboard denial returns to its Copy button at ${viewport.width}px`, async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true,
+        value: () => new Promise<void>((_resolve, reject) => {
+          (window as Window & { __HAFA_QA_REJECT_COPY__?: () => void }).__HAFA_QA_REJECT_COPY__ = () => reject(new Error('QA delayed denial'))
+        }),
+      })
+    })
+    await page.setViewportSize(viewport)
+    await openLesson(page)
+    const copy = page.getByRole('region', { name: 'Lesson' }).getByRole('button', { name: /Copy (code )?for Learn/ })
+    for (const closeWith of ['Escape', 'Done']) {
+      await page.evaluate(() => { delete (window as Window & { __HAFA_QA_REJECT_COPY__?: () => void }).__HAFA_QA_REJECT_COPY__ })
+      await copy.click()
+      await expect.poll(() => page.evaluate(() => typeof (window as Window & { __HAFA_QA_REJECT_COPY__?: () => void }).__HAFA_QA_REJECT_COPY__)).toBe('function')
+      const editor = page.getByRole('textbox', { name: /^Editor content/ }).first()
+      await editor.focus()
+      await expect(editor).toBeFocused()
+      await page.evaluate(() => (window as Window & { __HAFA_QA_REJECT_COPY__?: () => void }).__HAFA_QA_REJECT_COPY__!())
+      const dialog = page.getByRole('dialog', { name: 'Copy your code' })
+      await expect(dialog.getByLabel('Code to copy')).toHaveValue(STARTER)
+      await expect(dialog.getByRole('button', { name: 'Select all code' })).toBeFocused()
+      if (closeWith === 'Escape') await page.keyboard.press('Escape')
+      else await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+      await expect(dialog).toBeHidden()
+      await expect(copy).toBeFocused()
+    }
+  })
+}
