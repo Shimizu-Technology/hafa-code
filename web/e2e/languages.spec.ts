@@ -187,10 +187,13 @@ test('SQL runs seeded queries, preserves deliberate changes, resets, and explain
   await page.getByRole('button', { name: 'View starter rows' }).click()
   await expect(page.locator('.file-tab-list').getByRole('button', { name: 'seed.sql' })).toHaveClass(/active/)
   await page.locator('.file-tab-list').getByRole('button', { name: 'main.sql' }).click()
+  let reloaded = false
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) reloaded = true })
   await page.getByRole('button', { name: 'Run SQL' }).click()
   const initialResult = page.getByRole('region', { name: 'Query result, 3 rows' })
   await expect(initialResult.getByRole('columnheader')).toHaveText(['name', 'village', 'completed_lessons'])
   await expect(initialResult.getByRole('row').nth(1)).toContainText('Lina')
+  expect(reloaded, 'The first SQLite run must not reload the workspace').toBe(false)
 
   const editor = page.getByRole('textbox', { name: 'Editor content' })
   await page.locator('.monaco-editor .view-lines').click()
