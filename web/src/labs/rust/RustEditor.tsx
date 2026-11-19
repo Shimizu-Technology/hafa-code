@@ -1,4 +1,5 @@
 import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import type { OnMount } from '@monaco-editor/react'
 import type * as MonacoApi from 'monaco-editor'
 import { focusOutside, isApplePlatform } from '../../lib/focusNavigation'
@@ -88,7 +89,10 @@ export function RustEditor({ value, readOnly, theme, fontSize = 14, canRun = tru
   useEffect(() => { valueRef.current = value }, [value])
 
   const handleChange = (next: string | undefined, event?: MonacoApi.editor.IModelContentChangedEvent) => {
-    if (onChange(next ?? '') !== false) return
+    // Commit the controlled value before the next native EditContext update.
+    // A delayed React echo can otherwise replace newer model text and move
+    // the caret, splitting fast keyboard input across unrelated lines.
+    if (flushSync(() => onChange(next ?? '')) !== false) return
     // The refused change's ranges are in the accepted text's coordinates: put the cursor (or the
     // selection the change replaced) back there, so typing continues where the learner was.
     const selections = event?.changes.map(({ range }) => ({
