@@ -6,8 +6,11 @@ export function ManualCodeCopyDialog({ text, onClose }: { text: string; onClose:
   const dialogRef = useModalFocus<HTMLElement>(true, onClose)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const selectCode = () => {
-    textRef.current?.focus()
-    textRef.current?.select()
+    const textarea = textRef.current
+    if (!textarea) return
+    textarea.focus()
+    textarea.select()
+    textarea.setSelectionRange(0, textarea.value.length)
   }
 
   return (

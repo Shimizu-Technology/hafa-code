@@ -246,7 +246,7 @@ test('Python input accepts an answer or explains the Safari alternative', async 
     await expect(page.locator('.output-panel')).toHaveAttribute('data-run-status', 'error', { timeout: 90_000 })
     await page.getByRole('button', { name: 'Fix this error' }).click()
     await expect(page.getByText('This browser cannot ask for input', { exact: true })).toBeVisible()
-    await expect(page.getByText(/Safari can still run Python programs/)).toBeVisible()
+    await expect(page.getByText(/This browser can still run Python programs/)).toBeVisible()
     await expect(page.getByText(/replace input\(\) with a sample value/)).toBeVisible()
   } else {
     const answer = page.getByRole('textbox', { name: 'Program input' })
@@ -264,7 +264,7 @@ test('a browser without JSPI explains how to continue the Python lesson', async 
   await page.route('**/src/workers/pythonRunner.worker.ts*', async route => {
     legacyWorker = true
     const response = await route.fetch()
-    await route.fulfill({ response, body: 'WebAssembly.Suspending = undefined; WebAssembly.promising = undefined;\n' + await response.text() })
+    await route.fulfill({ response, body: 'delete WebAssembly.Suspending; delete WebAssembly.promising; delete WebAssembly.Suspender;\n' + await response.text() })
   })
   await page.goto('/?lang=python')
   await expect.poll(() => page.evaluate(() => Boolean(window.__HAFA_E2E_EDITOR__))).toBe(true)

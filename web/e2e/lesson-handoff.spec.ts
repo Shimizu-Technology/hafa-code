@@ -190,4 +190,5 @@ test('denied clipboard gives complete selectable code and keeps keyboard focus',
   expect(await dialog.getByLabel('Code to copy').evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe(STARTER.length)
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
+  await expect(copy).toBeFocused()
 })

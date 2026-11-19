@@ -4,6 +4,7 @@ import { buildStarterLink } from '../src/lib/starterLinks'
 
 // All source and shares in this suite are throwaway QA fixtures.
 const source = '# Own readiness fixture: Lina — å\nitems = [12, 8, 15]\nprint("Total:", sum(items))\n'
+const editedSource = source + '# learner edit: keep this exact line after recovery\n'
 const lessonUrl = 'https://learn.codeschoolofguam.com/lessons/419'
 function starterPath() {
   const url = new URL(buildStarterLink({ title: 'Own readiness fixture', kind: 'python', files: [{ path: 'main.py', content: source }], starterKey: 'qa-readiness:own', returnUrl: lessonUrl, returnLabel: 'Readiness QA' }).url)
@@ -59,12 +60,12 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
       await showCode(page)
       await editor.focus()
       await page.keyboard.press('ControlOrMeta+A')
-      await page.keyboard.insertText(source)
+      await page.keyboard.insertText(editedSource)
       await page.getByRole('button', { name: /Run Python|Run again/ }).first().click()
       await expect(page.locator('.terminal')).toContainText('Total: 35')
       await page.reload()
       await showCode(page)
-      await expect(page.locator('.monaco-editor .view-lines')).toContainText('Own readiness fixture')
+      await expect(page.locator('.monaco-editor .view-lines')).toContainText('learner edit: keep this exact line')
       const file = await backup(page)
       expect(await readFile(file, 'utf8')).toContain('Own readiness fixture')
       console.log(`${testInfo.project.name} ${viewport.width} Q2 passed error/fix/reload`)
@@ -74,7 +75,10 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
       await page.addInitScript(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async () => { throw new Error('QA denial') } }))
       await page.goto(starterPath())
       await showCode(page)
-      await copyFallback(page, source)
+      await page.getByRole('textbox', { name: /^Editor content/ }).first().focus()
+      await page.keyboard.press('ControlOrMeta+A')
+      await page.keyboard.insertText(editedSource)
+      await copyFallback(page, editedSource)
       const file = await backup(page, testInfo.outputPath('own-workspace-backup.json'))
       const originalBackup = JSON.parse(await readFile(file, 'utf8'))
       await page.context().close()
@@ -91,7 +95,8 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
         if (await close.isVisible()) await close.click()
         await next.goto(starterPath())
         await showCode(next)
-        await copyFallback(next, source)
+        await copyFallback(next, editedSource)
+        await expect(next.getByText('Welcome back. Your saved work on “Own readiness fixture” is open.', { exact: true })).toBeVisible()
         await expect(next.getByRole('region', { name: 'Lesson' }).getByRole('link')).toHaveAttribute('href', lessonUrl)
         const restoredFile = await backup(next)
         const roundTrip = JSON.parse(await readFile(restoredFile, 'utf8'))
@@ -103,15 +108,21 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
           if (obj.library) return projects(obj.library)
           return undefined
         }
-        const ownFiles = (value: unknown) => (projects(value) as { title: string; files: unknown[] }[]).find(p => p.title === 'Own readiness fixture')?.files
-        expect(ownFiles(roundTrip)).toBeDefined()
-        expect(ownFiles(roundTrip)).toEqual(ownFiles(originalBackup))
+        const ownProjects = (value: unknown) => (projects(value) as { title: string; files: { content: string }[] }[]).filter(p => p.title === 'Own readiness fixture')
+        expect(ownProjects(roundTrip)).toHaveLength(1)
+        expect(ownProjects(originalBackup)).toHaveLength(1)
+        expect(ownProjects(roundTrip)[0].files).toEqual(ownProjects(originalBackup)[0].files)
+        expect(ownProjects(roundTrip)[0].files[0].content).toBe(editedSource)
         console.log(`${testInfo.project.name} ${viewport.width} Q3/Q4 exact restore and fallback passed`)
       } finally { await restored.close() }
     })
 
     test('Q5 share opens an editable byte-exact copy without lesson metadata', async ({ page, browser }, testInfo) => {
       await page.goto(starterPath())
+      await showCode(page)
+      await page.getByRole('textbox', { name: /^Editor content/ }).first().focus()
+      await page.keyboard.press('ControlOrMeta+A')
+      await page.keyboard.insertText(editedSource)
       await page.getByRole('button', { name: 'Share', exact: true }).first().click()
       await page.getByRole('button', { name: 'Create share link' }).click()
       const link = await page.getByRole('dialog', { name: 'Copy project link' }).getByRole('textbox').inputValue()
@@ -131,7 +142,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
         const download = next.waitForEvent('download')
         await next.getByRole('button', { name: /Download.*\.py|Export.*\.py/ }).click()
         const file = await (await download).path()
-        expect(await readFile(file!, 'utf8')).toBe(source)
+        expect(await readFile(file!, 'utf8')).toBe(editedSource)
         console.log(`${testInfo.project.name} ${viewport.width} Q5 byte-exact editable copy passed`)
       } finally { await imported.close() }
     })

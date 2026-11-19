@@ -17,7 +17,7 @@ const toolchainPath = [
 ].filter(Boolean).join(':')
 
 const browserName = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium'
-const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : { ...devices['Desktop Chrome'], channel: 'chromium' }
+const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : { ...devices['Desktop Chrome'], channel: process.env.CI ? undefined : 'chromium' }
 
 export default defineConfig({
   testDir: './e2e',
