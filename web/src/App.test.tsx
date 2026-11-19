@@ -956,11 +956,11 @@ describe('App language guide practice projects', () => {
   describe('lesson handoff', () => {
     const LESSON_URL = 'https://learn.codeschoolofguam.com/lessons/42'
     const starterCode = 'def total(items):\n    pass\n'
-    const lessonLink = () => {
+    const lessonLink = (files = [{ path: 'expense_summary.py', content: starterCode }]) => {
       const url = new URL(buildStarterLink({
         title: 'Expense summary project',
         kind: 'python',
-        files: [{ path: 'expense_summary.py', content: starterCode }],
+        files,
         starterKey: 'csg-python-pilot:project',
         returnUrl: LESSON_URL,
         returnLabel: 'Independent expense-summary project',
@@ -996,10 +996,19 @@ describe('App language guide practice projects', () => {
     it('explains how to copy by hand when the clipboard is blocked', async () => {
       const user = userEvent.setup()
       Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true })
-      window.history.replaceState(null, '', lessonLink())
+      const files = [{ path: 'expense_summary.py', content: starterCode }, { path: 'helper.py', content: 'value = 2' }]
+      const combined = `----- expense_summary.py -----\n${starterCode}\n\n----- helper.py -----\nvalue = 2`
+      window.history.replaceState(null, '', lessonLink(files))
       render(<App />)
       await user.click(screen.getByRole('button', { name: /Copy code for Learn/ }))
-      expect(screen.getByText(/Clipboard blocked. Select the code in the editor/)).toBeTruthy()
+      expect(screen.getByRole('dialog', { name: 'Copy your code' })).toBeTruthy()
+      expect((screen.getByRole('textbox', { name: 'Code to copy' }) as HTMLTextAreaElement).value).toBe(combined)
+      await user.click(screen.getByRole('button', { name: 'Select all code' }))
+      const field = screen.getByRole('textbox', { name: 'Code to copy' }) as HTMLTextAreaElement
+      expect(field.selectionStart).toBe(0)
+      expect(field.selectionEnd).toBe(combined.length)
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog', { name: 'Copy your code' })).toBeNull()
     })
 
     it('keeps the lesson bar after a reload and only on the project that came from the lesson', async () => {

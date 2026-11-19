@@ -5198,3 +5198,17 @@ textarea {
   .mobile-home-create > div,
   .new-project-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.manual-code-copy {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.manual-code-copy textarea {
+  width: 100%;
+  min-height: 8rem;
+  height: min(40dvh, 20rem);
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 16px;
+}

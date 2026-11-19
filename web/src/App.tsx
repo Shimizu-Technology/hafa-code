@@ -64,6 +64,7 @@ import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { FloatingDock } from './components/FloatingDock'
+import { ManualCodeCopyDialog } from './components/ManualCodeCopyDialog'
 import { LessonBar } from './components/LessonBar'
 import { LabDestinationLinks } from './components/LabDestinationLinks'
 import { ProjectSidebar } from './components/ProjectSidebar'
@@ -1774,14 +1775,17 @@ export default function App() {
   // The lesson link stays with this browser's copy of the project; it is never part of Share or cloud saves.
   const lessonReturn = reviewProject ? null : lessonReturnForProject(lessonLinks, project.id)
 
+  const [manualCopyText, setManualCopyText] = useState<string | null>(null)
+
   const copyCodeForLearn = async () => {
     const text = project.files.length === 1
       ? project.files[0].content
       : project.files.map((file) => `----- ${file.path} -----\n${file.content}`).join('\n\n')
     const copied = await writeClipboardText(text)
+    if (!copied) setManualCopyText(text)
     setNotice(copied
       ? 'Code copied. Paste it into the lesson’s submission box.'
-      : 'Clipboard blocked. Select the code in the editor, copy it, then paste it into the lesson.')
+      : 'Clipboard blocked. Your code is ready to select and copy.')
     return copied
   }
 
@@ -2542,6 +2546,7 @@ export default function App() {
         />
       )}
 
+      {manualCopyText !== null && <ManualCodeCopyDialog text={manualCopyText} onClose={() => setManualCopyText(null)} />}
       <WorkspaceDialogs
         activeProjectCount={activeContextProjects.length}
         canEditProject={canEditProject}
