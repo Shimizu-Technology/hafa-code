@@ -5,6 +5,7 @@ const webPort = process.env.E2E_WEB_PORT || '5190'
 const apiPort = process.env.E2E_API_PORT || '3014'
 // A production build with a fake Clerk key, for the deferred sign-in tests (stubbed Clerk, real Rails).
 const clerkWebPort = process.env.E2E_CLERK_WEB_PORT || '5192'
+const rustWebPort = process.env.E2E_RUST_WEB_PORT || '5193'
 const webUrl = `http://127.0.0.1:${webPort}`
 const clerkWebUrl = `http://127.0.0.1:${clerkWebPort}`
 const apiUrl = `http://127.0.0.1:${apiPort}`
@@ -15,6 +16,15 @@ const toolchainPath = [
   userHome && `${userHome}/.rbenv/shims`,
   process.env.PATH,
 ].filter(Boolean).join(':')
+
+const browserName = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium'
+const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : {
+  ...devices['Desktop Chrome'],
+  // The Windows UA in Desktop Chrome makes Monaco bind Ctrl+A on a Mac,
+  // while Playwright's ControlOrMeta sends Cmd+A. Keep the native platform UA.
+  ...(process.platform === 'darwin' ? { userAgent: undefined } : {}),
+  channel: process.env.CI ? undefined : 'chromium',
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -31,17 +41,31 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
-      testIgnore: /deferred-sign-in\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      name: browserName,
+      testIgnore: browserName === 'webkit' ? /(?:deferred-sign-in|rust-lab)\.spec\.ts/ : /deferred-sign-in\.spec\.ts/,
+      use: { ...desktop },
     },
     {
-      name: 'chromium-clerk-build',
+      name: `${browserName}-clerk-build`,
       testMatch: /deferred-sign-in\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: clerkWebUrl },
+      use: { ...desktop, baseURL: clerkWebUrl },
     },
+    ...(browserName === 'webkit' ? [{
+      name: 'webkit-rust-build',
+      testMatch: /rust-lab\.spec\.ts/,
+      use: { ...desktop, baseURL: `http://127.0.0.1:${rustWebPort}` },
+    }] : []),
   ],
   webServer: [
+    ...(browserName === 'webkit' ? [{
+      name: 'Rust Lab production build',
+      command: `vite build --mode e2e --outDir dist-rust-e2e && vite build --config vite.lab.config.ts --mode e2e --outDir dist-rust-e2e && node scripts/serve-e2e-build.mjs dist-rust-e2e ${rustWebPort}`,
+      env: { ...process.env, VITE_CLERK_PUBLISHABLE_KEY: '', VITE_E2E_AUTH: 'true', VITE_API_URL: apiUrl, PATH: toolchainPath },
+      url: `http://127.0.0.1:${rustWebPort}/labs/rust/`,
+      reuseExistingServer: false,
+      timeout: 180_000,
+      gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 5_000 },
+    }] : []),
     {
       name: 'Rails E2E API',
       command: `bundle exec rails db:prepare e2e:reset && bundle exec rails server --binding 127.0.0.1 --port ${apiPort}`,

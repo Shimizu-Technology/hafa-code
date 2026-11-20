@@ -608,6 +608,9 @@ textarea {
 
 /* ---- Popovers and menus ---- */
 
+/* An open menu must sit above persistent notices, including on short phones. */
+.app-bar:has(.popover[data-open]) { z-index: 70; }
+
 .popover { position: relative; }
 
 .popover-panel {
@@ -5057,6 +5060,10 @@ textarea {
     font-weight: 600;
   }
 
+  /* Selection reverses ink and surface. Cross-fading both loses contrast
+     halfway through the swap; keep the colors immediate. */
+  .mobile-bottom-nav button { transition: transform var(--duration-press) var(--ease-out); }
+
   .mobile-bottom-nav button.active {
     background: var(--text-on-code);
     color: var(--surface-code);
@@ -5197,4 +5204,18 @@ textarea {
   .app-bar-project { padding-left: 0; border-left: 0; }
   .mobile-home-create > div,
   .new-project-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.manual-code-copy {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.manual-code-copy textarea {
+  width: 100%;
+  min-height: 8rem;
+  height: min(40dvh, 20rem);
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 16px;
 }

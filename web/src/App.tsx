@@ -64,6 +64,7 @@ import { PracticeSessionPanel } from './components/PracticeSessionPanel'
 import { EditorWorkspace } from './components/EditorWorkspace'
 import { MobileWorkspaceNav } from './components/MobileWorkspaceNav'
 import { FloatingDock } from './components/FloatingDock'
+import { ManualCodeCopyDialog } from './components/ManualCodeCopyDialog'
 import { LessonBar } from './components/LessonBar'
 import { LabDestinationLinks } from './components/LabDestinationLinks'
 import { ProjectSidebar } from './components/ProjectSidebar'
@@ -1774,14 +1775,17 @@ export default function App() {
   // The lesson link stays with this browser's copy of the project; it is never part of Share or cloud saves.
   const lessonReturn = reviewProject ? null : lessonReturnForProject(lessonLinks, project.id)
 
-  const copyCodeForLearn = async () => {
+  const [manualCopy, setManualCopy] = useState<{ text: string; opener: HTMLButtonElement } | null>(null)
+
+  const copyCodeForLearn = async (opener: HTMLButtonElement) => {
     const text = project.files.length === 1
       ? project.files[0].content
       : project.files.map((file) => `----- ${file.path} -----\n${file.content}`).join('\n\n')
     const copied = await writeClipboardText(text)
+    if (!copied) setManualCopy({ text, opener })
     setNotice(copied
       ? 'Code copied. Paste it into the lesson’s submission box.'
-      : 'Clipboard blocked. Select the code in the editor, copy it, then paste it into the lesson.')
+      : 'Clipboard blocked. Your code is ready to select and copy.')
     return copied
   }
 
@@ -2412,7 +2416,7 @@ export default function App() {
               onRestore={() => { void restoreProject() }}
             />
 
-            {lessonReturn && <LessonBar key={project.id} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
+            {lessonReturn && <LessonBar key={`lesson:${project.id}`} lesson={lessonReturn} onCopyForLearn={copyCodeForLearn} />}
 
             {mobileTab === 'history' && (
               <CheckpointPage
@@ -2424,7 +2428,7 @@ export default function App() {
             )}
 
             {canAccessProjectFeedback && (
-              <ProjectFeedback key={project.id} projectId={project.id} files={project.files} currentUserId={user?.id} />
+              <ProjectFeedback key={`feedback:${project.id}`} projectId={project.id} files={project.files} currentUserId={user?.id} />
             )}
 
             {currentPracticeChallengeId && !currentPracticeChallenge && practiceLabState !== 'ready' && (
@@ -2542,6 +2546,7 @@ export default function App() {
         />
       )}
 
+      {manualCopy !== null && <ManualCodeCopyDialog text={manualCopy.text} returnFocusTo={manualCopy.opener} onClose={() => setManualCopy(null)} />}
       <WorkspaceDialogs
         activeProjectCount={activeContextProjects.length}
         canEditProject={canEditProject}

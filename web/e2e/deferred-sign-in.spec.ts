@@ -70,7 +70,7 @@ async function editorAndRunReady(page: Page) {
 }
 
 test.describe('editor-first sign-in', () => {
-  test('an anonymous visit never downloads Clerk until Sign in is pressed', async ({ context, page }) => {
+  test('anonymous service-worker precaching excludes Clerk and includes offline learning tools', async ({ context, page }) => {
     const trace = await trackClerk(context)
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/')
@@ -91,56 +91,72 @@ test.describe('editor-first sign-in', () => {
     expect(cached.some((path) => path.includes('/assets/ClerkBridge-'))).toBe(false)
     expect(cached.some((path) => path.includes('/assets/LearningSidecar-'))).toBe(true)
     expect(cached.some((path) => path.includes('/assets/practiceLab-'))).toBe(true)
-
-    const signIn = page.locator('.app-bar').getByRole('button', { name: 'Sign in' })
-    await expect(signIn).toBeVisible()
-    await signIn.click()
-    await expect(page.getByRole('dialog', { name: 'Stub Clerk sign in' })).toBeAttached()
-    expect(await page.evaluate(() => (window as unknown as { __stubClerk: { signInOpened: number } }).__stubClerk.signInOpened)).toBe(1)
-    expect(trace.clerkChunk.length).toBeGreaterThan(0)
-    expect(trace.clerkScript.length).toBeGreaterThan(0)
   })
 
-  test('a returning signed-in learner gets Clerk after the editor, a neutral state, then their cloud work', async ({ context, page }) => {
-    const trace = await trackClerk(context)
-    await context.addCookies([{ name: '__client_uat', value: String(Math.floor(Date.now() / 1000)), url: test.info().project.use.baseURL! }])
-    await context.addInitScript((persona) => {
-      localStorage.setItem('e2e-stub-clerk-persona', persona)
-      // Record whether signed-out controls ever flash for this learner.
-      const w = window as unknown as { __signedOutFlash: string[]; __editorReadyAt: number }
-      w.__signedOutFlash = []
-      w.__editorReadyAt = 0
-      new MutationObserver(() => {
-        if (!w.__editorReadyAt && document.querySelector('.monaco-editor .view-lines')) w.__editorReadyAt = Date.now()
-        for (const button of document.querySelectorAll('button')) {
-          if (/^(Sign in|Opening sign-in…)$/.test(button.textContent?.trim() ?? '')) w.__signedOutFlash.push(button.textContent!.trim())
-        }
-        if (document.querySelector('.welcome-hero')) w.__signedOutFlash.push('welcome')
-      }).observe(document, { childList: true, subtree: true })
-    }, String(STUDENT_ID))
-    await page.setViewportSize({ width: 1280, height: 800 })
+  test.describe('with the Clerk transport stub', () => {
+    // Playwright cannot route requests controlled by service workers in WebKit.
+    // Keep the real precache checks above; isolate provider transport here so
+    // the fake host can never download real Clerk or contact a real account.
+    test.use({ serviceWorkers: 'block' })
 
-    const session = page.waitForResponse((response) => response.url().endsWith('/api/v1/sessions') && response.request().method() === 'POST')
-    await page.goto('/')
-    await expect(page.locator('.app-bar').getByText('Checking your account')).toBeVisible()
-    await editorAndRunReady(page)
-    expect((await session).status()).toBe(200)
+    test('an anonymous visit never downloads Clerk until Sign in is pressed', async ({ context, page }) => {
+      const trace = await trackClerk(context)
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto('/')
+      await editorAndRunReady(page)
+      expect(trace.clerkScript).toHaveLength(0)
+      expect(trace.clerkChunk).toHaveLength(0)
 
-    await expect(page.locator('.app-bar').getByText('Cloud sync on')).toBeVisible()
-    await expect(page.locator('.app-bar').getByRole('button', { name: 'Stub account menu' })).toBeVisible()
-    const editorReadyAt = await page.evaluate(() => (window as unknown as { __editorReadyAt: number }).__editorReadyAt)
-    expect(editorReadyAt).toBeGreaterThan(0)
-    expect(trace.clerkChunk[0], 'Clerk waits for the editor').toBeGreaterThanOrEqual(editorReadyAt)
-    expect(await page.evaluate(() => (window as unknown as { __signedOutFlash: string[] }).__signedOutFlash)).toEqual([])
-    expect(await page.evaluate(() => localStorage.getItem('hafa-code-signed-in-hint-v1'))).toBe('1')
+      const signIn = page.locator('.app-bar').getByRole('button', { name: 'Sign in' })
+      await expect(signIn).toBeVisible()
+      await signIn.click()
+      await expect(page.getByRole('dialog', { name: 'Stub Clerk sign in' })).toBeAttached()
+      expect(await page.evaluate(() => (window as unknown as { __stubClerk: { signInOpened: number } }).__stubClerk.signInOpened)).toBe(1)
+      expect(trace.clerkChunk.length).toBeGreaterThan(0)
+      expect(trace.clerkScript.length).toBeGreaterThan(0)
+    })
 
-    // Cloud projects and teacher feedback still load for the signed-in learner.
-    if (!await page.getByLabel('Switch workspace').isVisible()) await page.getByRole('button', { name: 'Workspace and display settings' }).click()
-    await page.getByLabel('Switch workspace').selectOption('92001')
-    await page.keyboard.press('Escape')
-    const projects = page.locator('.sidebar-content')
-    await projects.getByRole('button', { name: /Student Private Lab/ }).click()
-    await expect(page.getByLabel('Project name')).toHaveValue('Student Private Lab')
-    await expect(page.getByText('Explain why const is a good choice here.')).toBeVisible()
+    test('a returning signed-in learner gets Clerk after the editor, a neutral state, then their cloud work', async ({ context, page }) => {
+      const trace = await trackClerk(context)
+      await context.addCookies([{ name: '__client_uat', value: String(Math.floor(Date.now() / 1000)), url: test.info().project.use.baseURL! }])
+      await context.addInitScript((persona) => {
+        localStorage.setItem('e2e-stub-clerk-persona', persona)
+        // Record whether signed-out controls ever flash for this learner.
+        const w = window as unknown as { __signedOutFlash: string[]; __editorReadyAt: number }
+        w.__signedOutFlash = []
+        w.__editorReadyAt = 0
+        new MutationObserver(() => {
+          if (!w.__editorReadyAt && document.querySelector('.monaco-editor .view-lines')) w.__editorReadyAt = Date.now()
+          for (const button of document.querySelectorAll('button')) {
+            if (/^(Sign in|Opening sign-in…)$/.test(button.textContent?.trim() ?? '')) w.__signedOutFlash.push(button.textContent!.trim())
+          }
+          if (document.querySelector('.welcome-hero')) w.__signedOutFlash.push('welcome')
+        }).observe(document, { childList: true, subtree: true })
+      }, String(STUDENT_ID))
+      await page.setViewportSize({ width: 1280, height: 800 })
+
+      const session = page.waitForResponse((response) => response.url().endsWith('/api/v1/sessions') && response.request().method() === 'POST')
+      await page.goto('/')
+      await expect(page.locator('.app-bar').getByText('Checking your account')).toBeVisible()
+      await editorAndRunReady(page)
+      expect((await session).status()).toBe(200)
+
+      await expect(page.locator('.app-bar').getByText('Cloud sync on')).toBeVisible()
+      await expect(page.locator('.app-bar').getByRole('button', { name: 'Stub account menu' })).toBeVisible()
+      const editorReadyAt = await page.evaluate(() => (window as unknown as { __editorReadyAt: number }).__editorReadyAt)
+      expect(editorReadyAt).toBeGreaterThan(0)
+      expect(trace.clerkChunk[0], 'Clerk waits for the editor').toBeGreaterThanOrEqual(editorReadyAt)
+      expect(await page.evaluate(() => (window as unknown as { __signedOutFlash: string[] }).__signedOutFlash)).toEqual([])
+      expect(await page.evaluate(() => localStorage.getItem('hafa-code-signed-in-hint-v1'))).toBe('1')
+
+      // Cloud projects and teacher feedback still load for the signed-in learner.
+      if (!await page.getByLabel('Switch workspace').isVisible()) await page.getByRole('button', { name: 'Workspace and display settings' }).click()
+      await page.getByLabel('Switch workspace').selectOption('92001')
+      await page.keyboard.press('Escape')
+      const projects = page.locator('.sidebar-content')
+      await projects.getByRole('button', { name: /Student Private Lab/ }).click()
+      await expect(page.getByLabel('Project name')).toHaveValue('Student Private Lab')
+      await expect(page.getByText('Explain why const is a good choice here.')).toBeVisible()
+    })
   })
 })

@@ -1,3 +1,4 @@
+import { tabToNextControl } from './keyboard'
 import { expect, test, type Page } from '@playwright/test'
 
 async function openPython(page: Page) {
@@ -60,8 +61,8 @@ test('keyboard focus is visible with the focus-ring token', async ({ page }) => 
   await openPython(page)
   const share = page.locator('.app-bar').getByRole('button', { name: 'Share' })
   await share.focus()
-  await page.keyboard.press('Shift+Tab')
-  await page.keyboard.press('Tab')
+  await tabToNextControl(page, true)
+  await tabToNextControl(page)
   await expect(share).toBeFocused()
   await expect(share).toHaveCSS('outline-style', 'solid')
   await expect(share).toHaveCSS('outline-width', '2px')
@@ -132,6 +133,13 @@ test('toasts sit bottom-right without covering controls and leave on their own',
   await page.locator('.sidebar-content').getByRole('button', { name: 'JS', exact: true }).click()
   const toast = page.locator('.floating-dock .toast')
   await expect(toast).toHaveAttribute('data-tone', 'success')
+  // Visibility precedes the dock's collision-avoidance transition. Measure its
+  // settled placement, rather than whichever animation frame this engine sees.
+  // Poll current animations: a new placement cancels/replaces the old transition
+  // (whose finished promise rejects), so a captured promise list can race it.
+  await expect.poll(() => toast.evaluate((node) => node.parentElement!
+    .getAnimations({ subtree: true })
+    .filter((animation) => animation.playState === 'running' || animation.pending).length)).toBe(0)
   const box = (await toast.boundingBox())!
   expect(box.x + box.width).toBeGreaterThan(1440 - 40)
   // Bottom-right, lifted only as far as needed to clear the output footer and page footer.

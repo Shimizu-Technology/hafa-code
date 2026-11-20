@@ -49,7 +49,7 @@ Links without `starter` or `return` still work. They behave like a Share link fr
 ## What the learner sees
 
 - **First open:** a new project with the starter, opened on the code with Run ready. Above the code, a bar shows a quiet "Code School of Guam" badge, the lesson title, "Copy code for Learn", and "Back to your lesson". On desktops 1280px and wider, the bar also says "Paste it into the lesson's submission box."
-- **Copy code for Learn:** copies the project's code (one file as-is; several files separated by `----- path -----` lines) and confirms "Code copied. Paste it into the lesson's submission box." If the browser blocks the clipboard, the learner is told to select and copy the code by hand.
+- **Copy code for Learn:** copies the project's code (one file as-is; several files separated by `----- path -----` lines) and confirms "Code copied. Paste it into the lesson's submission box." If the browser blocks the clipboard, a “Copy your code” dialog shows the complete text, including every file in a multi-file project. Choose **Select all code**, use the device’s Copy command, then paste into Learn. **Done** or Escape closes the dialog without changing the project.
 - **Back to your lesson:** a normal link to the lesson in the same tab. Work is already saved in the browser (and to their account when signed in). Learn opens external links in a new tab, so the lesson tab is usually still open too.
 - **Reload or come back later:** the bar returns whenever that project is open in this browser. It does not appear on other projects.
 - **Opening the lesson link again:**
@@ -99,7 +99,7 @@ Base64 makes the payload about a third longer than its bytes, and the return URL
 
 The link opens straight to the code with Run reachable, in portrait and landscape. The lesson bar sits above the code and the output: on phones it shows the lesson title on one line and two 44px buttons, "Back to your lesson" and "Copy code for Learn" (shortened to "Lesson" under 380px wide). A phone turned sideways moves the navigation to a rail on the left and keeps the bar to one 44px row ("Lesson", the lesson title, "Copy for Learn"), so the editor gets most of the height (about 267px of a 390px-tall screen).
 
-The copy button uses the system clipboard, which needs a tap; in-app browsers that block clipboard access get the select-and-copy message instead.
+The copy button uses the system clipboard, which needs a tap; in-app browsers that block clipboard access get the selectable plain-text dialog instead.
 
 ## Limits
 

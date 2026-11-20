@@ -166,7 +166,7 @@ test('invited student joins the correct classroom from the invitation link', asy
   await expect(page.getByText('Joined FDMS Web Development.')).toBeVisible()
   await expect((await workspaceSelect(page)).getByRole('option', { name: 'FDMS Web Development' })).toHaveCount(1)
   await switchToClassroom(page)
-  await expect(page.getByText('student workspace')).toBeVisible()
+  await expect(page.getByText('student workspace. Teacher-only projects are visible to instructors.', { exact: true })).toBeVisible()
 })
 
 test('teacher can send, resend, revoke, and export from the classroom controls', async ({ page }) => {

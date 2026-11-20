@@ -92,7 +92,9 @@ bin/rails server -p 3000
 
 The web build, dev server, and tests also build the Go runtime, so they need Go 1.21 or newer on `PATH`; the build downloads the exact toolchain pinned in `web/runtimes/go/go.mod`. `npm --prefix web run verify:go-content` checks every Go guide example and challenge solution against the real `go run`.
 
-The full gate includes an isolated Playwright classroom suite plus automated accessibility, keyboard, zoom-equivalent layout, contrast, and mobile-target checks. It creates and resets only a PostgreSQL database whose name ends in `_e2e`; it refuses to run against any other database. Install Chromium once with `cd web && npx playwright install chromium` if Playwright has not already downloaded it.
+The full gate includes an isolated Playwright classroom suite plus automated accessibility, keyboard, zoom-equivalent layout, contrast, and mobile-target checks. It creates and resets only a PostgreSQL database whose name ends in `_e2e`; it refuses to run against any other database. Install Chromium once with `(cd web && npx playwright install chromium)` if Playwright has not already downloaded it.
+
+For Safari-engine coverage, install WebKit with `(cd web && npx playwright install webkit)`, then run `E2E_BROWSER=webkit npm --prefix web run test:e2e -- --workers=1` from the repository root. WebKit's Rust project serves an isolated build on port 5193 (`E2E_RUST_WEB_PORT` overrides it), applying the generated production `_headers`: its COEP blocks Vite's development worker imports. The saved-compiler test uses a fresh disposable persistent profile because WebKit's ephemeral contexts discard Cache Storage on reload. No existing browser profile or production data is used.
 
 ## Clerk Setup
 

@@ -5,7 +5,7 @@ import type { LessonReturn } from '../lib/starterLinks'
 type LessonBarProps = {
   lesson: LessonReturn
   /** Copies the project's code; resolves false when the clipboard is blocked. */
-  onCopyForLearn: () => Promise<boolean>
+  onCopyForLearn: (opener: HTMLButtonElement) => Promise<boolean>
 }
 
 const COPIED_RESET_MS = 2_000
@@ -23,8 +23,8 @@ export function LessonBar({ lesson, onCopyForLearn }: LessonBarProps) {
     if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current)
   }, [])
 
-  const copy = async () => {
-    const ok = await onCopyForLearn()
+  const copy = async (opener: HTMLButtonElement) => {
+    const ok = await onCopyForLearn(opener)
     if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current)
     setCopied(ok)
     if (ok) resetTimerRef.current = window.setTimeout(() => setCopied(false), COPIED_RESET_MS)
@@ -45,7 +45,7 @@ export function LessonBar({ lesson, onCopyForLearn }: LessonBarProps) {
       </p>
       <div className="lesson-submit">
         <small className="lesson-hint" id="lesson-copy-hint">Paste it into the lesson’s submission box.</small>
-        <button className="secondary lesson-copy" type="button" onClick={copy} aria-describedby="lesson-copy-hint">
+        <button className="secondary lesson-copy" type="button" onClick={(event) => { event.currentTarget.focus(); void copy(event.currentTarget) }} aria-describedby="lesson-copy-hint">
           {copied ? <Check size={16} aria-hidden="true" /> : <ClipboardCopy size={16} aria-hidden="true" />}
           {copied
             ? <span>Copied</span>
