@@ -26,12 +26,17 @@ const desktop = browserName === 'webkit' ? devices['Desktop Safari'] : {
   channel: process.env.CI ? undefined : 'chromium',
 }
 
+// These files use anonymous browser-local state only. Keep all tests that use
+// seeded classroom personas together on one worker: they mutate shared records.
+const anonymousFiles = /(?:learner-polish|pilot-readiness|rust-lab)\.spec\.ts/
+const parallelCI = Boolean(process.env.CI) && browserName === 'chromium' && !process.env.E2E_SERIAL_CI
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  workers: parallelCI ? 2 : 1,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
     baseURL: webUrl,
@@ -42,11 +47,19 @@ export default defineConfig({
   projects: [
     {
       name: browserName,
-      testIgnore: browserName === 'webkit' ? /(?:deferred-sign-in|rust-lab)\.spec\.ts/ : /deferred-sign-in\.spec\.ts/,
+      workers: 1,
+      testIgnore: parallelCI ? [anonymousFiles, /deferred-sign-in\.spec\.ts/] : browserName === 'webkit' ? /(?:deferred-sign-in|rust-lab)\.spec\.ts/ : /deferred-sign-in\.spec\.ts/,
       use: { ...desktop },
     },
+    ...(parallelCI ? [{
+      name: 'chromium-anonymous',
+      testMatch: anonymousFiles,
+      use: { ...desktop },
+    }] : []),
     {
       name: `${browserName}-clerk-build`,
+      // The returning-user case also uses a seeded classroom persona.
+      dependencies: parallelCI ? ['chromium'] : [],
       testMatch: /deferred-sign-in\.spec\.ts/,
       use: { ...desktop, baseURL: clerkWebUrl },
     },

@@ -13,9 +13,28 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Test documentation filter
+        run: python3 -m unittest discover -s scripts -p test_ci_changes.py
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/ci_changes.py >> "$GITHUB_OUTPUT"
+
   backend:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
     # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: api
@@ -63,7 +82,10 @@ jobs:
         run: bundle exec bundler-audit check --update
 
   frontend:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
@@ -101,9 +123,11 @@ jobs:
         run: npm audit --audit-level=high
 
   classroom-e2e:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
     # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675 # 17.11
@@ -145,9 +169,23 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Cache Chromium
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ hashFiles('web/package-lock.json') }}
+
       - name: Install Chromium
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        # ubuntu-24.04 already supplies Chromium's shared libraries. Avoid
+        # install-deps, which upgraded Mesa and installed unused fallback fonts
+        # through apt for eight minutes in run 44644255138. App fonts are local.
+        # Playwright still validates required shared libraries when launching.
+        run: npx playwright install chromium
+
+      - name: Prove browser test coverage
+        working-directory: web
+        run: node scripts/verify-e2e-coverage.mjs
 
       - name: Test classroom workflows in a browser
         working-directory: web
