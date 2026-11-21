@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   backend:
-    # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
+    # Pinned: ruby/setup-ruby lacked these 3.3.x builds for ubuntu-latest (26.04).
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -43,7 +43,7 @@ jobs:
 
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
-          ruby-version: "3.3.7"
+          ruby-version: "3.3.14"
           bundler-cache: true
           working-directory: api
 
@@ -101,7 +101,7 @@ jobs:
         run: npm audit --audit-level=high
 
   classroom-e2e:
-    # ruby/setup-ruby has no Ruby 3.3.7 build for ubuntu-latest (26.04) yet.
+    # Pinned: ruby/setup-ruby lacked these 3.3.x builds for ubuntu-latest (26.04).
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -126,7 +126,7 @@ jobs:
 
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
-          ruby-version: "3.3.7"
+          ruby-version: "3.3.14"
           bundler-cache: true
           working-directory: api
 
