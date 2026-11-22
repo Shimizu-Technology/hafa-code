@@ -39,6 +39,8 @@ export default defineConfig({
   workers: parallelCI ? 2 : 1,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
+    // Exercise settled accessible states without CPU-dependent transition frames.
+    reducedMotion: 'reduce',
     baseURL: webUrl,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

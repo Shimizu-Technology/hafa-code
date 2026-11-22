@@ -31,3 +31,9 @@ No frontend source or deployment configuration changed. No production frontend b
 ## Local verification
 
 On the Mac mini, the implementation passed all **93 Chromium tests in 3.5 minutes with two workers**, against the dedicated `hafa_code_ci_speed_e2e` database and ports 3114/5290/5292. No tests failed or retried. The database and task-owned servers were cleaned afterward; the borrowed PostgreSQL service remained running. This is a macOS verification, not an after-measurement of GitHub's Linux runners. Web lint, the production build and its security/asset verification, actionlint, the inventory proof, and four filter tests passed. The filter integration test covers committed docs, a source-to-Markdown rename, missing history, and an initial push. Unchanged backend/unit suites are left to full CI under the task's affected-tests-only local instruction. WebKit is not run on this host.
+
+### Contention fix verification (November 22)
+
+The two-worker CI failures included unsettled display controls, WCAG scans after a fixed 300 ms delay, and transient Monaco widget visibility failures. The browser projects now request `prefers-reduced-motion: reduce`, using the app’s existing reduced-motion CSS to test settled accessible states. The accessibility suite does not assert motion. Worker scheduling, check names, timeouts, and test selection are unchanged.
+
+The full CI-parallel Chromium suite passed twice on macOS: **93/93 in 3.6 minutes**, then **93/93 in 3.5 minutes** with one CPU-busy Python process running throughout. Neither run retried a test. The inventory verifier still reports 93 serial = 93 parallel, without duplicates or omissions. Runs used the throwaway `hafa_code_pr77_fix_e2e` database and ports 3514/5590/5592. This supports the motion fix but does not reproduce the exact four-vCPU Linux runner; final GitHub verification belongs to the lead.
