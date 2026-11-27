@@ -6,6 +6,7 @@ import { CloudAuthProvider, configureE2EAuthToken, E2EAuthProvider } from './con
 import { hasClerkPublishableKey } from './lib/clerk.ts'
 import { e2eAuthEnabled } from './lib/e2eAuth.ts'
 import { loadEditorRuntime } from './lib/editorRuntime.ts'
+import { initAnalytics } from './lib/analytics.ts'
 import { registerServiceWorker } from './pwa.ts'
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -37,4 +38,5 @@ void loadEditorRuntime().catch(() => {
   // EditorWorkspace offers a retry when the editor chunk cannot load.
 })
 
+initAnalytics()
 registerServiceWorker()
