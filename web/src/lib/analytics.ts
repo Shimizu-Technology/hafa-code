@@ -13,7 +13,19 @@ export const isAnalyticsEnabled =
   Boolean(POSTHOG_KEY && !PLACEHOLDER_KEYS.has(POSTHOG_KEY)) &&
   (import.meta.env.PROD || ENABLE_IN_DEV)
 
-const SENSITIVE_PARAMS = new Set(['token', 'invitation_token', 'code', 'state', 'auth', 'email', 'clerk', 'jwt', 'key', 'secret'])
+const SENSITIVE_PARAMS = new Set([
+  'token',
+  'invitation_token',
+  'code',
+  'state',
+  'auth',
+  'email',
+  'clerk',
+  'jwt',
+  'key',
+  'secret',
+])
+const NESTED_URL_KEYS = new Set(['href', 'url', 'name'])
 
 export function sanitizeAnalyticsUrl(rawUrl: string): string {
   try {
@@ -23,17 +35,43 @@ export function sanitizeAnalyticsUrl(rawUrl: string): string {
         parsed.searchParams.set(key, '[REDACTED]')
       }
     }
+    // Strip fragments because classroom invitation links carry #invite=TOKEN.
+    parsed.hash = ''
     return parsed.origin === 'https://app.invalid'
-      ? `${parsed.pathname}${parsed.search}${parsed.hash}`
+      ? `${parsed.pathname}${parsed.search}`
       : parsed.toString()
   } catch {
     return rawUrl
   }
 }
 
+function sanitizeNestedReplayValue(value: unknown, key?: string): unknown {
+  if (typeof value === 'string') {
+    if (
+      key &&
+      NESTED_URL_KEYS.has(key) &&
+      (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/'))
+    ) {
+      return sanitizeAnalyticsUrl(value)
+    }
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeNestedReplayValue(item))
+  }
+  if (value && typeof value === 'object') {
+    const copy: Record<string, unknown> = {}
+    for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+      copy[childKey] = sanitizeNestedReplayValue(childValue, childKey)
+    }
+    return copy
+  }
+  return value
+}
+
 export function sanitizeAnalyticsEvent(event: CaptureResult | null): CaptureResult | null {
   if (!event?.properties) return event
-  const props = event.properties
+  const props = { ...event.properties }
   for (const key of [
     '$current_url',
     '$referrer',
@@ -46,13 +84,24 @@ export function sanitizeAnalyticsEvent(event: CaptureResult | null): CaptureResu
       props[key] = sanitizeAnalyticsUrl(props[key] as string)
     }
   }
-  return event
+  if ('$snapshot_data' in props && props.$snapshot_data) {
+    props.$snapshot_data = sanitizeNestedReplayValue(props.$snapshot_data)
+  }
+  return { ...event, properties: props }
+}
+
+export function maskReplayNetworkRequest<T extends { name?: string }>(request: T): T {
+  if (!request?.name) return request
+  return {
+    ...request,
+    name: sanitizeAnalyticsUrl(request.name),
+  }
 }
 
 let posthogPromise: Promise<PostHogClient | null> | null = null
 let initialized = false
 
-function getPostHog(): Promise<PostHogClient | null> {
+export function loadPostHog(): Promise<PostHogClient | null> {
   if (!isAnalyticsEnabled || !POSTHOG_KEY || typeof window === 'undefined') {
     return Promise.resolve(null)
   }
@@ -69,6 +118,9 @@ function getPostHog(): Promise<PostHogClient | null> {
           session_recording: {
             maskAllInputs: true,
             maskTextSelector: '.monaco-editor',
+            recordHeaders: false,
+            recordBody: false,
+            maskCapturedNetworkRequestFn: maskReplayNetworkRequest,
           },
           before_send: sanitizeAnalyticsEvent,
         })
@@ -85,5 +137,18 @@ function getPostHog(): Promise<PostHogClient | null> {
 
 export function initAnalytics() {
   if (!isAnalyticsEnabled || typeof window === 'undefined') return
-  void getPostHog()
+  // Defer analytics loading until after load + idle so it never competes with editor startup.
+  const start = () => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => {
+        void loadPostHog()
+      }, { timeout: 3000 })
+    } else {
+      globalThis.setTimeout(() => {
+        void loadPostHog()
+      }, 1500)
+    }
+  }
+  if (document.readyState === 'complete') start()
+  else window.addEventListener('load', start, { once: true })
 }
