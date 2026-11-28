@@ -2611,7 +2611,7 @@ export default function App() {
         onSubmitFileDialog={submitFileDialog}
       />
 
-      <footer className="oss-footer" aria-label="Open source project" data-dock-avoid>
+      <footer className="oss-footer" aria-label="About and support" data-dock-avoid>
         <span>Hafa Code is open source.</span>
         <a href="https://github.com/Shimizu-Technology/hafa-code" target="_blank" rel="noreferrer">
           View the code on GitHub
@@ -2619,6 +2619,10 @@ export default function App() {
         <span aria-hidden="true">·</span>
         <a href="https://cheerpj.com/" target="_blank" rel="noreferrer">
           Java powered by CheerpJ
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href="mailto:support@shimizu-technology.com">
+          Help &amp; Contact: support@shimizu-technology.com
         </a>
       </footer>
     </main>

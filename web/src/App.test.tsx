@@ -1128,6 +1128,13 @@ describe('App language guide practice projects', () => {
       act(() => { vi.advanceTimersByTime(4_100) })
       expect(document.querySelector('.floating-dock .toast')).toBeNull()
     })
+
+    it('renders an accessible Help & Contact link in the footer', () => {
+      render(<App />)
+      const footer = screen.getByRole('contentinfo', { name: 'About and support' })
+      const supportLink = within(footer).getByRole('link', { name: /support@shimizu-technology\.com/i })
+      expect(supportLink.getAttribute('href')).toBe('mailto:support@shimizu-technology.com')
+    })
   })
 })
 })
