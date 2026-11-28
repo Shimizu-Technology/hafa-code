@@ -2,6 +2,7 @@ require "cgi"
 
 class OrganizationInviteEmailService
   BRAND_NAME = "Hafa Code"
+  DEFAULT_REPLY_TO_EMAIL = "support@shimizu-technology.com"
   class ConfigurationError < StandardError; end
 
   class << self
@@ -19,6 +20,7 @@ class OrganizationInviteEmailService
       response = Resend::Emails.send(
         {
           from: from_email,
+          reply_to: reply_to_email,
           to: invitation.email,
           subject: "#{invitation.invited_by.full_name} invited you to #{invitation.organization.name} on #{BRAND_NAME}",
           html: invite_html(invitation: invitation, invitation_url: invitation_url),
@@ -48,6 +50,10 @@ class OrganizationInviteEmailService
 
     def from_email
       ENV["RESEND_FROM_EMAIL"].presence || ENV["MAILER_FROM_EMAIL"].presence
+    end
+
+    def reply_to_email
+      ENV["MAILER_REPLY_TO_EMAIL"].presence || DEFAULT_REPLY_TO_EMAIL
     end
 
     def h(value)
